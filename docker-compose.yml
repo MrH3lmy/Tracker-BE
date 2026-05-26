@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: taskpriority-db
+    environment:
+      POSTGRES_DB: taskpriority
+      POSTGRES_USER: taskpriority
+      POSTGRES_PASSWORD: taskpriority
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskpriority -d taskpriority"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskpriority-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://db:5432/taskpriority
+      DB_USERNAME: taskpriority
+      DB_PASSWORD: taskpriority
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
