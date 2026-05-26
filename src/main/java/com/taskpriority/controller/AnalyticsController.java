@@ -1,8 +1,8 @@
-package com.example.taskpriority.controller;
+package com.taskpriority.controller;
 
-import com.example.taskpriority.model.PriorityCategory;
-import com.example.taskpriority.model.Task;
-import com.example.taskpriority.service.TaskService;
+import com.taskpriority.model.PriorityCategory;
+import com.taskpriority.model.Task;
+import com.taskpriority.service.TaskService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

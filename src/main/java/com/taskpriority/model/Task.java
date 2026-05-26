@@ -1,4 +1,4 @@
-package com.example.taskpriority.model;
+package com.taskpriority.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

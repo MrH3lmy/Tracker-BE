@@ -1,4 +1,4 @@
-package com.example.taskpriority.model;
+package com.taskpriority.model;
 
 public enum Status {
     BACKLOG,

@@ -1,7 +1,7 @@
-package com.example.taskpriority.controller;
+package com.taskpriority.controller;
 
-import com.example.taskpriority.model.Task;
-import com.example.taskpriority.service.TaskService;
+import com.taskpriority.model.Task;
+import com.taskpriority.service.TaskService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;

@@ -1,7 +1,7 @@
-package com.example.taskpriority.service;
+package com.taskpriority.service;
 
-import com.example.taskpriority.model.*;
-import com.example.taskpriority.repository.TaskRepository;
+import com.taskpriority.model.*;
+import com.taskpriority.repository.TaskRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
