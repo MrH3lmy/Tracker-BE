@@ -1,5 +1,6 @@
 package com.taskpriority.service;
 
+import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.task.application.RecurrenceService;
@@ -36,7 +37,11 @@ public class TaskService {
     public List<Task> findAll() { return taskRepository.findAll().stream().peek(this::computeDerivedFields).toList(); }
 
     @Transactional(readOnly = true)
-    public Task findById(Long id) { return taskRepository.findById(id).map(t -> { computeDerivedFields(t); return t; }).orElseThrow(); }
+    public Task findById(Long id) {
+        return taskRepository.findById(id)
+                .map(t -> { computeDerivedFields(t); return t; })
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+    }
 
     @Transactional
     public void delete(Long id) { taskRepository.deleteById(id); }

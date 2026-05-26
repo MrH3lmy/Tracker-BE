@@ -1,5 +1,6 @@
 package com.taskpriority.task.api;
 
+import com.taskpriority.model.RecurrenceRule;
 import com.taskpriority.model.Task;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +11,7 @@ public class TaskApiMapper {
         Task task = new Task();
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate());
+                request.followUpDate(), request.recurrence());
         return task;
     }
 
@@ -19,7 +20,7 @@ public class TaskApiMapper {
         task.setId(id);
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate());
+                request.followUpDate(), request.recurrence());
         return task;
     }
 
@@ -51,7 +52,8 @@ public class TaskApiMapper {
     private void applyCommonFields(Task task, String title, String description, java.time.LocalDate dueDate,
                                    boolean important, com.taskpriority.model.Status status,
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
-                                   String blockedReason, String waitingOn, java.time.LocalDate followUpDate) {
+                                   String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
+                                   CreateTaskRequest.RecurrenceRuleRequest recurrence) {
         task.setTitle(title);
         task.setDescription(description);
         task.setDueDate(dueDate);
@@ -62,5 +64,16 @@ public class TaskApiMapper {
         task.setBlockedReason(blockedReason);
         task.setWaitingOn(waitingOn);
         task.setFollowUpDate(followUpDate);
+        if (recurrence != null) {
+            RecurrenceRule recurrenceRule = new RecurrenceRule();
+            recurrenceRule.setFrequency(recurrence.frequency());
+            recurrenceRule.setInterval(recurrence.interval());
+            recurrenceRule.setDaysOfWeek(recurrence.daysOfWeek());
+            recurrenceRule.setDayOfMonth(recurrence.dayOfMonth());
+            recurrenceRule.setAnnualDate(recurrence.annualDate());
+            task.setRecurrenceRule(recurrenceRule);
+        } else {
+            task.setRecurrenceRule(null);
+        }
     }
 }
