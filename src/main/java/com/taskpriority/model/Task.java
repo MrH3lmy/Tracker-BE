@@ -7,7 +7,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tasks")
+@Table(name = "tasks", indexes = {
+        @Index(name = "idx_tasks_status", columnList = "status"),
+        @Index(name = "idx_tasks_due_date", columnList = "due_date"),
+        @Index(name = "idx_tasks_follow_up_date", columnList = "follow_up_date"),
+        @Index(name = "idx_tasks_created_at", columnList = "created_at"),
+        @Index(name = "idx_tasks_area", columnList = "area"),
+        @Index(name = "idx_tasks_effort", columnList = "effort"),
+        @Index(name = "idx_tasks_important", columnList = "important"),
+        @Index(name = "idx_tasks_deleted", columnList = "deleted")
+})
 public class Task {
 
     @Id
@@ -15,27 +24,50 @@ public class Task {
     private Long id;
 
     @NotBlank
+    @Column(nullable = false)
     private String title;
+
+    @Column(columnDefinition = "text")
     private String description;
+
+    @Column(name = "due_date")
     private LocalDate dueDate;
+
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
+
+    @Column(name = "completed_date")
     private LocalDateTime completedDate;
+
+    @Column(nullable = false)
     private boolean important;
 
+    @Column(nullable = false)
+    private boolean deleted;
+
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Status status = Status.BACKLOG;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Area area = Area.PERSONAL;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Effort effort = Effort.MEDIUM;
 
+    @Column(name = "blocked_reason")
     private String blockedReason;
+
+    @Column(name = "waiting_on")
     private String waitingOn;
+
+    @Column(name = "follow_up_date")
     private LocalDate followUpDate;
 
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "recurrence_rule_id")
     private RecurrenceRule recurrenceRule;
 
     @Transient
@@ -64,6 +96,8 @@ public class Task {
     public void setCompletedDate(LocalDateTime completedDate) { this.completedDate = completedDate; }
     public boolean isImportant() { return important; }
     public void setImportant(boolean important) { this.important = important; }
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
     public Status getStatus() { return status; }
     public void setStatus(Status status) { this.status = status; }
     public Area getArea() { return area; }
