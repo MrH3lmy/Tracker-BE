@@ -7,6 +7,24 @@ This document maps backend endpoints intended for frontend integration.
 - **Primary endpoints (use these):** `/api/v1/**`
 - **Legacy/deprecated endpoints (avoid for new FE work):** `/api/**` and `/api/analytics/**`
 
+## FE Implementation Plan (Milestones)
+
+1. **Backend domain pages first (replace old Auth-page-first milestone):**
+   - `Tasks`
+   - `Planning`
+   - `Matrix`
+   - `Dashboard`
+   - `Calendar`
+   - `Settings`
+   - `Import`
+2. **Auth sequencing rule:**
+   - If authentication is required, first add backend auth routes and update the OpenAPI specification.
+   - Then implement frontend auth flows against those documented routes.
+3. **Navigation and page scaffolding:**
+   - Use route groups as nav sections.
+   - Map one page per route group first.
+   - Add advanced inspector/tooling only after route-group pages are in place.
+
 ---
 
 ## Primary Endpoints (`/api/v1/**`)
@@ -88,4 +106,3 @@ This document maps backend endpoints intended for frontend integration.
 | GET | `/api/analytics/today` | None | `TaskService.TodayView` (wrapped in `ResponseEntity`) |
 | GET | `/api/analytics/weekly-plan` | None | `List<TaskService.DailyPlan>` (wrapped in `ResponseEntity`) |
 | GET | `/api/analytics/duplicates` | None | `List<DuplicateDetectionService.DuplicateGroup>` (wrapped in `ResponseEntity`) |
-
