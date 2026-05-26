@@ -42,7 +42,14 @@ public class TaskService {
     public void delete(Long id) { taskRepository.deleteById(id); }
 
     @Transactional
-    public Task markComplete(Long id) { Task t = findById(id); t.setStatus(Status.DONE); t.setCompletedDate(LocalDateTime.now()); return save(t); }
+    public Task markComplete(Long id) {
+        Task t = findById(id);
+        LocalDateTime completionTimestamp = LocalDateTime.now();
+        t.setStatus(Status.DONE);
+        t.setCompletedDate(completionTimestamp);
+        recurrenceService.completeRecurringTask(t, completionTimestamp.toLocalDate());
+        return save(t);
+    }
 
     @Transactional
     public Task updateStatus(Long id, Status status) { Task t = findById(id); t.setStatus(status); return save(t); }
