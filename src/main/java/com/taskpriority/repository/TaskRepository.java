@@ -1,7 +1,7 @@
-package com.example.taskpriority.repository;
+package com.taskpriority.repository;
 
-import com.example.taskpriority.model.Status;
-import com.example.taskpriority.model.Task;
+import com.taskpriority.model.Status;
+import com.taskpriority.model.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
