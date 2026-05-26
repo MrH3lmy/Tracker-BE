@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { apiJson, type ApiCallResult } from '../apiClient';
-import { RequestInspector } from '../RequestInspector';
+import { RequestInspector } from '../components/RequestInspector';
 
 type TaskStatus = 'BACKLOG' | 'NOT_STARTED' | 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'DONE' | 'CANCELLED';
 type TaskTab = 'active' | 'archive' | 'duplicates';
