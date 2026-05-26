@@ -1,108 +1,318 @@
-# Frontend Endpoint Map
+# Frontend Endpoint → Screen Mapping (Tracker-BE)
 
-This document maps backend endpoints intended for frontend integration.
+This document is the implementation-ready FE map for Tracker-BE using the **primary v1 API**.
 
-## FE Routing Policy
-
-- **Primary endpoints (use these):** `/api/v1/**`
-- **Legacy/deprecated endpoints (avoid for new FE work):** `/api/**` and `/api/analytics/**`
-
-## FE Implementation Plan (Milestones)
-
-1. **Backend domain pages first (replace old Auth-page-first milestone):**
-   - `Tasks`
-   - `Planning`
-   - `Matrix`
-   - `Dashboard`
-   - `Calendar`
-   - `Settings`
-   - `Import`
-2. **Auth sequencing rule:**
-   - If authentication is required, first add backend auth routes and update the OpenAPI specification.
-   - Then implement frontend auth flows against those documented routes.
-3. **Navigation and page scaffolding:**
-   - Use route groups as nav sections.
-   - Map one page per route group first.
-   - Add advanced inspector/tooling only after route-group pages are in place.
+- Base URL: `http://localhost:8080` (or your configured backend host)
+- FE should use: `/api/v1/**`
+- FE should avoid for new work: `/api/**`, `/api/analytics/**`
 
 ---
 
-## Primary Endpoints (`/api/v1/**`)
+## 1) Endpoint → Screen Mapping
 
-### Tasks API (`TaskControllerV1`)
+## A. Dashboard / Health
 
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/tasks` | None | `List<TaskResponse>` |
-| GET | `/api/v1/tasks/{id}` | Path: `id` (`Long`) | `TaskResponse` |
-| POST | `/api/v1/tasks` | Body: `CreateTaskRequest` (`title`, `description`, `dueDate`, `important`, `status`, `area`, `effort`, `blockedReason`, `waitingOn`, `followUpDate`, `recurrence`) | `TaskResponse` (wrapped in `ResponseEntity`, HTTP 201) |
-| PUT | `/api/v1/tasks/{id}` | Path: `id` (`Long`); Body: `UpdateTaskRequest` (same shape as create) | `TaskResponse` |
-| DELETE | `/api/v1/tasks/{id}` | Path: `id` (`Long`) | `Void` (wrapped in `ResponseEntity<Void>`, HTTP 204) |
-| PATCH | `/api/v1/tasks/{id}/complete` | Path: `id` (`Long`) | `TaskResponse` |
-| PATCH | `/api/v1/tasks/{id}/status` | Path: `id` (`Long`); Query: `status` (`Status`) | `TaskResponse` |
-| GET | `/api/v1/tasks/archive` | None | `List<TaskResponse>` |
-| GET | `/api/v1/tasks/duplicates` | None | `List<DuplicateDetectionService.DuplicateGroup>` |
+**Purpose:** quick sanity check and summary visibility.
 
-### Import API (`ImportController`)
+### `GET /api/v1/dashboard`
+- UI screen: `DashboardPage`
+- Trigger: `Load Summary` button + auto-load on page entry
+- Show:
+  - HTTP status
+  - Response time (ms)
+  - JSON body (`TaskService.DashboardSummary`)
 
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| POST | `/api/v1/import/csv` | Body: raw `String` CSV payload | `int` |
-| POST | `/api/v1/import/tasks` | Body: raw `String` CSV payload | `ImportService.ImportResult` |
+### Health check recommendation
+Tracker-BE currently does not define `/health` or `/status` in app controllers.
+Use one of these options:
+1. If Spring Boot Actuator is enabled, use `GET /actuator/health`.
+2. Otherwise, use `GET /api/v1/dashboard` as the app-level reachability check.
 
-### Planning API (`PlanningController`)
-
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/planning/today` | None | `PlanningController.TodayViewResponse` |
-| GET | `/api/v1/planning/weekly` | None | `List<PlanningController.DailyPlanResponse>` |
-
-### Matrix API (`MatrixController`)
-
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/matrix` | None | `Map<PriorityCategory, List<TaskResponse>>` |
-
-### Calendar API (`CalendarController`)
-
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/calendar/month` | Query: `year` (`int`), `month` (`int`) | `Map<LocalDate, CalendarService.DaySummary>` |
-| GET | `/api/v1/calendar/export.ics` | None | `String` (wrapped in `ResponseEntity<String>`, `text/calendar`) |
-
-### Settings API (`SettingsController`)
-
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/settings` | None | `Map<String, String>` |
-| PUT | `/api/v1/settings` | Body: `Map<String, String>` | `Map<String, String>` |
-
-### Dashboard API (`DashboardController`)
-
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/v1/dashboard` | None | `TaskService.DashboardSummary` |
+UI control label recommendation: **Check API**
 
 ---
 
-## Legacy / Deprecated Endpoints (`/api/**`, `/api/analytics/**`)
+## B. Auth Page
 
-> Keep for backward compatibility only. Frontend should migrate to `/api/v1/**`.
+**Purpose:** validate authentication/token flows.
 
-### Legacy Tasks (`TaskController`)
+Current Tracker-BE route set does **not** include app auth endpoints such as:
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `POST /auth/refresh`
+- `POST /auth/logout`
 
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/tasks` | None | `List<TaskResponse>` (wrapped in `ResponseEntity`) |
-| POST | `/api/tasks` | Body: `CreateTaskRequest` | `TaskResponse` (wrapped in `ResponseEntity`, HTTP 201) |
-| PUT | `/api/tasks/{id}` | Path: `id` (`Long`); Body: `UpdateTaskRequest` | `TaskResponse` (wrapped in `ResponseEntity`) |
+### FE policy for now
+- Keep `AuthPage` scaffolded as **Not Implemented by backend yet**.
+- Do not block domain pages on token logic until backend auth routes are added.
+- When auth is introduced, implement:
+  - token storage (demo-only localStorage)
+  - `Authorization: Bearer <token>` request injection
+  - auth badge (Logged In/Out)
+  - token preview (first/last characters only)
 
-### Legacy Analytics (`AnalyticsController`)
+---
 
-| Method | Path | Params / Body | Response model class |
-|---|---|---|---|
-| GET | `/api/analytics/matrix` | None | `Map<PriorityCategory, List<TaskResponse>>` (wrapped in `ResponseEntity`) |
-| GET | `/api/analytics/dashboard` | None | `TaskService.DashboardSummary` (wrapped in `ResponseEntity`) |
-| GET | `/api/analytics/today` | None | `TaskService.TodayView` (wrapped in `ResponseEntity`) |
-| GET | `/api/analytics/weekly-plan` | None | `List<TaskService.DailyPlan>` (wrapped in `ResponseEntity`) |
-| GET | `/api/analytics/duplicates` | None | `List<DuplicateDetectionService.DuplicateGroup>` (wrapped in `ResponseEntity`) |
+## C. Main Feature Page (Tasks as Tracker entity)
+
+Tracker-BE core entity is **Task** (`TaskControllerV1`).
+
+## Tasks List / Search Page
+
+### `GET /api/v1/tasks`
+- UI screen: `TasksPage`
+- Components:
+  - `DataTable`
+  - quick filter/search inputs (client-side initially)
+- Show request metadata + response JSON in inspector panel
+
+### `GET /api/v1/tasks/archive`
+- UI placement: archive toggle/tab inside `TasksPage`
+- Behavior: list archived/completed tasks returned by service
+
+### `GET /api/v1/tasks/duplicates`
+- UI placement: `Duplicates` tab in `TasksPage`
+- Behavior: show duplicate groups (`DuplicateDetectionService.DuplicateGroup`)
+
+## Task Detail Page
+
+### `GET /api/v1/tasks/{id}`
+- UI screen: `TaskDetailPage`
+- Components:
+  - detail panel
+  - request/response inspector
+
+## Task Create / Update / Delete
+
+### `POST /api/v1/tasks`
+- UI: create form in `TasksPage`
+- Body: `CreateTaskRequest`
+- Expected: HTTP `201`
+
+### `PUT /api/v1/tasks/{id}`
+- UI: inline edit form or dedicated edit section in `TaskDetailPage`
+- Body: `UpdateTaskRequest`
+
+### `DELETE /api/v1/tasks/{id}`
+- UI: delete action with `ConfirmDialog`
+- Expected: HTTP `204`
+
+## Task State Actions
+
+### `PATCH /api/v1/tasks/{id}/complete`
+- UI: row action `Complete`
+
+### `PATCH /api/v1/tasks/{id}/status?status=<Status>`
+- UI: status dropdown in row/detail view
+- Use enum-safe client values to avoid invalid query values
+
+UI behavior for all task mutations:
+- Disable buttons while request is in-flight
+- Show optimistic loading indicator
+- Refetch or update cache after mutation
+- Always log payload + response body in JSON inspector
+
+---
+
+## D. Related Domain Pages (Planner/Matrix/Calendar/Settings/Import)
+
+## Planning
+
+### `GET /api/v1/planning/today`
+### `GET /api/v1/planning/weekly`
+- UI screen: `PlanningPage`
+- Tabs:
+  - `Today`
+  - `Weekly`
+
+## Matrix
+
+### `GET /api/v1/matrix`
+- UI screen: `MatrixPage`
+- Render by `PriorityCategory` buckets
+
+## Calendar
+
+### `GET /api/v1/calendar/month?year=YYYY&month=M`
+- UI screen: `CalendarPage`
+- Inputs: year + month selector
+
+### `GET /api/v1/calendar/export.ics`
+- UI action: `Export ICS`
+- Behavior: download text/calendar file
+
+## Settings
+
+### `GET /api/v1/settings`
+### `PUT /api/v1/settings`
+- UI screen: `SettingsPage`
+- Key/value editor with save action
+
+## Import
+
+### `POST /api/v1/import/csv`
+### `POST /api/v1/import/tasks`
+- UI screen: `ImportPage`
+- Input: CSV textarea/file load
+- Show parsed result/count response payload
+
+---
+
+## E. Error Playground
+
+**Purpose:** verify backend validation/error consistency.
+
+UI screen: `ErrorPlaygroundPage`
+
+Preset scenarios:
+1. Missing required body fields (`POST /api/v1/tasks` with incomplete JSON) → expect 400/validation error
+2. Invalid enum value (`PATCH /api/v1/tasks/{id}/status?status=BAD_VALUE`) → expect 400
+3. Missing resource (`GET /api/v1/tasks/999999999`) → expect 404
+4. Invalid path variable (`GET /api/v1/tasks/not-a-number`) → expect 400
+5. Malformed JSON body on create/update → expect parser/validation error
+
+Display for each response:
+- status code
+- error message
+- validation field list (if present)
+- correlation/request ID (if backend exposes one)
+
+---
+
+## 2) Wireframe + Component Checklist
+
+## App Layout
+- Top nav tabs:
+  - Dashboard
+  - Tasks
+  - Planning
+  - Matrix
+  - Calendar
+  - Settings
+  - Import
+  - Error Playground
+- Split view:
+  - Left: request forms/inputs
+  - Right: response/log inspector
+
+## Reusable Components
+- `ApiRequestForm` (method, URL, payload)
+- `JsonViewer` (pretty print + copy)
+- `StatusBadge` (2xx/4xx/5xx)
+- `DataTable`
+- `ConfirmDialog`
+- `Toast`
+- `RequestHistoryPanel` (last 10 calls)
+
+Auth-specific components (`AuthTokenPill`, auth badge) should be added when backend auth routes exist.
+
+## Suggested Pages
+- `DashboardPage.tsx`
+- `TasksPage.tsx`
+- `TaskDetailPage.tsx`
+- `PlanningPage.tsx`
+- `MatrixPage.tsx`
+- `CalendarPage.tsx`
+- `SettingsPage.tsx`
+- `ImportPage.tsx`
+- `ErrorPlaygroundPage.tsx`
+- `AuthPage.tsx` (scaffold/placeholder until backend auth is added)
+
+---
+
+## 3) Build Steps (Frontend Implementation Guide)
+
+## Step 0 — Prerequisites
+- Node.js 20+
+- npm or pnpm
+- Running Tracker-BE backend locally
+
+## Step 1 — Scaffold frontend
+```bash
+npm create vite@latest tracker-fe-demo -- --template react-ts
+cd tracker-fe-demo
+npm install
+npm install axios react-router-dom @tanstack/react-query zod
+```
+Optional UI stack:
+```bash
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+## Step 2 — Setup env
+Create `.env`:
+```bash
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+## Step 3 — Create API client
+`src/api/client.ts`:
+- axios instance with `baseURL` from env
+- request interceptor for shared headers
+- response interceptor to normalize error shape for UI
+
+## Step 4 — Add routing shell
+Routes:
+- `/dashboard`
+- `/tasks`
+- `/planning`
+- `/matrix`
+- `/calendar`
+- `/settings`
+- `/import`
+- `/errors`
+- `/auth` (placeholder)
+
+Build shared layout with nav + response console area.
+
+## Step 5 — Build domain pages first
+Implement these before auth-dependent flows:
+- Dashboard
+- Tasks CRUD + actions
+- Planning
+- Matrix
+- Calendar
+- Settings
+- Import
+
+## Step 6 — Build Error Playground
+- preloaded invalid request presets
+- exact backend error rendering
+
+## Step 7 — Add request/response inspector
+For every action:
+- method + endpoint + payload
+- response status + body
+- maintain last 10 calls
+
+## Step 8 — Add Auth page when backend routes exist
+- register/login/me/refresh/logout
+- token storage + auth header
+- logout clears query cache and token
+
+## Step 9 — QA checklist (manual)
+- no token path behavior (once auth exists)
+- valid domain flows succeed
+- create/update/delete reflected in UI
+- validation errors readable
+- network failures show fallback message
+
+## Step 10 — README for demo consumers
+Include:
+- install/run commands
+- env setup
+- backend URL config
+- endpoint coverage table
+- known limitations
+
+---
+
+## 4) Suggested Milestones
+
+1. **Milestone 1 (Half day):** scaffold + shared API client + Dashboard
+2. **Milestone 2 (1 day):** Tasks CRUD + detail/actions + inspector
+3. **Milestone 3 (Half day):** Planning + Matrix + Calendar
+4. **Milestone 4 (Half day):** Settings + Import + Error Playground + docs polish
+5. **Milestone 5 (Later, optional):** Auth flow after backend auth endpoints are added
