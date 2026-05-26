@@ -1,27 +1,40 @@
 package com.taskpriority.dashboard;
 
 import com.taskpriority.model.Status;
+import com.taskpriority.model.Task;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.service.PriorityEngine;
 import com.taskpriority.service.TaskService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class DashboardService {
     private final TaskRepository taskRepository;
-    public DashboardService(TaskRepository taskRepository) { this.taskRepository = taskRepository; }
+    private final PriorityEngine priorityEngine;
+    public DashboardService(TaskRepository taskRepository, PriorityEngine priorityEngine) { this.taskRepository = taskRepository; this.priorityEngine = priorityEngine; }
 
     @Transactional(readOnly = true)
     public TaskService.DashboardSummary getDashboardSummary() {
-        List<?> tasks = taskRepository.findAll();
+        List<Task> tasks = taskRepository.findAll();
         int total = tasks.size();
-        int completed = (int) taskRepository.findAll().stream().filter(t -> t.getStatus() == Status.DONE).count();
-        int active = (int) taskRepository.findAll().stream().filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED).count();
+        int completed = (int) tasks.stream().filter(t -> t.getStatus() == Status.DONE).count();
+        int active = (int) tasks.stream().filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED).count();
         int overdue = taskRepository.findOverdueTasks(LocalDate.now(), Status.DONE).size();
+        int dueToday = taskRepository.findByDueDate(LocalDate.now()).size();
         int dueThisWeek = taskRepository.findByDueDateBetween(LocalDate.now(), LocalDate.now().plusDays(6)).size();
-        return new TaskService.DashboardSummary(total, active, completed, overdue, dueThisWeek);
+        int important = (int) tasks.stream().filter(Task::isImportant).count();
+        int deleted = (int) tasks.stream().filter(Task::isDeleted).count();
+        double completionRate = total == 0 ? 0d : (completed * 100.0) / total;
+        Map<Status, Long> byStatus = tasks.stream().collect(Collectors.groupingBy(Task::getStatus, Collectors.counting()));
+        Map<com.taskpriority.model.PriorityCategory, Long> byPriorityCategory = tasks.stream()
+                .filter(t -> !t.isDeleted())
+                .collect(Collectors.groupingBy(t -> priorityEngine.compute(t).priorityCategory(), Collectors.counting()));
+        return new TaskService.DashboardSummary(total, active, completed, overdue, dueToday, dueThisWeek, important, deleted, completionRate, byStatus, byPriorityCategory);
     }
 }

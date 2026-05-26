@@ -9,4 +9,5 @@ public class ImportController {
     private final ImportService importService;
     public ImportController(ImportService importService){this.importService=importService;}
     @PostMapping("/csv") public int importCsv(@RequestBody String csv){ return importService.importCsv(csv).size(); }
+    @PostMapping("/tasks") public ImportService.ImportResult importTasks(@RequestBody String csv){ return importService.importTasksCsv(csv); }
 }
