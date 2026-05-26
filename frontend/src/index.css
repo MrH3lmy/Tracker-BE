@@ -1,0 +1,14 @@
+:root {
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+body {
+  margin: 0;
+  background: #fafafa;
+  color: #111;
+}
+
+* {
+  box-sizing: border-box;
+}
