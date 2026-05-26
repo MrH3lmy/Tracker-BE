@@ -68,6 +68,7 @@ Flyway is enabled by default and runs migrations at startup from `classpath:db/m
 - JDK 21
 - Maven 3.9+
 - PostgreSQL 16+ (if not using Docker)
+- Node.js 20.19+ (for the optional frontend app)
 
 ### 1) Clone and enter project
 
@@ -97,6 +98,33 @@ mvn spring-boot:run
 ```
 
 The app starts on `http://localhost:8080`.
+
+---
+
+## Frontend app
+
+A Vite + React + TypeScript frontend lives under `frontend/`. It provides routed
+screens for the v1 endpoint map and a request/response inspector for smoke
+testing API calls.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend reads its backend origin from `VITE_API_BASE_URL` and defaults to:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+Build check:
+
+```bash
+cd frontend
+npm run build
+```
 
 ---
 
