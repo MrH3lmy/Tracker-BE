@@ -220,9 +220,14 @@ curl -X POST http://localhost:8080/api/v1/import/csv -H "Content-Type: text/plai
 
 ## OpenAPI / Swagger URL
 
-If OpenAPI is enabled (for example via `springdoc-openapi`), typical local URLs are:
+OpenAPI is enabled in this project via Springdoc. Local URLs:
 
-- UI: `http://localhost:8080/swagger-ui/index.html`
-- Spec JSON: `http://localhost:8080/v3/api-docs`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 
-If these return 404, the OpenAPI dependency/config is not enabled in the current build.
+Quick checks:
+
+```bash
+curl -i http://localhost:8080/v3/api-docs
+curl -i http://localhost:8080/swagger-ui/index.html
+```
