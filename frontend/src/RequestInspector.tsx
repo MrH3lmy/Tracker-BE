@@ -6,9 +6,7 @@ interface RequestInspectorProps {
 }
 
 export function RequestInspector({ result, history = [] }: RequestInspectorProps) {
-  if (!result && history.length === 0) {
-    return <div className="panel">No request yet.</div>;
-  }
+  if (!result && history.length === 0) return <div className="panel">No request yet.</div>;
 
   const items = history.length > 0 ? history : result ? [result] : [];
 
@@ -22,11 +20,17 @@ export function RequestInspector({ result, history = [] }: RequestInspectorProps
           <p><strong>Method:</strong> {item.request.method}</p>
           <p><strong>Payload:</strong></p>
           <pre>{JSON.stringify(item.request.payload ?? null, null, 2)}</pre>
-
           <p><strong>Status:</strong> {item.status}</p>
           <p><strong>Latency:</strong> {item.latencyMs} ms</p>
-          <p><strong>JSON:</strong></p>
+          {item.error && <p className="error"><strong>Error:</strong> {item.error}</p>}
+          <p><strong>Parsed Response:</strong></p>
           <pre>{JSON.stringify(item.data, null, 2)}</pre>
+          {item.error && (
+            <>
+              <p><strong>Raw Failed Response:</strong></p>
+              <pre>{item.rawBody ?? ''}</pre>
+            </>
+          )}
         </div>
       ))}
     </div>

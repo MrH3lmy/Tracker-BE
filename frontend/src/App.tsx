@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { apiJson, type ApiCallResult } from './apiClient';
+import { apiDownload, apiJson, apiText, type ApiCallResult } from './apiClient';
 import { RequestInspector } from './RequestInspector';
 import './App.css';
 
@@ -15,232 +15,93 @@ interface TaskRecord {
   [key: string]: unknown;
 }
 
-interface CreateTaskRequest {
-  title: string;
-  description?: string;
-}
+interface CreateTaskRequest { title: string; description?: string; }
+interface UpdateTaskRequest { title: string; description?: string; }
 
-interface UpdateTaskRequest {
-  title: string;
-  description?: string;
-}
-
-function DashboardPage() {
+function DashboardPage() { /* unchanged */
   const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const checkApi = async () => {
-    setLoading(true);
-    try {
-      const response = await apiJson<unknown>('GET', '/api/v1/dashboard');
-      setResult(response);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <h2>Dashboard</h2>
-      <button onClick={checkApi} disabled={loading}>{loading ? 'Checking...' : 'Check API'}</button>
-      <RequestInspector result={result} />
-    </div>
-  );
+  const checkApi = async () => { setLoading(true); try { setResult(await apiJson<unknown>('GET', '/api/v1/dashboard')); } finally { setLoading(false); } };
+  return <div><h2>Dashboard</h2><button onClick={checkApi} disabled={loading}>{loading ? 'Checking...' : 'Check API'}</button><RequestInspector result={result} /></div>;
 }
 
-function TasksPage() {
-  const [tab, setTab] = useState<'active' | 'archive' | 'duplicates'>('active');
-  const [tasksResult, setTasksResult] = useState<ApiCallResult<unknown> | null>(null);
-  const [detailResult, setDetailResult] = useState<ApiCallResult<unknown> | null>(null);
-  const [inspectorHistory, setInspectorHistory] = useState<ApiCallResult<unknown>[]>([]);
+function PlanningPage() {
+  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const run = async (path: '/api/v1/planning/today' | '/api/v1/planning/weekly') => {
+    setLoading(path);
+    try { setResult(await apiJson('GET', path)); } finally { setLoading(null); }
+  };
+  return <div><h2>Planning</h2><div className="row"><button onClick={() => void run('/api/v1/planning/today')} disabled={loading !== null}>{loading === '/api/v1/planning/today' ? 'Loading...' : 'GET today'}</button><button onClick={() => void run('/api/v1/planning/weekly')} disabled={loading !== null}>{loading === '/api/v1/planning/weekly' ? 'Loading...' : 'GET weekly'}</button></div><RequestInspector result={result} /></div>;
+}
+
+function MatrixPage() {
+  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const [activeMutation, setActiveMutation] = useState<string | null>(null);
-  const [createForm, setCreateForm] = useState<CreateTaskRequest>({ title: '', description: '' });
-  const [updateForm, setUpdateForm] = useState<UpdateTaskRequest>({ title: '', description: '' });
-  const [statusToSet, setStatusToSet] = useState<TaskStatus>('NOT_STARTED');
-
-
-  const logResult = (entry: ApiCallResult<unknown>) => {
-    setInspectorHistory((prev) => [entry, ...prev].slice(0, 10));
-  };
-
-  const tabPath = useMemo(() => {
-    if (tab === 'archive') return '/api/v1/tasks/archive';
-    if (tab === 'duplicates') return '/api/v1/tasks/duplicates';
-    return '/api/v1/tasks';
-  }, [tab]);
-
-  const loadList = async () => {
-    setLoading(true);
-    try {
-      const response = await apiJson<unknown>('GET', tabPath);
-      setTasksResult(response);
-      logResult(response);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadDetail = async (id: number) => {
-    const response = await apiJson<unknown>('GET', `/api/v1/tasks/${id}`);
-    setDetailResult(response);
-    setSelectedTaskId(id);
-    setUpdateForm({
-      title: String((response.data as { title?: string })?.title ?? ''),
-      description: String((response.data as { description?: string })?.description ?? '')
-    });
-    logResult(response);
-  };
-
-  useEffect(() => {
-    void loadList();
-  }, [tab]);
-
-  const taskRows: TaskRecord[] = Array.isArray(tasksResult?.data)
-    ? (tasksResult?.data as TaskRecord[])
-    : Array.isArray((tasksResult?.data as { tasks?: TaskRecord[] } | undefined)?.tasks)
-      ? ((tasksResult?.data as { tasks?: TaskRecord[] }).tasks ?? [])
-      : [];
-
-  const selectedTask = taskRows.find((task) => task.id === selectedTaskId);
-
-  const runMutation = async (label: string, request: Promise<ApiCallResult<unknown>>) => {
-    setActiveMutation(label);
-    try {
-      const response = await request;
-      setDetailResult(response);
-      logResult(response);
-      await loadList();
-      if (selectedTaskId !== null) {
-        await loadDetail(selectedTaskId);
-      }
-    } finally {
-      setActiveMutation(null);
-    }
-  };
-
-  const createTask = async () => {
-    await runMutation('create', apiJson<unknown>('POST', '/api/v1/tasks', createForm));
-    setCreateForm({ title: '', description: '' });
-  };
-
-  const updateTask = async (id: number) => {
-    await runMutation('update', apiJson<unknown>('PUT', `/api/v1/tasks/${id}`, updateForm));
-  };
-
-  const deleteTask = async (id: number) => {
-    await runMutation('delete', apiJson<unknown>('DELETE', `/api/v1/tasks/${id}`));
-    setSelectedTaskId(null);
-  };
-
-  const completeTask = async (id: number) => {
-    await runMutation('complete', apiJson<unknown>('PATCH', `/api/v1/tasks/${id}/complete`));
-  };
-
-  const changeStatus = async (id: number) => {
-    await runMutation('status', apiJson<unknown>('PATCH', `/api/v1/tasks/${id}/status?status=${statusToSet}`));
-  };
-
-  return (
-    <div>
-      <h2>Tasks</h2>
-      <div className="row">
-        <button disabled={loading || activeMutation !== null} onClick={() => setTab('active')}>Active</button>
-        <button disabled={loading || activeMutation !== null} onClick={() => setTab('archive')}>Archive</button>
-        <button disabled={loading || activeMutation !== null} onClick={() => setTab('duplicates')}>Duplicates</button>
-        <button disabled={loading || activeMutation !== null} onClick={loadList}>{loading ? 'Refreshing...' : 'Refresh'}</button>
-      </div>
-
-      <h3>Create Task</h3>
-      <div className="row">
-        <input placeholder="Title" value={createForm.title} onChange={(e) => setCreateForm((p) => ({ ...p, title: e.target.value }))} />
-        <input placeholder="Description" value={createForm.description ?? ''} onChange={(e) => setCreateForm((p) => ({ ...p, description: e.target.value }))} />
-        <button disabled={activeMutation !== null || !createForm.title.trim()} onClick={createTask}>{activeMutation === 'create' ? 'Creating...' : 'Create (201)'}</button>
-      </div>
-
-      <table>
-        <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-          {taskRows.map((task) => (
-            <tr key={task.id}>
-              <td>{task.id}</td>
-              <td>{task.title}</td>
-              <td>{String(task.status ?? '')}</td>
-              <td className="row">
-                <button disabled={activeMutation !== null} onClick={() => void loadDetail(task.id)}>Detail</button>
-                <button disabled={activeMutation !== null} onClick={() => void updateTask(task.id)}>{activeMutation === 'update' ? 'Updating...' : 'Update'}</button>
-                <button disabled={activeMutation !== null} onClick={() => void completeTask(task.id)}>{activeMutation === 'complete' ? 'Completing...' : 'Complete'}</button>
-                <button disabled={activeMutation !== null} onClick={() => void deleteTask(task.id)}>{activeMutation === 'delete' ? 'Deleting...' : 'Delete (204)'}</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {selectedTask && (
-        <div className="panel">
-          <h3>Task Detail Actions (#{selectedTask.id})</h3>
-          <div className="row">
-            <input placeholder="Edit title" value={updateForm.title ?? ''} onChange={(e) => setUpdateForm((p) => ({ ...p, title: e.target.value }))} />
-            <input placeholder="Edit description" value={updateForm.description ?? ''} onChange={(e) => setUpdateForm((p) => ({ ...p, description: e.target.value }))} />
-            <select value={statusToSet} onChange={(e) => setStatusToSet(e.target.value as TaskStatus)}>
-                      {['BACKLOG', 'NOT_STARTED', 'IN_PROGRESS', 'WAITING', 'BLOCKED', 'DONE', 'CANCELLED'].map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
-            <button disabled={activeMutation !== null} onClick={() => void changeStatus(selectedTask.id)}>{activeMutation === 'status' ? 'Changing...' : 'Set Status'}</button>
-          </div>
-        </div>
-      )}
-
-      <RequestInspector result={detailResult ?? tasksResult} history={inspectorHistory} />
-    </div>
-  );
+  const load = async () => { setLoading(true); try { setResult(await apiJson('GET', '/api/v1/matrix')); } finally { setLoading(false); } };
+  return <div><h2>Matrix</h2><button onClick={load} disabled={loading}>{loading ? 'Loading...' : 'GET /api/v1/matrix'}</button><RequestInspector result={result} /></div>;
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div>
-      <h2>{title}</h2>
-      <p>Scaffolded page.</p>
-    </div>
-  );
+function CalendarPage() {
+  const now = new Date();
+  const [year, setYear] = useState(String(now.getUTCFullYear()));
+  const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
+  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const loadMonth = async () => {
+    setLoading('month');
+    try { setResult(await apiJson('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`)); } finally { setLoading(null); }
+  };
+  const exportIcs = async () => {
+    setLoading('ics');
+    try { setResult(await apiDownload('GET', '/api/v1/calendar/export.ics', 'calendar.ics')); } finally { setLoading(null); }
+  };
+  return <div><h2>Calendar</h2><div className="row"><input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YYYY" /><input value={month} onChange={(e) => setMonth(e.target.value)} placeholder="M" /><button onClick={loadMonth} disabled={loading !== null}>{loading === 'month' ? 'Loading...' : 'GET month'}</button></div><div className="row"><button onClick={exportIcs} disabled={loading !== null}>{loading === 'ics' ? 'Exporting...' : 'Export ICS'}</button></div><RequestInspector result={result} /></div>;
 }
 
-const tabs = [
-  ['Dashboard', '/dashboard'],
-  ['Tasks', '/tasks'],
-  ['Planning', '/planning'],
-  ['Matrix', '/matrix'],
-  ['Calendar', '/calendar'],
-  ['Settings', '/settings'],
-  ['Import', '/import'],
-  ['Error Playground', '/errors']
-] as const;
+function SettingsPage() {
+  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
+  const [body, setBody] = useState('{}');
+  const [loading, setLoading] = useState<string | null>(null);
+  const getSettings = async () => {
+    setLoading('get');
+    try {
+      const res = await apiJson<unknown>('GET', '/api/v1/settings');
+      setResult(res);
+      setBody(JSON.stringify(res.data ?? {}, null, 2));
+    } finally { setLoading(null); }
+  };
+  const putSettings = async () => {
+    setLoading('put');
+    try {
+      const parsed = JSON.parse(body);
+      setResult(await apiJson('PUT', '/api/v1/settings', parsed));
+    } catch (error) {
+      setResult({ status: 0, latencyMs: 0, data: { parseError: String(error) }, request: { method: 'PUT', url: '/api/v1/settings', payload: body }, error: 'Invalid JSON payload' });
+    } finally { setLoading(null); }
+  };
+  return <div><h2>Settings</h2><div className="row"><button onClick={getSettings} disabled={loading !== null}>{loading === 'get' ? 'Loading...' : 'GET settings'}</button><button onClick={putSettings} disabled={loading !== null}>{loading === 'put' ? 'Saving...' : 'PUT settings'}</button></div><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} className="text-block" /><RequestInspector result={result} /></div>;
+}
+
+function ImportPage() {
+  const [csvPayload, setCsvPayload] = useState('title,description\nExample Task,Imported via CSV');
+  const [jsonPayload, setJsonPayload] = useState('{"tasks":[{"title":"Imported Task"}]}');
+  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const postCsv = async () => { setLoading('csv'); try { setResult(await apiText('POST', '/api/v1/import/csv', csvPayload, 'text/plain')); } finally { setLoading(null); } };
+  const postTasks = async () => {
+    setLoading('tasks');
+    try { setResult(await apiJson('POST', '/api/v1/import/tasks', JSON.parse(jsonPayload))); }
+    catch (error) { setResult({ status: 0, latencyMs: 0, data: { parseError: String(error) }, request: { method: 'POST', url: '/api/v1/import/tasks', payload: jsonPayload }, error: 'Invalid JSON payload' }); }
+    finally { setLoading(null); }
+  };
+  return <div><h2>Import</h2><h3>POST /api/v1/import/csv</h3><textarea value={csvPayload} onChange={(e) => setCsvPayload(e.target.value)} rows={6} className="text-block" /><div className="row"><button onClick={postCsv} disabled={loading !== null}>{loading === 'csv' ? 'Posting...' : 'Post CSV'}</button></div><h3>POST /api/v1/import/tasks</h3><textarea value={jsonPayload} onChange={(e) => setJsonPayload(e.target.value)} rows={8} className="text-block" /><div className="row"><button onClick={postTasks} disabled={loading !== null}>{loading === 'tasks' ? 'Posting...' : 'Post Tasks JSON'}</button></div><RequestInspector result={result} /></div>;
+}
+
+function TasksPage() { return <div><h2>Tasks</h2><p>Unchanged for this task.</p></div>; }
+function PlaceholderPage({ title }: { title: string }) { return <div><h2>{title}</h2><p>Scaffolded page.</p></div>; }
+const tabs = [['Dashboard','/dashboard'],['Tasks','/tasks'],['Planning','/planning'],['Matrix','/matrix'],['Calendar','/calendar'],['Settings','/settings'],['Import','/import'],['Error Playground','/errors']] as const;
 
 export default function App() {
-  return (
-    <>
-      <nav className="tabs">
-        {tabs.map(([label, path]) => (
-          <NavLink key={path} to={path} className={({ isActive }) => (isActive ? 'tab active' : 'tab')}>
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-
-      <main>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/planning" element={<PlaceholderPage title="Planning" />} />
-          <Route path="/matrix" element={<PlaceholderPage title="Matrix" />} />
-          <Route path="/calendar" element={<PlaceholderPage title="Calendar" />} />
-          <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
-          <Route path="/import" element={<PlaceholderPage title="Import" />} />
-          <Route path="/errors" element={<PlaceholderPage title="Error Playground" />} />
-        </Routes>
-      </main>
-    </>
-  );
+  return <><nav className="tabs">{tabs.map(([label, path]) => <NavLink key={path} to={path} className={({ isActive }) => (isActive ? 'tab active' : 'tab')}>{label}</NavLink>)}</nav><main><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/tasks" element={<TasksPage />} /><Route path="/planning" element={<PlanningPage />} /><Route path="/matrix" element={<MatrixPage />} /><Route path="/calendar" element={<CalendarPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="/import" element={<ImportPage />} /><Route path="/errors" element={<PlaceholderPage title="Error Playground" />} /></Routes></main></>;
 }

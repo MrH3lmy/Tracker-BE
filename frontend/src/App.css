@@ -63,3 +63,12 @@ th, td {
 input, select, button {
   padding: 0.4rem;
 }
+
+.text-block {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.error {
+  color: #b91c1c;
+}
