@@ -4,7 +4,7 @@ import { apiJson, type ApiCallResult } from './apiClient';
 import { RequestInspector } from './RequestInspector';
 import './App.css';
 
-type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED' | 'ARCHIVED';
+type TaskStatus = 'BACKLOG' | 'NOT_STARTED' | 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'DONE' | 'CANCELLED';
 
 interface TaskRecord {
   id: number;
@@ -52,12 +52,18 @@ function TasksPage() {
   const [tab, setTab] = useState<'active' | 'archive' | 'duplicates'>('active');
   const [tasksResult, setTasksResult] = useState<ApiCallResult<unknown> | null>(null);
   const [detailResult, setDetailResult] = useState<ApiCallResult<unknown> | null>(null);
+  const [inspectorHistory, setInspectorHistory] = useState<ApiCallResult<unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [activeMutation, setActiveMutation] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<CreateTaskRequest>({ title: '', description: '' });
   const [updateForm, setUpdateForm] = useState<UpdateTaskRequest>({ title: '', description: '' });
-  const [statusToSet, setStatusToSet] = useState<TaskStatus>('TODO');
+  const [statusToSet, setStatusToSet] = useState<TaskStatus>('NOT_STARTED');
+
+
+  const logResult = (entry: ApiCallResult<unknown>) => {
+    setInspectorHistory((prev) => [entry, ...prev].slice(0, 10));
+  };
 
   const tabPath = useMemo(() => {
     if (tab === 'archive') return '/api/v1/tasks/archive';
@@ -70,6 +76,7 @@ function TasksPage() {
     try {
       const response = await apiJson<unknown>('GET', tabPath);
       setTasksResult(response);
+      logResult(response);
     } finally {
       setLoading(false);
     }
@@ -79,6 +86,11 @@ function TasksPage() {
     const response = await apiJson<unknown>('GET', `/api/v1/tasks/${id}`);
     setDetailResult(response);
     setSelectedTaskId(id);
+    setUpdateForm({
+      title: String((response.data as { title?: string })?.title ?? ''),
+      description: String((response.data as { description?: string })?.description ?? '')
+    });
+    logResult(response);
   };
 
   useEffect(() => {
@@ -98,6 +110,7 @@ function TasksPage() {
     try {
       const response = await request;
       setDetailResult(response);
+      logResult(response);
       await loadList();
       if (selectedTaskId !== null) {
         await loadDetail(selectedTaskId);
@@ -172,14 +185,14 @@ function TasksPage() {
             <input placeholder="Edit title" value={updateForm.title ?? ''} onChange={(e) => setUpdateForm((p) => ({ ...p, title: e.target.value }))} />
             <input placeholder="Edit description" value={updateForm.description ?? ''} onChange={(e) => setUpdateForm((p) => ({ ...p, description: e.target.value }))} />
             <select value={statusToSet} onChange={(e) => setStatusToSet(e.target.value as TaskStatus)}>
-              {['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'ARCHIVED'].map((status) => <option key={status} value={status}>{status}</option>)}
+                      {['BACKLOG', 'NOT_STARTED', 'IN_PROGRESS', 'WAITING', 'BLOCKED', 'DONE', 'CANCELLED'].map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
             <button disabled={activeMutation !== null} onClick={() => void changeStatus(selectedTask.id)}>{activeMutation === 'status' ? 'Changing...' : 'Set Status'}</button>
           </div>
         </div>
       )}
 
-      <RequestInspector result={detailResult ?? tasksResult} />
+      <RequestInspector result={detailResult ?? tasksResult} history={inspectorHistory} />
     </div>
   );
 }
