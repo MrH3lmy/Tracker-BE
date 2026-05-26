@@ -1,22 +1,9 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { apiDownload, apiJson, apiText, type ApiCallResult } from './apiClient';
 import { RequestInspector } from './RequestInspector';
+import { TasksPage } from './pages/TasksPage';
 import './App.css';
-
-type TaskStatus = 'BACKLOG' | 'NOT_STARTED' | 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'DONE' | 'CANCELLED';
-
-interface TaskRecord {
-  id: number;
-  title: string;
-  description?: string;
-  status?: TaskStatus;
-  archived?: boolean;
-  [key: string]: unknown;
-}
-
-interface CreateTaskRequest { title: string; description?: string; }
-interface UpdateTaskRequest { title: string; description?: string; }
 
 function DashboardPage() { /* unchanged */
   const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
@@ -98,7 +85,6 @@ function ImportPage() {
   return <div><h2>Import</h2><h3>POST /api/v1/import/csv</h3><textarea value={csvPayload} onChange={(e) => setCsvPayload(e.target.value)} rows={6} className="text-block" /><div className="row"><button onClick={postCsv} disabled={loading !== null}>{loading === 'csv' ? 'Posting...' : 'Post CSV'}</button></div><h3>POST /api/v1/import/tasks</h3><textarea value={jsonPayload} onChange={(e) => setJsonPayload(e.target.value)} rows={8} className="text-block" /><div className="row"><button onClick={postTasks} disabled={loading !== null}>{loading === 'tasks' ? 'Posting...' : 'Post Tasks JSON'}</button></div><RequestInspector result={result} /></div>;
 }
 
-function TasksPage() { return <div><h2>Tasks</h2><p>Unchanged for this task.</p></div>; }
 function PlaceholderPage({ title }: { title: string }) { return <div><h2>{title}</h2><p>Scaffolded page.</p></div>; }
 const tabs = [['Dashboard','/dashboard'],['Tasks','/tasks'],['Planning','/planning'],['Matrix','/matrix'],['Calendar','/calendar'],['Settings','/settings'],['Import','/import'],['Error Playground','/errors']] as const;
 
