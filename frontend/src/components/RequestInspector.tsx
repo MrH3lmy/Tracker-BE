@@ -1,4 +1,4 @@
-import type { ApiCallResult } from './apiClient';
+import type { ApiCallResult } from '../apiClient';
 
 interface RequestInspectorProps {
   result: ApiCallResult<unknown> | null;
