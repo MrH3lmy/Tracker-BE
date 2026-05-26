@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +15,11 @@ import java.util.stream.Collectors;
 public class TaskService {
 
     private final TaskRepository taskRepository;
+    private final PriorityEngine priorityEngine;
 
-    public TaskService(TaskRepository taskRepository) {
+    public TaskService(TaskRepository taskRepository, PriorityEngine priorityEngine) {
         this.taskRepository = taskRepository;
+        this.priorityEngine = priorityEngine;
     }
 
     @Transactional
@@ -88,41 +89,14 @@ public class TaskService {
     }
 
     public void computeDerivedFields(Task task) {
-        int urgencyScore = 0;
-        if (task.getDueDate() != null) {
-            long daysUntilDue = ChronoUnit.DAYS.between(LocalDate.now(), task.getDueDate());
-            if (daysUntilDue < 0) urgencyScore = 30;
-            else if (daysUntilDue <= 2) urgencyScore = 20;
-            else if (daysUntilDue <= 7) urgencyScore = 10;
-        }
-        int importanceScore = task.isImportant() ? 50 : 0;
-        int statusPenalty = (task.getStatus() == Status.DONE || task.getStatus() == Status.CANCELLED) ? -100 : 0;
-        int effortPenalty = switch (task.getEffort()) {
-            case QUICK -> 0;
-            case MEDIUM -> 5;
-            case DEEP_WORK -> 10;
-            case LARGE -> 20;
-        };
-        int score = importanceScore + urgencyScore + statusPenalty - effortPenalty;
-        task.setPriorityScore(score);
-
-        boolean urgent = urgencyScore >= 20;
-        boolean important = task.isImportant();
-        PriorityCategory category;
-        if (important && urgent) category = PriorityCategory.DO_NOW;
-        else if (important) category = PriorityCategory.SCHEDULE;
-        else if (urgent) category = PriorityCategory.DELEGATE;
-        else category = PriorityCategory.DELETE;
-        task.setPriorityCategory(category);
-
-        if (task.getCreatedDate() != null) {
-            long ageDays = ChronoUnit.DAYS.between(task.getCreatedDate().toLocalDate(), LocalDate.now());
-            AgeFlag flag;
-            if (ageDays <= 7) flag = AgeFlag.NEW;
-            else if (ageDays <= 30) flag = AgeFlag.AGING;
-            else flag = AgeFlag.STALE;
-            task.setAgeFlag(flag);
-        }
+        PriorityEngine.PriorityComputation computation = priorityEngine.compute(task);
+        task.setDaysLeft(computation.daysLeft());
+        task.setOverdue(computation.overdue());
+        task.setUrgent(computation.urgent());
+        task.setPriorityScore(computation.priorityScore());
+        task.setPriorityCategory(computation.priorityCategory());
+        task.setAgeFlag(computation.ageFlag());
+        task.setPriorityReason(computation.priorityReason());
     }
 
     public record DashboardSummary(int totalTasks, int activeTasks, int completedTasks,

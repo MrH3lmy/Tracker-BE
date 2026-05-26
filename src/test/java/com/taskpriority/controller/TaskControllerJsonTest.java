@@ -54,7 +54,7 @@ class TaskControllerJsonTest {
         var response = new com.taskpriority.task.api.TaskResponse(
                 7L, "Write release notes", "for sprint 15", LocalDate.parse("2026-06-01"),
                 null, null, true, Status.BACKLOG, Area.WORK, Effort.MEDIUM,
-                null, null, null, 50, com.taskpriority.model.PriorityCategory.SCHEDULE, null
+                null, null, null, null, false, false, 50, com.taskpriority.model.PriorityCategory.SCHEDULE, null, null
         );
 
         when(taskApiMapper.fromCreateRequest(any())).thenReturn(new com.taskpriority.model.Task());
@@ -78,7 +78,7 @@ class TaskControllerJsonTest {
         var response = new com.taskpriority.task.api.TaskResponse(
                 9L, "Refine API", "DTO alignment", LocalDate.parse("2026-06-02"),
                 null, null, false, Status.IN_PROGRESS, Area.WORK, Effort.DEEP_WORK,
-                null, null, null, 10, com.taskpriority.model.PriorityCategory.DO_NOW, null
+                null, null, null, null, false, false, 10, com.taskpriority.model.PriorityCategory.DO_NOW, null, null
         );
 
         when(taskApiMapper.fromUpdateRequest(any(), any())).thenReturn(new com.taskpriority.model.Task());
