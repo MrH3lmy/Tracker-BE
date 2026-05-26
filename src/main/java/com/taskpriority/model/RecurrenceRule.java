@@ -16,19 +16,29 @@ public class RecurrenceRule {
     private Long id;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Frequency frequency = Frequency.NONE;
 
+    @Column(name = "rule_interval", nullable = false)
     private int interval = 1;
 
     @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "recurrence_rule_days", joinColumns = @JoinColumn(name = "recurrence_rule_id"))
+    @Column(name = "day_of_week", nullable = false)
+    @Enumerated(EnumType.STRING)
     private List<DayOfWeek> daysOfWeek;
 
+    @Column(name = "day_of_month")
     private Integer dayOfMonth;
 
+    @Convert(converter = MonthDayStringConverter.class)
+    @Column(name = "annual_date")
     private MonthDay annualDate;
 
+    @Column(name = "next_due_date")
     private LocalDate nextDueDate;
 
+    @Column(name = "last_completed_date")
     private LocalDate lastCompletedDate;
 
     public RecurrenceRule() {}
