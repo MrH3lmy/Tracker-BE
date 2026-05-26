@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { apiDownload, apiJson, type ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
+import { validateCalendarInputs } from '../validation/calendar';
 
 type CalendarAction = 'month' | 'ics';
 
@@ -11,7 +12,11 @@ export function CalendarPage() {
   const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
   const [loading, setLoading] = useState<CalendarAction | null>(null);
 
+  const inputErrors = useMemo(() => validateCalendarInputs(year, month), [year, month]);
+  const canLoadMonth = loading === null && !inputErrors.year && !inputErrors.month;
+
   const loadMonth = async () => {
+    if (!canLoadMonth) return;
     setLoading('month');
     try {
       setResult(await apiJson('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`));
@@ -29,5 +34,5 @@ export function CalendarPage() {
     }
   };
 
-  return <div><h2>Calendar</h2><div className="row"><input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YYYY" /><input value={month} onChange={(e) => setMonth(e.target.value)} placeholder="M" /><button onClick={loadMonth} disabled={loading !== null}>{loading === 'month' ? 'Loading...' : 'GET month'}</button></div><div className="row"><button onClick={exportIcs} disabled={loading !== null}>{loading === 'ics' ? 'Exporting...' : 'Export ICS'}</button></div><RequestInspector result={result} /></div>;
+  return <div><h2>Calendar</h2><div className="row"><input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YYYY" /><input value={month} onChange={(e) => setMonth(e.target.value)} placeholder="M" /><button onClick={loadMonth} disabled={!canLoadMonth}>{loading === 'month' ? 'Loading...' : 'GET month'}</button></div>{inputErrors.year && <p className="error">{inputErrors.year}</p>}{inputErrors.month && <p className="error">{inputErrors.month}</p>}<div className="row"><button onClick={exportIcs} disabled={loading !== null}>{loading === 'ics' ? 'Exporting...' : 'Export ICS'}</button></div><RequestInspector result={result} /></div>;
 }
