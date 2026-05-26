@@ -1,0 +1,41 @@
+#root {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  color: #333;
+}
+
+.tab.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.panel {
+  margin-top: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+pre {
+  background: #f7f7f7;
+  border-radius: 6px;
+  padding: 0.75rem;
+  overflow-x: auto;
+}
