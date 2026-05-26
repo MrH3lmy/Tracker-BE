@@ -2,6 +2,10 @@ package com.taskpriority.controller;
 
 import com.taskpriority.model.Task;
 import com.taskpriority.service.TaskService;
+import com.taskpriority.task.api.CreateTaskRequest;
+import com.taskpriority.task.api.TaskApiMapper;
+import com.taskpriority.task.api.TaskResponse;
+import com.taskpriority.task.api.UpdateTaskRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -14,28 +18,27 @@ import java.util.List;
 public class TaskController {
 
     private final TaskService taskService;
+    private final TaskApiMapper taskApiMapper;
 
-    public TaskController(TaskService taskService) {
+    public TaskController(TaskService taskService, TaskApiMapper taskApiMapper) {
         this.taskService = taskService;
+        this.taskApiMapper = taskApiMapper;
     }
 
     @GetMapping
-    public ResponseEntity<List<Task>> getAllTasks() {
-        return ResponseEntity.ok(taskService.findAll());
+    public ResponseEntity<List<TaskResponse>> getAllTasks() {
+        return ResponseEntity.ok(taskService.findAll().stream().map(taskApiMapper::toResponse).toList());
     }
 
     @PostMapping
-    public ResponseEntity<Task> createTask(@Validated @RequestBody Task task) {
-        Task saved = taskService.save(task);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    public ResponseEntity<TaskResponse> createTask(@Validated @RequestBody CreateTaskRequest request) {
+        Task saved = taskService.save(taskApiMapper.fromCreateRequest(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(taskApiMapper.toResponse(saved));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Task> updateTask(@PathVariable Long id, @Validated @RequestBody Task task) {
-        if (task.getId() == null || !task.getId().equals(id)) {
-            return ResponseEntity.badRequest().build();
-        }
-        Task saved = taskService.save(task);
-        return ResponseEntity.ok(saved);
+    public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id, @Validated @RequestBody UpdateTaskRequest request) {
+        Task saved = taskService.save(taskApiMapper.fromUpdateRequest(id, request));
+        return ResponseEntity.ok(taskApiMapper.toResponse(saved));
     }
 }
