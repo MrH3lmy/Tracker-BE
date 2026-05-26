@@ -33,5 +33,16 @@ class ApiV1IntegrationTest {
         mockMvc.perform(get("/api/v1/settings")).andExpect(status().isOk());
         mockMvc.perform(put("/api/v1/settings").contentType(MediaType.APPLICATION_JSON).content("{\"theme\":\"dark\"}")).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/import/csv").contentType(MediaType.TEXT_PLAIN).content("title\nImported task")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/import/tasks").contentType(MediaType.TEXT_PLAIN).content("title,description,dueDate,status,important,area,effort\nImported task,desc,2026-05-01,BACKLOG,true,WORK,MEDIUM"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importedCount").value(1));
+
+        mockMvc.perform(get("/api/v1/calendar/export.ics"))
+                .andExpect(header().string("Content-Disposition", "attachment; filename=tasks-calendar.ics"));
+
+        mockMvc.perform(get("/api/v1/dashboard"))
+                .andExpect(jsonPath("$.completionRate").exists())
+                .andExpect(jsonPath("$.byStatus").exists())
+                .andExpect(jsonPath("$.byPriorityCategory").exists());
     }
 }
