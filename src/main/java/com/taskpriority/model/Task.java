@@ -79,6 +79,18 @@ public class Task {
     @Transient
     private AgeFlag ageFlag;
 
+    @Transient
+    private Integer daysLeft;
+
+    @Transient
+    private boolean overdue;
+
+    @Transient
+    private boolean urgent;
+
+    @Transient
+    private String priorityReason;
+
     public Task() {}
     public Task(@NotBlank String title) { this.title = title; }
 
@@ -118,4 +130,12 @@ public class Task {
     public void setPriorityCategory(PriorityCategory priorityCategory) { this.priorityCategory = priorityCategory; }
     public AgeFlag getAgeFlag() { return ageFlag; }
     public void setAgeFlag(AgeFlag ageFlag) { this.ageFlag = ageFlag; }
+    public Integer getDaysLeft() { return daysLeft; }
+    public void setDaysLeft(Integer daysLeft) { this.daysLeft = daysLeft; }
+    public boolean isOverdue() { return overdue; }
+    public void setOverdue(boolean overdue) { this.overdue = overdue; }
+    public boolean isUrgent() { return urgent; }
+    public void setUrgent(boolean urgent) { this.urgent = urgent; }
+    public String getPriorityReason() { return priorityReason; }
+    public void setPriorityReason(String priorityReason) { this.priorityReason = priorityReason; }
 }

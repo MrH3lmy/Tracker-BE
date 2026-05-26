@@ -23,7 +23,11 @@ public record TaskResponse(
         String blockedReason,
         String waitingOn,
         LocalDate followUpDate,
+        Integer daysLeft,
+        boolean overdue,
+        boolean urgent,
         int priorityScore,
         PriorityCategory priorityCategory,
-        AgeFlag ageFlag
+        AgeFlag ageFlag,
+        String priorityReason
 ) {}

@@ -38,9 +38,13 @@ public class TaskApiMapper {
                 task.getBlockedReason(),
                 task.getWaitingOn(),
                 task.getFollowUpDate(),
+                task.getDaysLeft(),
+                task.isOverdue(),
+                task.isUrgent(),
                 task.getPriorityScore(),
                 task.getPriorityCategory(),
-                task.getAgeFlag()
+                task.getAgeFlag(),
+                task.getPriorityReason()
         );
     }
 
