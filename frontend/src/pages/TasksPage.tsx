@@ -4,7 +4,7 @@ import { RequestInspector } from '../RequestInspector';
 
 type TaskStatus = 'BACKLOG' | 'NOT_STARTED' | 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'DONE' | 'CANCELLED';
 type TaskTab = 'active' | 'archive' | 'duplicates';
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
 interface TaskFormState { title: string; description: string; status: '' | TaskStatus; }
 const statusOptions: TaskStatus[] = ['BACKLOG','NOT_STARTED','IN_PROGRESS','WAITING','BLOCKED','DONE','CANCELLED'];
@@ -14,6 +14,7 @@ export function TasksPage() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTaskSnapshot, setEditingTaskSnapshot] = useState<TaskRecord | null>(null);
   const [createForm, setCreateForm] = useState<TaskFormState>({ title: '', description: '', status: '' });
   const [updateForm, setUpdateForm] = useState<TaskFormState>({ title: '', description: '', status: '' });
   const [inspectorHistory, setInspectorHistory] = useState<ApiCallResult<unknown>[]>([]);
@@ -50,7 +51,12 @@ export function TasksPage() {
 
   const selectTab = async (nextTab: TaskTab) => {
     setTab(nextTab);
-    await runAction(`load-${nextTab}`, () => apiJson('GET', nextTab === 'archive' ? '/api/v1/tasks/archive' : nextTab === 'duplicates' ? '/api/v1/tasks/duplicates' : '/api/v1/tasks'), false);
+    setBusyAction(`load-${nextTab}`);
+    try {
+      await fetchTab(nextTab);
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   const createTask = async () => {
@@ -59,11 +65,23 @@ export function TasksPage() {
     setCreateForm({ title: '', description: '', status: '' });
     setTab('active');
   };
-  const startEdit = (task: TaskRecord) => { setEditingTaskId(task.id); setUpdateForm({ title: task.title, description: task.description ?? '', status: task.status ?? '' }); };
+  const startEdit = (task: TaskRecord) => { setEditingTaskId(task.id); setEditingTaskSnapshot(task); setUpdateForm({ title: task.title, description: task.description ?? '', status: task.status ?? '' }); };
   const saveUpdate = async () => {
     if (editingTaskId === null || !updateForm.title.trim()) return;
-    await runAction('update', () => apiJson('PUT', `/api/v1/tasks/${editingTaskId}`, { title: updateForm.title.trim(), description: updateForm.description || undefined, status: updateForm.status || undefined }));
+    await runAction('update', () => apiJson('PUT', `/api/v1/tasks/${editingTaskId}`, {
+      title: updateForm.title.trim(),
+      description: updateForm.description || undefined,
+      status: updateForm.status || undefined,
+      dueDate: editingTaskSnapshot?.dueDate ?? null,
+      important: editingTaskSnapshot?.important ?? false,
+      area: editingTaskSnapshot?.area ?? null,
+      effort: editingTaskSnapshot?.effort ?? null,
+      blockedReason: editingTaskSnapshot?.blockedReason ?? null,
+      waitingOn: editingTaskSnapshot?.waitingOn ?? null,
+      followUpDate: editingTaskSnapshot?.followUpDate ?? null,
+    }));
     setEditingTaskId(null);
+    setEditingTaskSnapshot(null);
   };
   const removeTask = async (id: number) => { if (!window.confirm(`Delete task #${id}? This cannot be undone.`)) return; await runAction(`delete-${id}`, () => apiJson('DELETE', `/api/v1/tasks/${id}`)); };
   const markComplete = async (id: number) => runAction(`complete-${id}`, () => apiJson('PATCH', `/api/v1/tasks/${id}/complete`));
@@ -82,7 +100,7 @@ export function TasksPage() {
     {tab === 'duplicates' ? <section className="panel"><h3>Duplicate groups ({duplicates.length}) · Tasks in groups ({duplicateCount})</h3>{duplicates.map((g, idx) => <div key={idx} className="panel inspector-item"><p><strong>Representative:</strong> #{g.representative?.id} {g.representative?.title}</p><ul>{g.duplicates?.map((d) => <li key={d.id}>#{d.id} {d.title}</li>)}</ul></div>)}</section> :
     <section className="panel"><h3>{tab === 'archive' ? 'Archived Tasks' : 'Tasks'} ({tasks.length})</h3><table><thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Actions</th></tr></thead><tbody>{tasks.map((task) => <tr key={task.id}><td>{task.id}</td><td>{task.title}</td><td>{task.status ?? '-'}</td><td><div className="row"><button onClick={() => startEdit(task)} disabled={isBusy}>Edit</button><button onClick={() => void markComplete(task.id)} disabled={isBusy}>{busyAction === `complete-${task.id}` ? 'Completing...' : 'Complete'}</button><select disabled={isBusy} defaultValue="" onChange={(e) => { if (e.target.value) void changeStatus(task.id, e.target.value as TaskStatus); }}><option value="">Set status...</option>{statusOptions.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}</select><button onClick={() => void removeTask(task.id)} disabled={isBusy}>{busyAction === `delete-${task.id}` ? 'Deleting...' : 'Delete'}</button></div></td></tr>)}</tbody></table></section>}
 
-    {editingTaskId !== null && <section className="panel"><h3>Update Task #{editingTaskId}</h3><div className="row"><input placeholder="Title" value={updateForm.title} onChange={(e) => setUpdateForm((p) => ({ ...p, title: e.target.value }))} disabled={isBusy} /><input placeholder="Description" value={updateForm.description} onChange={(e) => setUpdateForm((p) => ({ ...p, description: e.target.value }))} disabled={isBusy} /><select value={updateForm.status} onChange={(e) => setUpdateForm((p) => ({ ...p, status: e.target.value as TaskFormState['status'] }))} disabled={isBusy}><option value="">(no status)</option>{statusOptions.map((s) => <option key={`edit-${s}`} value={s}>{s}</option>)}</select><button onClick={() => void saveUpdate()} disabled={isBusy || !updateForm.title.trim()}>{busyAction === 'update' ? 'Saving...' : 'Save'}</button><button onClick={() => setEditingTaskId(null)} disabled={isBusy}>Cancel</button></div></section>}
+    {editingTaskId !== null && <section className="panel"><h3>Update Task #{editingTaskId}</h3><div className="row"><input placeholder="Title" value={updateForm.title} onChange={(e) => setUpdateForm((p) => ({ ...p, title: e.target.value }))} disabled={isBusy} /><input placeholder="Description" value={updateForm.description} onChange={(e) => setUpdateForm((p) => ({ ...p, description: e.target.value }))} disabled={isBusy} /><select value={updateForm.status} onChange={(e) => setUpdateForm((p) => ({ ...p, status: e.target.value as TaskFormState['status'] }))} disabled={isBusy}><option value="">(no status)</option>{statusOptions.map((s) => <option key={`edit-${s}`} value={s}>{s}</option>)}</select><button onClick={() => void saveUpdate()} disabled={isBusy || !updateForm.title.trim()}>{busyAction === 'update' ? 'Saving...' : 'Save'}</button><button onClick={() => { setEditingTaskId(null); setEditingTaskSnapshot(null); }} disabled={isBusy}>Cancel</button></div></section>}
 
     <RequestInspector history={inspectorHistory} result={inspectorHistory[0] ?? null} />
   </div>;
