@@ -26,7 +26,8 @@ export async function apiJson<T>(method: HttpMethod, path: string, body?: unknow
   });
 
   const latencyMs = Math.round(performance.now() - startedAt);
-  const data = (await response.json()) as T;
+  const text = await response.text();
+  const data = (text ? JSON.parse(text) : null) as T;
 
   return {
     status: response.status,
