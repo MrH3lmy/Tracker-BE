@@ -1,38 +1,19 @@
 import { useMemo, useState } from 'react';
-import { apiDownload, apiJson, type ApiCallResult } from '../apiClient';
+import { apiDownload } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
+import { QueryState } from '../components/QueryState';
+import { useCalendarMonthQuery } from '../hooks/useApiQueries';
 import { validateCalendarInputs } from '../validation/calendar';
-
-type CalendarAction = 'month' | 'ics';
 
 export function CalendarPage() {
   const now = new Date();
   const [year, setYear] = useState(String(now.getUTCFullYear()));
   const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
-  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
-  const [loading, setLoading] = useState<CalendarAction | null>(null);
-
+  const [lastResult, setLastResult] = useState<any>(null);
+  const [enabled, setEnabled] = useState(false);
   const inputErrors = useMemo(() => validateCalendarInputs(year, month), [year, month]);
-  const canLoadMonth = loading === null && !inputErrors.year && !inputErrors.month;
+  const canLoadMonth = !inputErrors.year && !inputErrors.month;
+  const query = useCalendarMonthQuery(year, month, enabled && canLoadMonth);
 
-  const loadMonth = async () => {
-    if (!canLoadMonth) return;
-    setLoading('month');
-    try {
-      setResult(await apiJson('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const exportIcs = async () => {
-    setLoading('ics');
-    try {
-      setResult(await apiDownload('GET', '/api/v1/calendar/export.ics', 'calendar.ics'));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  return <div><h2>Calendar</h2><div className="row"><input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YYYY" /><input value={month} onChange={(e) => setMonth(e.target.value)} placeholder="M" /><button onClick={loadMonth} disabled={!canLoadMonth}>{loading === 'month' ? 'Loading...' : 'GET month'}</button></div>{inputErrors.year && <p className="error">{inputErrors.year}</p>}{inputErrors.month && <p className="error">{inputErrors.month}</p>}<div className="row"><button onClick={exportIcs} disabled={loading !== null}>{loading === 'ics' ? 'Exporting...' : 'Export ICS'}</button></div><RequestInspector result={result} /></div>;
+  return <div><h2>Calendar</h2><div className="row"><input value={year} onChange={(e) => setYear(e.target.value)} placeholder="YYYY" /><input value={month} onChange={(e) => setMonth(e.target.value)} placeholder="M" /><button onClick={() => setEnabled(true)} disabled={!canLoadMonth || query.isFetching}>{query.isFetching ? 'Loading...' : 'GET month'}</button></div>{inputErrors.year && <p className="error">{inputErrors.year}</p>}{inputErrors.month && <p className="error">{inputErrors.month}</p>}<div className="row"><button onClick={async () => setLastResult(await apiDownload('GET', '/api/v1/calendar/export.ics', 'calendar.ics'))} disabled={query.isFetching}>Export ICS</button></div><QueryState isLoading={query.isLoading || query.isFetching} isError={Boolean(query.data && !query.data.ok)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} /><RequestInspector result={lastResult ?? query.data ?? null} /></div>;
 }
