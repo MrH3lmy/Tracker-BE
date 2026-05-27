@@ -22,7 +22,7 @@ export function RequestInspector({ result, history = [] }: RequestInspectorProps
           <pre>{JSON.stringify(item.request.payload ?? null, null, 2)}</pre>
           <p><strong>Status:</strong> {item.status}</p>
           <p><strong>Latency:</strong> {item.latencyMs} ms</p>
-          {item.error && <p className="error"><strong>Error:</strong> {item.error}</p>}
+          {item.error && <p className="error"><strong>Error:</strong> {item.error.message}</p>}
           <p><strong>Parsed Response:</strong></p>
           <pre>{JSON.stringify(item.data, null, 2)}</pre>
           {item.error && (

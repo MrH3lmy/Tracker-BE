@@ -1,19 +1,10 @@
 import { useState } from 'react';
-import { apiJson, type ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
+import { QueryState } from '../components/QueryState';
+import { useMatrixQuery } from '../hooks/useApiQueries';
 
 export function MatrixPage() {
-  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      setResult(await apiJson('GET', '/api/v1/matrix'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return <div><h2>Matrix</h2><button onClick={load} disabled={loading}>{loading ? 'Loading...' : 'GET /api/v1/matrix'}</button><RequestInspector result={result} /></div>;
+  const [enabled, setEnabled] = useState(false);
+  const query = useMatrixQuery(enabled);
+  return <div><h2>Matrix</h2><button onClick={() => setEnabled(true)} disabled={query.isFetching}>{query.isFetching ? 'Loading...' : 'GET /api/v1/matrix'}</button><QueryState isLoading={query.isLoading || query.isFetching} isError={Boolean(query.data && !query.data.ok)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} /><RequestInspector result={query.data ?? null} /></div>;
 }

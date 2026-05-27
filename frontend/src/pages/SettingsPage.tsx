@@ -1,38 +1,20 @@
-import { useMemo, useState } from 'react';
-import { apiJson, type ApiCallResult } from '../apiClient';
+import { useEffect, useMemo, useState } from 'react';
 import { RequestInspector } from '../components/RequestInspector';
+import { QueryState } from '../components/QueryState';
+import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { validateSettingsPayload } from '../validation/settings';
 
-type SettingsAction = 'get' | 'put';
-
 export function SettingsPage() {
-  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
+  const settingsQuery = useSettingsQuery(true);
+  const saveMutation = useSaveSettingsMutation();
   const [body, setBody] = useState('{}');
-  const [loading, setLoading] = useState<SettingsAction | null>(null);
+
+  useEffect(() => {
+    if (settingsQuery.data?.ok) setBody(JSON.stringify(settingsQuery.data.data ?? {}, null, 2));
+  }, [settingsQuery.data]);
 
   const bodyValidation = useMemo(() => validateSettingsPayload(body), [body]);
-  const canSubmit = loading === null && bodyValidation.errors.length === 0;
+  const canSubmit = !saveMutation.isPending && bodyValidation.errors.length === 0;
 
-  const getSettings = async () => {
-    setLoading('get');
-    try {
-      const res = await apiJson<unknown>('GET', '/api/v1/settings');
-      setResult(res);
-      setBody(JSON.stringify(res.data ?? {}, null, 2));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const putSettings = async () => {
-    if (!bodyValidation.parsed || bodyValidation.errors.length > 0) return;
-    setLoading('put');
-    try {
-      setResult(await apiJson('PUT', '/api/v1/settings', bodyValidation.parsed));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  return <div><h2>Settings</h2><div className="row"><button onClick={getSettings} disabled={loading !== null}>{loading === 'get' ? 'Loading...' : 'GET settings'}</button><button onClick={putSettings} disabled={!canSubmit}>{loading === 'put' ? 'Saving...' : 'PUT settings'}</button></div><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} className="text-block" />{bodyValidation.errors.map((error) => <p key={error} className="error">{error}</p>)}<RequestInspector result={result} /></div>;
+  return <div><h2>Settings</h2><div className="row"><button onClick={() => settingsQuery.refetch()} disabled={settingsQuery.isFetching}>{settingsQuery.isFetching ? 'Loading...' : 'GET settings'}</button><button onClick={() => bodyValidation.parsed && saveMutation.mutate(bodyValidation.parsed)} disabled={!canSubmit}>{saveMutation.isPending ? 'Saving...' : 'PUT settings'}</button></div><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} className="text-block" />{bodyValidation.errors.map((error) => <p key={error} className="error">{error}</p>)}<QueryState isLoading={settingsQuery.isLoading} isError={Boolean((settingsQuery.data && !settingsQuery.data.ok) || saveMutation.data && !saveMutation.data.ok)} isEmpty={false} /><RequestInspector result={saveMutation.data ?? settingsQuery.data ?? null} /></div>;
 }

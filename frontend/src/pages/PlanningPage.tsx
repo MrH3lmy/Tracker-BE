@@ -1,21 +1,14 @@
 import { useState } from 'react';
-import { apiJson, type ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
-
-type PlanningPath = '/api/v1/planning/today' | '/api/v1/planning/weekly';
+import { QueryState } from '../components/QueryState';
+import { latestResult, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
 
 export function PlanningPage() {
-  const [result, setResult] = useState<ApiCallResult<unknown> | null>(null);
-  const [loading, setLoading] = useState<PlanningPath | null>(null);
+  const [selected, setSelected] = useState<'today' | 'weekly'>('today');
+  const today = usePlanningTodayQuery(selected === 'today');
+  const weekly = usePlanningWeeklyQuery(selected === 'weekly');
+  const active = selected === 'today' ? today : weekly;
+  const result = latestResult(today.data, weekly.data);
 
-  const run = async (path: PlanningPath) => {
-    setLoading(path);
-    try {
-      setResult(await apiJson('GET', path));
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  return <div><h2>Planning</h2><div className="row"><button onClick={() => void run('/api/v1/planning/today')} disabled={loading !== null}>{loading === '/api/v1/planning/today' ? 'Loading...' : 'GET today'}</button><button onClick={() => void run('/api/v1/planning/weekly')} disabled={loading !== null}>{loading === '/api/v1/planning/weekly' ? 'Loading...' : 'GET weekly'}</button></div><RequestInspector result={result} /></div>;
+  return <div><h2>Planning</h2><div className="row"><button onClick={() => setSelected('today')} disabled={active.isFetching}>GET today</button><button onClick={() => setSelected('weekly')} disabled={active.isFetching}>GET weekly</button></div><QueryState isLoading={active.isLoading || active.isFetching} isError={Boolean(active.data && !active.data.ok)} isEmpty={!active.isLoading && Boolean(active.data && !active.data.data)} /><RequestInspector result={result} /></div>;
 }
