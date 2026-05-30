@@ -67,8 +67,9 @@ The easiest way to run Tracker locally is with Docker because the existing Docke
 
 - `postgres:16-alpine` database
 - Spring Boot backend
+- Vite frontend
 
-Use the root-level convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`.
+Use the root-level convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`. The frontend container installs dependencies from `frontend/package-lock.json`, starts Vite from the `frontend/` directory, and points the UI at `VITE_API_BASE_URL=http://localhost:8080`.
 
 macOS/Linux:
 
@@ -84,6 +85,7 @@ start-tracker-docker.bat
 
 After startup, open:
 
+- Frontend URL: `http://localhost:5173`
 - Backend URL: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
@@ -146,7 +148,7 @@ The app starts on `http://localhost:8080`.
 
 ---
 
-## Run with Docker Compose (app + PostgreSQL)
+## Run with Docker Compose (frontend + app + PostgreSQL)
 
 Build and start everything:
 
@@ -168,8 +170,11 @@ docker compose down -v
 
 Services:
 
-- App: `http://localhost:8080`
+- Frontend: `http://localhost:5173`
+- App/API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
+
+The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci`, then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
 
 ---
 
