@@ -178,6 +178,94 @@ The frontend service uses the checked-in `frontend/package.json` and `frontend/p
 
 ---
 
+## Optional native packaging with JDK 21 `jpackage`
+
+The repository includes optional helper scripts for creating platform-specific native launchers around the Spring Boot JAR. This packaging flow is useful for distributing the backend as a desktop-style command launcher, but it does **not** replace the database requirement: PostgreSQL is still required at runtime unless you use the Docker-based starter described above, which starts PostgreSQL for you.
+
+The generated launcher starts the packaged Spring Boot JAR with behavior equivalent to:
+
+```bash
+java -jar taskpriority-0.0.1-SNAPSHOT.jar
+```
+
+### Packaging prerequisites
+
+- JDK 21 from a full JDK distribution, with both `java` and `jpackage` on `PATH`.
+- Maven 3.9+ or the Maven wrapper if one is added later.
+- Platform packaging tools for installer formats:
+  - Windows `.exe` / `.msi`: run on Windows; WiX Toolset may be required for `.msi` generation depending on your JDK packaging toolchain.
+  - macOS `.app` / `.dmg`: run on macOS.
+  - Linux `.deb` / `.rpm`: run on the matching Linux packaging environment with the required system packaging tools installed.
+
+`jpackage` is platform-specific. Build Windows packages on Windows, macOS packages on macOS, and Linux packages on Linux. The `app-image` type creates an unpacked application image for the current platform.
+
+### Build packages
+
+macOS/Linux:
+
+```bash
+# Unpacked app image for the current OS
+./scripts/package/package.sh app-image
+
+# macOS examples
+./scripts/package/package.sh dmg
+
+# Linux examples
+./scripts/package/package.sh deb
+./scripts/package/package.sh rpm
+```
+
+Windows:
+
+```bat
+REM Unpacked app image for Windows
+scripts\package\package.bat app-image
+
+REM Windows installer examples
+scripts\package\package.bat exe
+scripts\package\package.bat msi
+```
+
+Each script performs the same workflow:
+
+1. Verifies that JDK 21 and `jpackage` are available.
+2. Builds `target/taskpriority-0.0.1-SNAPSHOT.jar` with Maven using `clean package`.
+3. Copies the JAR into `target/jpackage-input/`.
+4. Runs `jpackage` with `--main-jar taskpriority-0.0.1-SNAPSHOT.jar`.
+5. Writes package output under `build/jpackage/`.
+
+You can customize the package command with environment variables:
+
+```bash
+APP_NAME=TaskPriorityBackend \
+OUTPUT_DIR=dist/native \
+JPACKAGE_OPTIONS="--vendor ExampleOrg --linux-shortcut" \
+./scripts/package/package.sh deb
+```
+
+On Windows, set the same variables before running `package.bat`:
+
+```bat
+set APP_NAME=TaskPriorityBackend
+set OUTPUT_DIR=dist\native
+set JPACKAGE_OPTIONS=--vendor ExampleOrg
+scripts\package\package.bat msi
+```
+
+### Running a packaged launcher
+
+Before launching the packaged backend, make sure PostgreSQL is running and reachable with the expected environment variables:
+
+```bash
+export DB_URL=jdbc:postgresql://localhost:5432/taskpriority
+export DB_USERNAME=taskpriority
+export DB_PASSWORD=taskpriority
+```
+
+The Docker starter remains the easiest local option if you want the app, frontend, and PostgreSQL started together without installing PostgreSQL separately.
+
+---
+
 ## Migration workflow (Flyway)
 
 1. Add a new SQL migration file under:
