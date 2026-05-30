@@ -1,4 +1,6 @@
 @echo off
+rem BACKEND-ONLY launcher: this script starts the Spring Boot API only.
+rem Use start-tracker-docker.bat for the full app stack (PostgreSQL, backend, frontend).
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "JAR_PATH=target\taskpriority-0.0.1-SNAPSHOT.jar"
@@ -57,7 +59,9 @@ if not defined DB_URL set "DB_URL=jdbc:postgresql://localhost:5432/taskpriority"
 if not defined DB_USERNAME set "DB_USERNAME=taskpriority"
 if not defined DB_PASSWORD set "DB_PASSWORD=taskpriority"
 
-echo Starting Tracker backend...
+echo Starting Tracker backend (backend-only launcher)...
+echo WARNING: PostgreSQL must already be running and reachable via DB_URL.
+echo WARNING: Start the frontend dev server separately from frontend/ for the UI.
 echo Backend URL: %BACKEND_URL%
 echo Swagger URL: %SWAGGER_URL%
 

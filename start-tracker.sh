@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# BACKEND-ONLY launcher: this script starts the Spring Boot API only.
+# Use start-tracker-docker.sh for the full app stack (PostgreSQL, backend, frontend).
+
 JAR_PATH="target/taskpriority-0.0.1-SNAPSHOT.jar"
 BACKEND_URL="http://localhost:8080"
 SWAGGER_URL="http://localhost:8080/swagger-ui/index.html"
@@ -45,7 +48,9 @@ export DB_URL="${DB_URL:-jdbc:postgresql://localhost:5432/taskpriority}"
 export DB_USERNAME="${DB_USERNAME:-taskpriority}"
 export DB_PASSWORD="${DB_PASSWORD:-taskpriority}"
 
-echo "Starting Tracker backend..."
+echo "Starting Tracker backend (backend-only launcher)..."
+echo "WARNING: PostgreSQL must already be running and reachable via DB_URL."
+echo "WARNING: Start the frontend dev server separately from frontend/ for the UI."
 echo "Backend URL: ${BACKEND_URL}"
 echo "Swagger URL: ${SWAGGER_URL}"
 
