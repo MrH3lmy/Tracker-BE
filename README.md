@@ -89,6 +89,16 @@ After startup, open:
 - Backend URL: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
+### Double-click launch
+
+Non-technical users can start the full Docker-based Tracker app by double-clicking the launcher for their operating system:
+
+- **macOS:** double-click `launch/Tracker.command`. If macOS blocks the file because it was downloaded from the internet, right-click it, choose **Open**, and confirm that you want to run it.
+- **Linux:** double-click `launch/Tracker.desktop`. Depending on your desktop environment, you may need to right-click the file, open **Properties**, allow it to run as a program, or choose **Allow Launching** first.
+- **Windows:** double-click `launch/Tracker.bat`.
+
+Each launcher calls the existing Docker startup script for that OS (`start-tracker-docker.sh` on macOS/Linux or `start-tracker-docker.bat` on Windows). The Docker startup script checks that Docker is installed and running, starts PostgreSQL, the backend, and the frontend with Docker Compose, waits for `http://localhost:5173`, and then opens the web app in your browser. If startup fails, the launcher keeps the terminal window open so you can read the Docker or startup error message.
+
 ---
 
 ## Local setup
