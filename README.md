@@ -63,13 +63,13 @@ Flyway is enabled by default and runs migrations at startup from `classpath:db/m
 
 ## One-click / easy start
 
-The easiest way to run Tracker locally is with Docker because the existing Docker Compose stack starts both required services for you:
+The recommended one-click way to run the full Tracker app locally is with Docker because the existing Docker Compose stack starts every required service for you:
 
 - `postgres:16-alpine` database
 - Spring Boot backend
 - Vite frontend
 
-Use the root-level convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`. The frontend container installs dependencies from `frontend/package-lock.json`, starts Vite from the `frontend/` directory, and points the UI at `VITE_API_BASE_URL=http://localhost:8080`.
+Use the root-level Docker convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`. The frontend container installs dependencies from `frontend/package-lock.json`, starts Vite from the `frontend/` directory, and points the UI at `VITE_API_BASE_URL=http://localhost:8080`.
 
 macOS/Linux:
 
@@ -114,9 +114,11 @@ export DB_USERNAME=taskpriority
 export DB_PASSWORD=taskpriority
 ```
 
-### 3) Run with startup scripts
+### 3) Run the backend-only startup scripts
 
-The repository includes simple startup scripts that verify Java 21, build `target/taskpriority-0.0.1-SNAPSHOT.jar` when it is missing, set the `dev` Spring profile, apply the default DB environment values, and start the backend.
+The repository includes simple backend-only startup scripts that verify Java 21, build `target/taskpriority-0.0.1-SNAPSHOT.jar` when it is missing, set the `dev` Spring profile, apply the default DB environment values, and start only the Spring Boot backend.
+
+> **Warning:** `start-tracker.sh` and `start-tracker.bat` do not start PostgreSQL or the frontend. Before running them, make sure PostgreSQL is already running and reachable with your `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` settings. Start the frontend dev server separately from `frontend/` (for example, with `npm run dev`) if you need the UI at `http://localhost:5173`. For a full-app one-click startup that includes PostgreSQL, backend, and frontend, use `start-tracker-docker.sh` or `start-tracker-docker.bat` instead.
 
 macOS/Linux:
 
@@ -130,7 +132,7 @@ Windows:
 start-tracker.bat
 ```
 
-The app starts on `http://localhost:8080`, and Swagger UI is available at `http://localhost:8080/swagger-ui/index.html`.
+The backend starts on `http://localhost:8080`, and Swagger UI is available at `http://localhost:8080/swagger-ui/index.html`.
 
 ### 4) Run with Maven
 
