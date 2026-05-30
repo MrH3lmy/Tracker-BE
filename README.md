@@ -84,7 +84,25 @@ export DB_USERNAME=taskpriority
 export DB_PASSWORD=taskpriority
 ```
 
-### 3) Run with Maven
+### 3) Run with startup scripts
+
+The repository includes simple startup scripts that verify Java 21, build `target/taskpriority-0.0.1-SNAPSHOT.jar` when it is missing, set the `dev` Spring profile, apply the default DB environment values, and start the backend.
+
+macOS/Linux:
+
+```bash
+./start-tracker.sh
+```
+
+Windows:
+
+```bat
+start-tracker.bat
+```
+
+The app starts on `http://localhost:8080`, and Swagger UI is available at `http://localhost:8080/swagger-ui/index.html`.
+
+### 4) Run with Maven
 
 ```bash
 ./mvnw spring-boot:run
