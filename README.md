@@ -61,6 +61,34 @@ Flyway is enabled by default and runs migrations at startup from `classpath:db/m
 
 ---
 
+## One-click / easy start
+
+The easiest way to run Tracker locally is with Docker because the existing Docker Compose stack starts both required services for you:
+
+- `postgres:16-alpine` database
+- Spring Boot backend
+
+Use the root-level convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`.
+
+macOS/Linux:
+
+```bash
+./start-tracker-docker.sh
+```
+
+Windows:
+
+```bat
+start-tracker-docker.bat
+```
+
+After startup, open:
+
+- Backend URL: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+---
+
 ## Local setup
 
 ### Prerequisites
