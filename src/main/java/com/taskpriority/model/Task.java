@@ -15,7 +15,10 @@ import java.time.LocalDateTime;
         @Index(name = "idx_tasks_area", columnList = "area"),
         @Index(name = "idx_tasks_effort", columnList = "effort"),
         @Index(name = "idx_tasks_important", columnList = "important"),
-        @Index(name = "idx_tasks_deleted", columnList = "deleted")
+        @Index(name = "idx_tasks_deleted", columnList = "deleted"),
+        @Index(name = "idx_tasks_board_column_id", columnList = "board_column_id"),
+        @Index(name = "idx_tasks_board_column_position", columnList = "board_column_id, position"),
+        @Index(name = "idx_tasks_status_position", columnList = "status, position")
 })
 public class Task {
 
@@ -65,6 +68,12 @@ public class Task {
 
     @Column(name = "follow_up_date")
     private LocalDate followUpDate;
+
+    @Column(name = "board_column_id")
+    private Long boardColumnId;
+
+    @Column(nullable = false)
+    private int position;
 
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "recurrence_rule_id")
@@ -122,6 +131,10 @@ public class Task {
     public void setWaitingOn(String waitingOn) { this.waitingOn = waitingOn; }
     public LocalDate getFollowUpDate() { return followUpDate; }
     public void setFollowUpDate(LocalDate followUpDate) { this.followUpDate = followUpDate; }
+    public Long getBoardColumnId() { return boardColumnId; }
+    public void setBoardColumnId(Long boardColumnId) { this.boardColumnId = boardColumnId; }
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = position; }
     public RecurrenceRule getRecurrenceRule() { return recurrenceRule; }
     public void setRecurrenceRule(RecurrenceRule recurrenceRule) { this.recurrenceRule = recurrenceRule; }
     public int getPriorityScore() { return priorityScore; }

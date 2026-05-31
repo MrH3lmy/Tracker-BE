@@ -2,6 +2,7 @@ package com.taskpriority.service;
 
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
+import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.task.application.RecurrenceService;
 import com.taskpriority.service.PriorityEngine;
@@ -17,12 +18,16 @@ import java.util.stream.Collectors;
 
 @Service
 public class TaskService {
+    private static final int POSITION_STEP = 1000;
+
     private final TaskRepository taskRepository;
+    private final BoardColumnRepository boardColumnRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
 
-    public TaskService(TaskRepository taskRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService) {
+    public TaskService(TaskRepository taskRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService) {
         this.taskRepository = taskRepository;
+        this.boardColumnRepository = boardColumnRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
     }
@@ -30,6 +35,10 @@ public class TaskService {
     @Transactional
     public Task save(Task task) {
         recurrenceService.applyRecurrenceDefaults(task);
+        alignBoardColumn(task);
+        if (task.getPosition() <= 0) {
+            task.setPosition(nextPosition(task.getBoardColumnId(), task.getStatus()));
+        }
         computeDerivedFields(task);
         return taskRepository.save(task);
     }
@@ -58,7 +67,51 @@ public class TaskService {
     }
 
     @Transactional
-    public Task updateStatus(Long id, Status status) { Task t = findById(id); t.setStatus(status); return save(t); }
+    public Task updateStatus(Long id, Status status) {
+        return moveTask(id, status, null, null);
+    }
+
+    @Transactional
+    public Task moveTask(Long id, Status targetStatus, Long targetBoardColumnId, Integer targetPosition) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+
+        Status resolvedStatus = targetStatus;
+        Long resolvedColumnId = targetBoardColumnId;
+        if (resolvedColumnId != null) {
+            Long columnId = resolvedColumnId;
+            BoardColumn column = boardColumnRepository.findById(columnId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Board column with id " + columnId + " not found"));
+            if (column.getStatus() != null) {
+                resolvedStatus = column.getStatus();
+            }
+        } else if (resolvedStatus != null) {
+            resolvedColumnId = boardColumnRepository.findFirstByStatusOrderByPositionAsc(resolvedStatus)
+                    .map(BoardColumn::getId)
+                    .orElse(null);
+        }
+
+        if (resolvedStatus != null) {
+            task.setStatus(resolvedStatus);
+            if (resolvedStatus == Status.DONE && task.getCompletedDate() == null) {
+                task.setCompletedDate(LocalDateTime.now());
+            } else if (resolvedStatus != Status.DONE) {
+                task.setCompletedDate(null);
+            }
+        }
+        task.setBoardColumnId(resolvedColumnId);
+
+        List<Task> columnTasks = tasksForColumn(resolvedColumnId, task.getStatus()).stream()
+                .filter(existing -> !existing.getId().equals(task.getId()))
+                .collect(Collectors.toCollection(java.util.ArrayList::new));
+        int insertionIndex = Math.max(0, Math.min(targetPosition == null ? columnTasks.size() : targetPosition, columnTasks.size()));
+        columnTasks.add(insertionIndex, task);
+        renumber(columnTasks);
+
+        Task saved = taskRepository.save(task);
+        computeDerivedFields(saved);
+        return saved;
+    }
 
     @Transactional(readOnly = true)
     public List<Task> getArchive() { return taskRepository.findAll().stream().filter(t -> t.getStatus()==Status.DONE||t.getStatus()==Status.CANCELLED).peek(this::computeDerivedFields).toList(); }
@@ -67,6 +120,41 @@ public class TaskService {
     public Map<PriorityCategory, List<Task>> getMatrixView() {
         return taskRepository.findAll().stream().filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED).peek(this::computeDerivedFields)
                 .collect(Collectors.groupingBy(Task::getPriorityCategory));
+    }
+
+    private void alignBoardColumn(Task task) {
+        if (task.getStatus() == null) {
+            return;
+        }
+        if (task.getBoardColumnId() == null) {
+            boardColumnRepository.findFirstByStatusOrderByPositionAsc(task.getStatus())
+                    .map(BoardColumn::getId)
+                    .ifPresent(task::setBoardColumnId);
+            return;
+        }
+        boardColumnRepository.findById(task.getBoardColumnId())
+                .filter(column -> column.getStatus() == task.getStatus())
+                .or(() -> boardColumnRepository.findFirstByStatusOrderByPositionAsc(task.getStatus()))
+                .map(BoardColumn::getId)
+                .ifPresent(task::setBoardColumnId);
+    }
+
+    private int nextPosition(Long boardColumnId, Status status) {
+        List<Task> tasks = tasksForColumn(boardColumnId, status);
+        return tasks.isEmpty() ? POSITION_STEP : tasks.get(tasks.size() - 1).getPosition() + POSITION_STEP;
+    }
+
+    private List<Task> tasksForColumn(Long boardColumnId, Status status) {
+        if (boardColumnId != null) {
+            return taskRepository.findByBoardColumnIdOrderByPositionAscIdAsc(boardColumnId);
+        }
+        return taskRepository.findByStatusOrderByPositionAscIdAsc(status);
+    }
+
+    private void renumber(List<Task> tasks) {
+        for (int i = 0; i < tasks.size(); i++) {
+            tasks.get(i).setPosition((i + 1) * POSITION_STEP);
+        }
     }
 
     public void computeDerivedFields(Task task) {

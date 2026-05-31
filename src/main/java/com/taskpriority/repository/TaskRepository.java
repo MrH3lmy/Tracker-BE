@@ -18,4 +18,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByDueDate(LocalDate date);
 
     List<Task> findByDueDateBetween(LocalDate start, LocalDate end);
+
+    List<Task> findByBoardColumnIdOrderByPositionAscIdAsc(Long boardColumnId);
+
+    List<Task> findByStatusOrderByPositionAscIdAsc(Status status);
 }

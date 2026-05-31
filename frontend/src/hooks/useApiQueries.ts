@@ -32,6 +32,7 @@ export function useTaskMutations() {
     deleteTask: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}`), onSuccess }),
     completeTask: useMutation({ mutationFn: (id: number) => apiJson('PATCH', `/api/v1/tasks/${id}/complete`), onSuccess }),
     changeStatus: useMutation({ mutationFn: ({ id, status }: { id: number; status: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/status?status=${encodeURIComponent(status)}`), onSuccess }),
+    moveTask: useMutation({ mutationFn: ({ id, body }: { id: number; body: { status?: string; boardColumnId?: number; position?: number } }) => apiJson('PATCH', `/api/v1/tasks/${id}/move`, body), onSuccess }),
   };
 }
 export function useImportMutations() {

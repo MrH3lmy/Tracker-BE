@@ -29,5 +29,7 @@ public record TaskResponse(
         int priorityScore,
         PriorityCategory priorityCategory,
         AgeFlag ageFlag,
-        String priorityReason
+        String priorityReason,
+        Long boardColumnId,
+        int position
 ) {}
