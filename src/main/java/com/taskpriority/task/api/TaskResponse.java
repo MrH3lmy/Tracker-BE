@@ -8,6 +8,7 @@ import com.taskpriority.model.Status;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record TaskResponse(
         Long id,
@@ -31,5 +32,36 @@ public record TaskResponse(
         AgeFlag ageFlag,
         String priorityReason,
         Long boardColumnId,
-        int position
-) {}
+        int position,
+        List<Long> dependencyIds,
+        List<Long> blockingTaskIds
+) {
+    public TaskResponse(
+            Long id,
+            String title,
+            String description,
+            LocalDate dueDate,
+            LocalDateTime createdDate,
+            LocalDateTime completedDate,
+            boolean important,
+            Status status,
+            Area area,
+            Effort effort,
+            String blockedReason,
+            String waitingOn,
+            LocalDate followUpDate,
+            Integer daysLeft,
+            boolean overdue,
+            boolean urgent,
+            int priorityScore,
+            PriorityCategory priorityCategory,
+            AgeFlag ageFlag,
+            String priorityReason,
+            Long boardColumnId,
+            int position
+    ) {
+        this(id, title, description, dueDate, createdDate, completedDate, important, status, area, effort,
+                blockedReason, waitingOn, followUpDate, daysLeft, overdue, urgent, priorityScore, priorityCategory,
+                ageFlag, priorityReason, boardColumnId, position, List.of(), List.of());
+    }
+}

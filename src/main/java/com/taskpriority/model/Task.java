@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "tasks", indexes = {
@@ -100,6 +102,12 @@ public class Task {
     @Transient
     private String priorityReason;
 
+    @Transient
+    private List<Long> dependencyIds = new ArrayList<>();
+
+    @Transient
+    private List<Long> blockingTaskIds = new ArrayList<>();
+
     public Task() {}
     public Task(@NotBlank String title) { this.title = title; }
 
@@ -151,4 +159,8 @@ public class Task {
     public void setUrgent(boolean urgent) { this.urgent = urgent; }
     public String getPriorityReason() { return priorityReason; }
     public void setPriorityReason(String priorityReason) { this.priorityReason = priorityReason; }
+    public List<Long> getDependencyIds() { return dependencyIds; }
+    public void setDependencyIds(List<Long> dependencyIds) { this.dependencyIds = dependencyIds == null ? new ArrayList<>() : dependencyIds; }
+    public List<Long> getBlockingTaskIds() { return blockingTaskIds; }
+    public void setBlockingTaskIds(List<Long> blockingTaskIds) { this.blockingTaskIds = blockingTaskIds == null ? new ArrayList<>() : blockingTaskIds; }
 }

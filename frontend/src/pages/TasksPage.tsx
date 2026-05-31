@@ -2,11 +2,13 @@ import { useMemo, useRef, useState, type DragEvent } from 'react';
 import type { ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
-import { type TaskTab, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import { type TaskTab, useTaskBlockersQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { isTaskStatus, TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
+interface BlockerWarning { type: string; title: string; taskId?: number; taskTitle?: string; status?: TaskStatus; priorityScore?: number; message: string; recommendation: string; relatedTaskIds?: number[]; }
+interface BlockerAnalysis { warnings: BlockerWarning[]; dependencyCount: number; }
 
 type FilterValue = 'all' | string;
 type ViewMode = 'board' | 'list';
@@ -54,14 +56,19 @@ export function TasksPage() {
   const [effortFilter, setEffortFilter] = useState<FilterValue>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
+  const [dependencyTaskId, setDependencyTaskId] = useState('');
+  const [dependencyBlocksTaskId, setDependencyBlocksTaskId] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
   const duplicatesQuery = useTasksQuery('duplicates');
+  const blockersQuery = useTaskBlockersQuery();
   const query = tab === 'active' ? activeQuery : tab === 'archive' ? archiveQuery : duplicatesQuery;
-  const { createTask, updateTask, deleteTask, completeTask, changeStatus, moveTask } = useTaskMutations();
-  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || moveTask.isPending;
+  const { createTask, updateTask, deleteTask, completeTask, changeStatus, moveTask, addDependency, removeDependency } = useTaskMutations();
+  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || moveTask.isPending || addDependency.isPending || removeDependency.isPending;
 
+  const blockersData = blockersQuery.data?.data as BlockerAnalysis | undefined;
+  const blockerWarnings = Array.isArray(blockersData?.warnings) ? blockersData.warnings : [];
   const activeData = activeQuery.data?.data;
   const archiveData = archiveQuery.data?.data;
   const duplicatesData = duplicatesQuery.data?.data;
@@ -91,7 +98,7 @@ export function TasksPage() {
     status: columnStatus,
     tasks: sortTasksForBoard(filteredTasks.filter((task) => task.status === columnStatus)),
   })), [filteredTasks]);
-  const inspectorHistory = [moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, query.data]
+  const inspectorHistory = [removeDependency.data, addDependency.data, moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, blockersQuery.data, query.data]
     .filter((result): result is ApiCallResult<unknown> => Boolean(result));
 
   const submitCreate = () => {
@@ -113,6 +120,19 @@ export function TasksPage() {
     if (!task || !isTaskStatus(targetStatus)) return;
     if (task.status === targetStatus && task.position === position) return;
     moveTask.mutate({ id: taskId, body: { status: targetStatus, position } });
+  };
+
+  const submitDependency = () => {
+    const id = Number(dependencyTaskId);
+    const blocksTaskId = Number(dependencyBlocksTaskId);
+    if (!Number.isFinite(id) || !Number.isFinite(blocksTaskId) || id === blocksTaskId) return;
+    addDependency.mutate({ id, blocksTaskId }, { onSuccess: () => { setDependencyTaskId(''); setDependencyBlocksTaskId(''); } });
+  };
+
+  const snoozeFollowUp = (task: TaskRecord) => {
+    const next = new Date();
+    next.setDate(next.getDate() + 1);
+    updateTask.mutate({ id: task.id, body: { ...task, followUpDate: next.toISOString().slice(0, 10), dependencyIds: task.dependencyIds ?? [] } });
   };
 
   const handleDragStart = (event: DragEvent<HTMLElement>, taskId: number) => {
@@ -148,6 +168,52 @@ export function TasksPage() {
           {createOpen ? 'Close new task' : 'New task'}
         </button>
       </header>
+
+      {blockerWarnings.length > 0 && (
+        <section className="panel blocker-panel" aria-labelledby="blocker-warnings-title">
+          <div className="section-header">
+            <div>
+              <p className="eyebrow">Blocker radar</p>
+              <h3 id="blocker-warnings-title">{blockerWarnings.length} blocker warning{blockerWarnings.length === 1 ? '' : 's'}</h3>
+              <p>{blockersData?.dependencyCount ?? 0} dependency link{blockersData?.dependencyCount === 1 ? '' : 's'} tracked.</p>
+            </div>
+          </div>
+          <div className="blocker-warning-grid">
+            {blockerWarnings.slice(0, 6).map((warning, index) => {
+              const task = warning.taskId ? activeTasks.find((candidate) => candidate.id === warning.taskId) : undefined;
+              return (
+                <article className="blocker-warning-card" key={`${warning.type}-${warning.taskId ?? index}-${index}`}>
+                  <p className="eyebrow">{warning.type.replaceAll('_', ' ')}</p>
+                  <h4>{warning.title}</h4>
+                  <p><strong>{warning.taskId ? `#${warning.taskId} ${warning.taskTitle ?? ''}` : 'Dependency chain'}</strong></p>
+                  <p>{warning.message}</p>
+                  <p>{warning.recommendation}</p>
+                  {warning.relatedTaskIds && warning.relatedTaskIds.length > 0 && <p>Related: {warning.relatedTaskIds.map((id) => `#${id}`).join(', ')}</p>}
+                  {task && (
+                    <div className="task-actions">
+                      <button type="button" disabled={busy} onClick={() => changeStatus.mutate({ id: task.id, status: 'IN_PROGRESS' })}>Start task</button>
+                      <button type="button" disabled={busy} onClick={() => snoozeFollowUp(task)}>Follow up tomorrow</button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section className="panel dependency-panel" aria-labelledby="dependency-links-title">
+        <div>
+          <p className="eyebrow">Dependency links</p>
+          <h3 id="dependency-links-title">Add a blocker relationship</h3>
+          <p>Choose the task that is waiting, then the task that blocks it.</p>
+        </div>
+        <div className="task-toolbar">
+          <label htmlFor="dependencyTaskId"><span>Waiting task</span><select id="dependencyTaskId" value={dependencyTaskId} onChange={(e) => setDependencyTaskId(e.target.value)} disabled={busy}><option value="">Select task...</option>{activeTasks.map((task) => <option key={`wait-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
+          <label htmlFor="dependencyBlocksTaskId"><span>Blocked by</span><select id="dependencyBlocksTaskId" value={dependencyBlocksTaskId} onChange={(e) => setDependencyBlocksTaskId(e.target.value)} disabled={busy}><option value="">Select blocker...</option>{activeTasks.map((task) => <option key={`blocks-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
+          <button type="button" className="button-primary" onClick={submitDependency} disabled={busy || !dependencyTaskId || !dependencyBlocksTaskId || dependencyTaskId === dependencyBlocksTaskId}>Link dependency</button>
+        </div>
+      </section>
 
       {createOpen && (
         <section className="panel task-create-panel" aria-labelledby="create-task-title">
@@ -265,10 +331,12 @@ export function TasksPage() {
                           {task.important && <span className="task-important-pill">Important</span>}
                         </div>
                         {task.description && <p className="task-description">{task.description}</p>}
+                        {(task.dependencyIds?.length || task.blockingTaskIds?.length) ? <p className="task-description">Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
                         <dl className="task-board-meta">
                           <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</dd></div>
                           <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
                           <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+                          <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
                         </dl>
                       </article>
                     );
@@ -291,6 +359,7 @@ export function TasksPage() {
                   <th>Area</th>
                   <th>Effort</th>
                   <th>Waiting on</th>
+                  <th>Dependencies</th>
                   <th>Follow-up</th>
                   <th>Actions</th>
                 </tr>
@@ -311,6 +380,11 @@ export function TasksPage() {
                       <td data-label="Area">{formatValue(task.area)}</td>
                       <td data-label="Effort">{formatValue(task.effort)}</td>
                       <td data-label="Waiting on">{formatValue(task.waitingOn ?? task.blockedReason)}</td>
+                      <td data-label="Dependencies">
+                        <span>Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</span>
+                        <br />
+                        <span>Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</span>
+                      </td>
                       <td data-label="Follow-up">{formatDate(task.followUpDate)}</td>
                       <td data-label="Actions">
                         <div className="task-actions">
@@ -320,6 +394,8 @@ export function TasksPage() {
                             <option value="">Set status...</option>
                             {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
                           </select>
+                          <button type="button" onClick={() => snoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
+                          {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => removeDependency.mutate({ id: task.id, blocksTaskId })} disabled={busy}>Unlink #{blocksTaskId}</button>)}
                           <button type="button" onClick={() => deleteTask.mutate(task.id)} disabled={busy}>Delete</button>
                         </div>
                       </td>
@@ -334,7 +410,7 @@ export function TasksPage() {
 
       <details className="panel task-inspector" open={false}>
         <summary>API request inspector</summary>
-        <RequestInspector history={inspectorHistory} result={moveTask.data ?? changeStatus.data ?? completeTask.data ?? deleteTask.data ?? updateTask.data ?? createTask.data ?? query.data ?? null} />
+        <RequestInspector history={inspectorHistory} result={removeDependency.data ?? addDependency.data ?? moveTask.data ?? changeStatus.data ?? completeTask.data ?? deleteTask.data ?? updateTask.data ?? createTask.data ?? blockersQuery.data ?? query.data ?? null} />
       </details>
     </div>
   );

@@ -4,9 +4,11 @@ import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.task.application.RecurrenceService;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
+import com.taskpriority.task.api.DependencyRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +24,15 @@ public class TaskService {
     private static final int POSITION_STEP = 1000;
 
     private final TaskRepository taskRepository;
+    private final TaskDependencyRepository taskDependencyRepository;
     private final BoardColumnRepository boardColumnRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
 
-    public TaskService(TaskRepository taskRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper) {
         this.taskRepository = taskRepository;
+        this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
@@ -43,14 +47,21 @@ public class TaskService {
             task.setPosition(nextPosition(task.getBoardColumnId(), task.getStatus()));
         }
         computeDerivedFields(task);
-        return taskRepository.save(task);
+        Task saved = taskRepository.save(task);
+        computeDerivedFields(saved);
+        return saved;
     }
 
     @Transactional
     public Task updateTask(Long id, UpdateTaskRequest request) {
         Task existing = findById(id);
         taskApiMapper.applyUpdateRequest(existing, request);
-        return save(existing);
+        Task saved = save(existing);
+        if (request.dependencyIds() != null) {
+            replaceDependencies(saved.getId(), request.dependencyIds());
+            computeDerivedFields(saved);
+        }
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +76,49 @@ public class TaskService {
 
     @Transactional
     public void delete(Long id) { taskRepository.deleteById(id); }
+
+    @Transactional
+    public Task addDependency(Long id, DependencyRequest request) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task blocksTask = taskRepository.findById(request.blocksTaskId())
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + request.blocksTaskId() + " not found"));
+        if (task.getId().equals(blocksTask.getId())) {
+            throw new IllegalArgumentException("A task cannot depend on itself");
+        }
+        if (!taskDependencyRepository.existsByTaskIdAndBlocksTaskId(task.getId(), blocksTask.getId())) {
+            TaskDependency dependency = new TaskDependency();
+            dependency.setTask(task);
+            dependency.setBlocksTask(blocksTask);
+            dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
+            taskDependencyRepository.save(dependency);
+        }
+        computeDerivedFields(task);
+        return task;
+    }
+
+    @Transactional
+    public Task removeDependency(Long id, Long blocksTaskId) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        taskDependencyRepository.deleteByTaskIdAndBlocksTaskId(id, blocksTaskId);
+        computeDerivedFields(task);
+        return task;
+    }
+
+    @Transactional
+    public Task replaceDependencies(Long id, List<Long> dependencyIds) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        for (TaskDependency existing : taskDependencyRepository.findByTaskId(id)) {
+            taskDependencyRepository.delete(existing);
+        }
+        for (Long blocksTaskId : dependencyIds.stream().distinct().toList()) {
+            addDependency(id, new DependencyRequest(blocksTaskId, TaskDependencyType.BLOCKS));
+        }
+        computeDerivedFields(task);
+        return task;
+    }
 
     @Transactional
     public Task markComplete(Long id) {
@@ -168,7 +222,15 @@ public class TaskService {
     }
 
     public void computeDerivedFields(Task task) {
-        PriorityEngine.PriorityComputation c = priorityEngine.compute(task);
+        if (task.getId() != null) {
+            task.setDependencyIds(taskDependencyRepository.findByTaskId(task.getId()).stream()
+                    .map(dependency -> dependency.getBlocksTask().getId())
+                    .toList());
+            task.setBlockingTaskIds(taskDependencyRepository.findByBlocksTaskId(task.getId()).stream()
+                    .map(dependency -> dependency.getTask().getId())
+                    .toList());
+        }
+        PriorityEngine.PriorityComputation c = priorityEngine.compute(task, new PriorityEngine.DependencyContext(task.getDependencyIds().size(), task.getBlockingTaskIds().size()));
         task.setDaysLeft(c.daysLeft());task.setOverdue(c.overdue());task.setUrgent(c.urgent());task.setPriorityScore(c.priorityScore());task.setPriorityCategory(c.priorityCategory());task.setAgeFlag(c.ageFlag());task.setPriorityReason(c.priorityReason());
     }
 
