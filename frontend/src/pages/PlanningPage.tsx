@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
-import { latestResult, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
+import { latestResult, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
 
 interface TaskPreview {
   id?: number | string;
@@ -13,6 +13,16 @@ interface TaskPreview {
   priorityCategory?: string;
   priorityReason?: string | null;
   important?: boolean;
+}
+
+interface RecommendationPreview {
+  task?: TaskPreview;
+  recommendedAction?: string;
+  reasonCodes?: unknown;
+  explanation?: string;
+  confidence?: number;
+  blockerWarnings?: unknown;
+  rank?: number;
 }
 
 interface TodayPlan {
@@ -28,6 +38,8 @@ interface DailyPlan {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asTasks = (value: unknown): TaskPreview[] => Array.isArray(value) ? value.filter(isRecord) as TaskPreview[] : [];
+const asRecommendations = (value: unknown): RecommendationPreview[] => Array.isArray(value) ? value.filter(isRecord) as RecommendationPreview[] : [];
+const asStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 const taskKey = (task: TaskPreview, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
 
 function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage: string }) {
@@ -51,6 +63,78 @@ function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage:
         </article>
       ))}
     </div>
+  );
+}
+
+
+function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; isFetching: boolean; onRefresh: () => void }) {
+  const recommendations = asRecommendations(data);
+  const [topRecommendation, ...otherRecommendations] = recommendations;
+
+  return (
+    <section className="page-card recommendation-panel" aria-labelledby="recommended-task-title">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">Smart suggestions</p>
+          <h3 id="recommended-task-title">Recommended next task</h3>
+          <p className="muted">Ranked with priority score, due date, effort, current status, follow-up timing, and blocker context.</p>
+        </div>
+        <button type="button" className="button-secondary" onClick={onRefresh} disabled={isFetching}>
+          {isFetching ? 'Refreshing...' : 'Refresh suggestions'}
+        </button>
+      </div>
+
+      {!topRecommendation ? (
+        <p className="muted">No recommendations yet. Add active tasks or refresh after updating task details.</p>
+      ) : (
+        <div className="recommendation-content">
+          <article className="recommendation-hero-card">
+            <div className="recommendation-rank">#{topRecommendation.rank ?? 1}</div>
+            <div className="recommendation-copy">
+              <p className="eyebrow">{topRecommendation.recommendedAction ?? 'Do next'}</p>
+              <h4>{topRecommendation.task?.title ?? 'Untitled task'}</h4>
+              {topRecommendation.explanation && <p>{topRecommendation.explanation}</p>}
+              <div className="task-preview-meta">
+                {topRecommendation.task?.dueDate && <span className="pill">Due {topRecommendation.task.dueDate}</span>}
+                {topRecommendation.task?.status && <span className="pill">{topRecommendation.task.status}</span>}
+                {typeof topRecommendation.task?.priorityScore === 'number' && <span className="pill">Score {topRecommendation.task.priorityScore}</span>}
+                {typeof topRecommendation.confidence === 'number' && <span className="pill">{Math.round(topRecommendation.confidence * 100)}% confidence</span>}
+              </div>
+              {asStrings(topRecommendation.reasonCodes).length > 0 && (
+                <div className="task-preview-meta" aria-label="Recommendation reason codes">
+                  {asStrings(topRecommendation.reasonCodes).map((reason) => <span key={reason} className="pill reason-pill">{reason.replaceAll('_', ' ')}</span>)}
+                </div>
+              )}
+              {asStrings(topRecommendation.blockerWarnings).length > 0 && (
+                <ul className="recommendation-warnings">
+                  {asStrings(topRecommendation.blockerWarnings).map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              )}
+            </div>
+          </article>
+
+          {otherRecommendations.length > 0 && (
+            <div className="recommendation-sidebar">
+              <h4>More smart suggestions</h4>
+              <div className="mini-card-list">
+                {otherRecommendations.slice(0, 4).map((recommendation, index) => (
+                  <article key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? recommendation.task?.title ?? 'suggestion'}`} className="task-preview-card compact">
+                    <div className="section-card-header compact">
+                      <div>
+                        <h4>{recommendation.task?.title ?? 'Untitled task'}</h4>
+                        <p className="muted">{recommendation.recommendedAction ?? 'Review next'}</p>
+                      </div>
+                      <span className="status-badge status-other">#{recommendation.rank ?? index + 2}</span>
+                    </div>
+                    {recommendation.explanation && <p className="muted">{recommendation.explanation}</p>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -109,8 +193,9 @@ export function PlanningPage() {
   const [selected, setSelected] = useState<'today' | 'weekly'>('today');
   const today = usePlanningTodayQuery(selected === 'today');
   const weekly = usePlanningWeeklyQuery(selected === 'weekly');
+  const recommendations = usePlanningRecommendationsQuery(true);
   const active = selected === 'today' ? today : weekly;
-  const result = latestResult(today.data, weekly.data);
+  const result = latestResult(today.data, weekly.data, recommendations.data);
   const hasData = Boolean(active.data?.ok && active.data.data);
 
   return (
@@ -125,6 +210,8 @@ export function PlanningPage() {
           {active.isFetching ? 'Refreshing...' : selected === 'today' ? 'Refresh today' : 'Refresh weekly'}
         </button>
       </header>
+
+      <RecommendationsPanel data={recommendations.data?.data} isFetching={recommendations.isFetching} onRefresh={() => recommendations.refetch()} />
 
       <section className="page-card main-content-card" aria-labelledby="planning-content-title">
         <div className="section-header">
