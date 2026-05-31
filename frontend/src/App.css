@@ -1252,3 +1252,350 @@ th {
     min-height: 0;
   }
 }
+
+/* Shared API page pattern */
+.page-pattern {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
+  border: 1px solid rgba(191, 219, 254, 0.9);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(219, 234, 254, 0.78));
+  box-shadow: var(--shadow-md);
+}
+
+.page-header h2,
+.page-card h3,
+.page-card h4 {
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+
+.page-header h2 {
+  font-size: clamp(2rem, 5vw, 3.35rem);
+  line-height: 1;
+}
+
+.page-header p:not(.eyebrow),
+.muted,
+.section-card-header p,
+.import-mode-card p,
+.help-card p {
+  color: var(--color-text-muted);
+}
+
+.page-card {
+  min-width: 0;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid rgba(219, 227, 239, 0.92);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-md);
+}
+
+.main-content-card {
+  overflow: hidden;
+}
+
+.diagnostics-card {
+  background: rgba(248, 251, 255, 0.86);
+}
+
+.diagnostics-card > .panel {
+  margin-top: var(--space-4);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+
+.segmented-control button {
+  min-height: 2.35rem;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 800;
+}
+
+.segmented-control button.active {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-primary-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondary-action {
+  border-color: var(--color-border-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-weight: 800;
+}
+
+.planning-section-grid,
+.matrix-grid,
+.calendar-summary-grid,
+.import-mode-grid {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.planning-section-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weekly-plan-grid,
+.calendar-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.planning-section-card,
+.matrix-quadrant,
+.calendar-day-card,
+.import-mode-card,
+.help-card,
+.save-bar,
+.validation-banner {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, #ffffff 0%, var(--color-bg-soft) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.planning-section-card,
+.matrix-quadrant,
+.calendar-day-card,
+.import-mode-card,
+.help-card {
+  padding: var(--space-5);
+}
+
+.section-card-header,
+.save-bar,
+.validation-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.section-card-header {
+  margin-bottom: var(--space-4);
+}
+
+.mini-card-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.task-preview-card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.task-preview-card.compact {
+  padding: var(--space-3);
+}
+
+.task-preview-card h4,
+.task-preview-card p {
+  margin: 0;
+}
+
+.task-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.matrix-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.matrix-do-now { border-color: rgba(185, 28, 28, 0.26); }
+.matrix-schedule { border-color: rgba(37, 99, 235, 0.28); }
+.matrix-delegate { border-color: rgba(245, 158, 11, 0.32); }
+.matrix-delete { border-color: rgba(100, 116, 139, 0.34); }
+
+.calendar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(10rem, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+}
+
+.calendar-toolbar label,
+.field-stack {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.calendar-toolbar label span,
+.field-stack > span {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.calendar-toolbar input,
+.calendar-toolbar select {
+  width: 100%;
+}
+
+.warning-pill {
+  border-color: #fbbf24;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.config-panel,
+.import-panel,
+.import-editor {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.validation-banner,
+.save-bar {
+  padding: var(--space-4);
+}
+
+.validation-banner {
+  align-items: center;
+}
+
+.validation-banner span,
+.save-bar p {
+  margin: 0;
+}
+
+.validation-banner.valid {
+  border-color: rgba(22, 101, 52, 0.28);
+  background: #f0fdf4;
+  color: var(--color-success);
+}
+
+.validation-banner.invalid {
+  border-color: rgba(185, 28, 28, 0.28);
+  background: #fef2f2;
+  color: var(--color-danger);
+}
+
+.save-bar {
+  align-items: center;
+  background: rgba(248, 251, 255, 0.84);
+}
+
+.compact-row {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.import-mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.import-mode-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.import-mode-card.active {
+  border-color: var(--color-border-strong);
+  background: linear-gradient(180deg, #ffffff 0%, var(--color-primary-soft) 100%);
+}
+
+code {
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  padding: 0.08rem 0.28rem;
+}
+
+@media (max-width: 900px) {
+  .page-header,
+  .section-card-header,
+  .save-bar,
+  .validation-banner {
+    flex-direction: column;
+  }
+
+  .planning-section-grid,
+  .matrix-grid,
+  .import-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-toolbar button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .page-header,
+  .page-card,
+  .planning-section-card,
+  .matrix-quadrant,
+  .calendar-day-card,
+  .import-mode-card,
+  .help-card {
+    border-radius: var(--radius-lg);
+  }
+
+  .calendar-toolbar,
+  .weekly-plan-grid,
+  .calendar-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-header .button-primary,
+  .secondary-action,
+  .segmented-control,
+  .segmented-control button,
+  .compact-row,
+  .compact-row > *,
+  .save-bar .button-primary,
+  .import-mode-card button {
+    width: 100%;
+  }
+
+  .task-preview-card,
+  .inspector-item,
+  pre,
+  textarea,
+  input,
+  select {
+    min-width: 0;
+  }
+}
