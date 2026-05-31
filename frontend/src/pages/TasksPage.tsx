@@ -1,14 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type DragEvent } from 'react';
 import type { ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { type TaskTab, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { isTaskStatus, TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
 
 type FilterValue = 'all' | string;
+type ViewMode = 'board' | 'list';
 
 const formatValue = (value?: string | boolean | number | null) => {
   if (value === true) return 'Yes';
@@ -33,6 +34,8 @@ const isOverdue = (task: TaskRecord) => {
 
 const uniqueOptions = (tasks: TaskRecord[], key: 'area' | 'effort') => Array.from(new Set(tasks.map((task) => task[key]).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
 
+const sortTasksForBoard = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
+
 const taskMatchesSearch = (task: TaskRecord, searchTerm: string) => {
   const needle = searchTerm.trim().toLowerCase();
   if (!needle) return true;
@@ -49,13 +52,15 @@ export function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
   const [areaFilter, setAreaFilter] = useState<FilterValue>('all');
   const [effortFilter, setEffortFilter] = useState<FilterValue>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('board');
+  const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
   const duplicatesQuery = useTasksQuery('duplicates');
   const query = tab === 'active' ? activeQuery : tab === 'archive' ? archiveQuery : duplicatesQuery;
-  const { createTask, updateTask, deleteTask, completeTask, changeStatus } = useTaskMutations();
-  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending;
+  const { createTask, updateTask, deleteTask, completeTask, changeStatus, moveTask } = useTaskMutations();
+  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || moveTask.isPending;
 
   const activeData = activeQuery.data?.data;
   const archiveData = archiveQuery.data?.data;
@@ -82,7 +87,11 @@ export function TasksPage() {
     return relatedTasks.some((task) => taskMatchesSearch(task, search));
   }), [duplicates, search]);
   const activeFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all'].filter(Boolean).length;
-  const inspectorHistory = [changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, query.data]
+  const boardColumns = useMemo(() => TASK_STATUS_VALUES.map((columnStatus) => ({
+    status: columnStatus,
+    tasks: sortTasksForBoard(filteredTasks.filter((task) => task.status === columnStatus)),
+  })), [filteredTasks]);
+  const inspectorHistory = [moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, query.data]
     .filter((result): result is ApiCallResult<unknown> => Boolean(result));
 
   const submitCreate = () => {
@@ -97,6 +106,28 @@ export function TasksPage() {
   const showCreatePanel = () => {
     setCreateOpen((open) => !open);
     window.requestAnimationFrame(() => titleRef.current?.focus());
+  };
+
+  const moveTaskTo = (taskId: number, targetStatus: TaskStatus, position: number) => {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    if (!task || !isTaskStatus(targetStatus)) return;
+    if (task.status === targetStatus && task.position === position) return;
+    moveTask.mutate({ id: taskId, body: { status: targetStatus, position } });
+  };
+
+  const handleDragStart = (event: DragEvent<HTMLElement>, taskId: number) => {
+    setDraggingTaskId(taskId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(taskId));
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>, targetStatus: TaskStatus, position: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const taskId = Number(event.dataTransfer.getData('text/plain') || draggingTaskId);
+    setDraggingTaskId(null);
+    if (!Number.isFinite(taskId)) return;
+    moveTaskTo(taskId, targetStatus, position);
   };
 
   return (
@@ -149,10 +180,18 @@ export function TasksPage() {
             <h3 id="task-list-title">{tab === 'archive' ? 'Archived tasks' : tab === 'duplicates' ? 'Duplicate groups' : 'Active tasks'}</h3>
             <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} applied.` : 'Use filters to quickly find the next task to move.'}</p>
           </div>
-          <div className="task-view-toggle" role="group" aria-label="Task list view">
-            <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeTasks.length}</span></button>
-            <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archive <span>{archiveTasks.length}</span></button>
-            <button className={tab === 'duplicates' ? 'active' : ''} type="button" onClick={() => setTab('duplicates')}>Duplicates <span>{duplicateCount}</span></button>
+          <div className="task-header-actions">
+            {tab !== 'duplicates' && (
+              <div className="task-view-toggle" role="group" aria-label="Task display mode">
+                <button className={viewMode === 'board' ? 'active' : ''} type="button" onClick={() => setViewMode('board')}>Board</button>
+                <button className={viewMode === 'list' ? 'active' : ''} type="button" onClick={() => setViewMode('list')}>List</button>
+              </div>
+            )}
+            <div className="task-view-toggle" role="group" aria-label="Task list view">
+              <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeTasks.length}</span></button>
+              <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archive <span>{archiveTasks.length}</span></button>
+              <button className={tab === 'duplicates' ? 'active' : ''} type="button" onClick={() => setTab('duplicates')}>Duplicates <span>{duplicateCount}</span></button>
+            </div>
           </div>
         </div>
 
@@ -199,6 +238,45 @@ export function TasksPage() {
               <p><strong>Representative:</strong> #{g.representative?.id} {g.representative?.title}</p>
               <ul>{g.duplicates?.map((d) => <li key={d.id}>#{d.id} {d.title}</li>)}</ul>
             </div>)}
+          </div>
+        ) : viewMode === 'board' ? (
+          <div className="task-board" aria-label="Task status board">
+            {boardColumns.map((column) => (
+              <section key={column.status} className="task-board-column" onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, column.status, column.tasks.length)}>
+                <header className="task-board-column-header">
+                  <span className={`status-badge task-status-badge status-task-${column.status.toLowerCase().replaceAll('_', '-')}`}>{column.status}</span>
+                  <strong>{column.tasks.length}</strong>
+                </header>
+                <div className="task-board-card-list">
+                  {column.tasks.map((task, index) => {
+                    const overdue = isOverdue(task);
+                    return (
+                      <article
+                        key={task.id}
+                        className={`task-board-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''} ${draggingTaskId === task.id ? 'dragging' : ''}`.trim()}
+                        draggable={!busy}
+                        onDragStart={(event) => handleDragStart(event, task.id)}
+                        onDragEnd={() => setDraggingTaskId(null)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => handleDrop(event, column.status, index)}
+                      >
+                        <div className="task-board-card-title">
+                          <strong>#{task.id} {task.title}</strong>
+                          {task.important && <span className="task-important-pill">Important</span>}
+                        </div>
+                        {task.description && <p className="task-description">{task.description}</p>}
+                        <dl className="task-board-meta">
+                          <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</dd></div>
+                          <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
+                          <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+                        </dl>
+                      </article>
+                    );
+                  })}
+                  {column.tasks.length === 0 && <p className="task-board-empty">Drop tasks here.</p>}
+                </div>
+              </section>
+            ))}
           </div>
         ) : (
           <div className="task-table-shell">
@@ -256,7 +334,7 @@ export function TasksPage() {
 
       <details className="panel task-inspector" open={false}>
         <summary>API request inspector</summary>
-        <RequestInspector history={inspectorHistory} result={changeStatus.data ?? completeTask.data ?? deleteTask.data ?? updateTask.data ?? createTask.data ?? query.data ?? null} />
+        <RequestInspector history={inspectorHistory} result={moveTask.data ?? changeStatus.data ?? completeTask.data ?? deleteTask.data ?? updateTask.data ?? createTask.data ?? query.data ?? null} />
       </details>
     </div>
   );

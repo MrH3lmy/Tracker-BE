@@ -23,6 +23,8 @@ public record UpdateTaskRequest(
         String blockedReason,
         String waitingOn,
         LocalDate followUpDate,
+        Long boardColumnId,
+        Integer position,
         @Valid CreateTaskRequest.RecurrenceRuleRequest recurrence
 ) {
     @AssertTrue(message = "blockedReason is recommended when status is BLOCKED")

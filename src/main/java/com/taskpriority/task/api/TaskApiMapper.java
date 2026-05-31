@@ -11,7 +11,7 @@ public class TaskApiMapper {
         Task task = new Task();
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate(), request.recurrence());
+                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence());
         return task;
     }
 
@@ -20,7 +20,7 @@ public class TaskApiMapper {
         task.setId(id);
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate(), request.recurrence());
+                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence());
         return task;
     }
 
@@ -45,7 +45,9 @@ public class TaskApiMapper {
                 task.getPriorityScore(),
                 task.getPriorityCategory(),
                 task.getAgeFlag(),
-                task.getPriorityReason()
+                task.getPriorityReason(),
+                task.getBoardColumnId(),
+                task.getPosition()
         );
     }
 
@@ -53,6 +55,7 @@ public class TaskApiMapper {
                                    boolean important, com.taskpriority.model.Status status,
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
                                    String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
+                                   Long boardColumnId, Integer position,
                                    CreateTaskRequest.RecurrenceRuleRequest recurrence) {
         task.setTitle(title);
         task.setDescription(description);
@@ -64,6 +67,8 @@ public class TaskApiMapper {
         task.setBlockedReason(blockedReason);
         task.setWaitingOn(waitingOn);
         task.setFollowUpDate(followUpDate);
+        task.setBoardColumnId(boardColumnId);
+        if (position != null) task.setPosition(position);
         if (recurrence != null) {
             RecurrenceRule recurrenceRule = new RecurrenceRule();
             recurrenceRule.setFrequency(recurrence.frequency());
