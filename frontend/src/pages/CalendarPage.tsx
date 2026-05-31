@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { apiDownload } from '../apiClient';
+import { apiDownload, type ApiCallResult } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { useCalendarMonthQuery } from '../hooks/useApiQueries';
@@ -9,7 +9,7 @@ export function CalendarPage() {
   const now = new Date();
   const [year, setYear] = useState(String(now.getUTCFullYear()));
   const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
-  const [lastResult, setLastResult] = useState<any>(null);
+  const [lastResult, setLastResult] = useState<ApiCallResult<unknown> | null>(null);
   const [enabled, setEnabled] = useState(false);
   const inputErrors = useMemo(() => validateCalendarInputs(year, month), [year, month]);
   const canLoadMonth = !inputErrors.year && !inputErrors.month;

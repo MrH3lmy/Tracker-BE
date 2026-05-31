@@ -18,6 +18,16 @@ class ApiV1IntegrationTest {
     @Autowired MockMvc mockMvc;
 
     @Test
+    void allowsLocalFrontendCorsPreflight() throws Exception {
+        mockMvc.perform(options("/api/v1/tasks")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("GET")));
+    }
+
+    @Test
     void endpointContracts() throws Exception {
         String body = """
                 {"title":"Test Task","description":"d"}
