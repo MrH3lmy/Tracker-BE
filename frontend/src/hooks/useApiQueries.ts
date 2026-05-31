@@ -7,6 +7,7 @@ export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
+  planningRecommendations: ['planning', 'recommendations'] as const,
   matrix: ['matrix'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
   settings: ['settings'] as const,
@@ -17,11 +18,16 @@ const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archiv
 export const useTasksQuery = (tab: TaskTab) => useQuery({ queryKey: queryKeys.tasks(tab), queryFn: () => apiJson<unknown>('GET', taskPathByTab[tab]) });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
+export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
 export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.matrix, queryFn: () => apiJson<unknown>('GET', '/api/v1/matrix'), enabled });
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 
-const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => qc.invalidateQueries({ queryKey: ['tasks'] });
+const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
+  qc.invalidateQueries({ queryKey: ['tasks'] });
+  qc.invalidateQueries({ queryKey: ['planning'] });
+  qc.invalidateQueries({ queryKey: ['matrix'] });
+};
 
 export function useTaskMutations() {
   const qc = useQueryClient();

@@ -36,6 +36,15 @@ class ApiV1IntegrationTest {
         mockMvc.perform(get("/api/v1/tasks")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/today")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/weekly")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/planning/recommendations"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].task.title").value("Test Task"))
+                .andExpect(jsonPath("$[0].recommendedAction").exists())
+                .andExpect(jsonPath("$[0].reasonCodes").isArray())
+                .andExpect(jsonPath("$[0].explanation").exists())
+                .andExpect(jsonPath("$[0].confidence").exists())
+                .andExpect(jsonPath("$[0].blockerWarnings").isArray())
+                .andExpect(jsonPath("$[0].rank").value(1));
         mockMvc.perform(get("/api/v1/matrix")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/dashboard")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/calendar/month").param("year","2026").param("month","5")).andExpect(status().isOk());
