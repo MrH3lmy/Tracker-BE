@@ -58,7 +58,11 @@ public class TaskApiMapper {
                 task.getBoardColumnId(),
                 task.getPosition(),
                 task.getDependencyIds(),
-                task.getBlockingTaskIds()
+                task.getBlockingTaskIds(),
+                task.getSubtaskIds(),
+                task.getSubtaskCount(),
+                task.getCompletedSubtaskCount(),
+                task.getSubtaskProgressPercent()
         );
     }
 

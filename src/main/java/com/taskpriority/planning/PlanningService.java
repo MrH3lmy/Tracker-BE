@@ -137,14 +137,23 @@ public class PlanningService {
         List<Long> dependencyIds = sortedIds(dependencyIdsByTask.get(task.getId()));
         List<Long> blockingTaskIds = sortedIds(blockingTaskIdsByTask.get(task.getId()));
         List<String> blockers = blockersFor(task, dependencyIds);
-        PlannerRiskResponse risk = taskRisk(task, columnRisk, blockers, today, calendarSettings);
+        List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(task.getId());
+        PlannerRiskResponse risk = taskRisk(task, columnRisk, blockers, subtasks, today, calendarSettings);
+        int aggregateEstimatedMinutes = aggregateEstimatedMinutes(task, subtasks);
+        int completedSubtaskCount = (int) subtasks.stream()
+                .filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED)
+                .count();
+        int subtaskCount = subtasks.size();
+        int subtaskProgressPercent = subtaskCount == 0 ? 0 : (int) Math.round((completedSubtaskCount * 100.0) / subtaskCount);
 
         return new PlannerTaskResponse(task.getId(), task.getTitle(), task.getStatus(), normalize(task.getTrack()), normalize(phaseFor(task)),
                 task.getStartDate(), task.getDueDate(), task.getEstimatedMinutes(), roundHours(estimatedMinutes(task) / 60.0),
+                task.getParentTaskId(), subtasks.stream().map(Task::getId).toList(), subtaskCount, completedSubtaskCount,
+                subtaskProgressPercent, aggregateEstimatedMinutes, roundHours(aggregateEstimatedMinutes / 60.0),
                 risk, dependencyIds, blockingTaskIds, blockers);
     }
 
-    private PlannerRiskResponse taskRisk(Task task, PlannerRiskResponse columnRisk, List<String> blockers, LocalDate today,
+    private PlannerRiskResponse taskRisk(Task task, PlannerRiskResponse columnRisk, List<String> blockers, List<Task> subtasks, LocalDate today,
                                          WorkingCalendarService.CalendarSettings calendarSettings) {
         PlannerRiskResponse.Level persistedLevel = mapRiskLevel(task.getRiskLevel());
         List<String> reasons = new ArrayList<>();
@@ -162,6 +171,16 @@ public class PlanningService {
         if (task.getDueDate() != null && !workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings)) {
             level = max(level, PlannerRiskResponse.Level.MEDIUM);
             reasons.add("Due date falls on an excluded calendar day.");
+        }
+        long incompleteSubtasks = subtasks.stream()
+                .filter(subtask -> subtask.getStatus() != Status.DONE && subtask.getStatus() != Status.CANCELLED)
+                .count();
+        if (incompleteSubtasks > 0 && task.getStatus() == Status.DONE) {
+            level = max(level, PlannerRiskResponse.Level.HIGH);
+            reasons.add("Parent is done while " + incompleteSubtasks + " subtask(s) remain incomplete.");
+        } else if (incompleteSubtasks > 0) {
+            level = max(level, PlannerRiskResponse.Level.MEDIUM);
+            reasons.add(incompleteSubtasks + " incomplete subtask(s) contribute to this task's delivery risk.");
         }
         if (columnRisk.level() != PlannerRiskResponse.Level.LOW) {
             level = max(level, columnRisk.level());
@@ -212,6 +231,10 @@ public class PlanningService {
 
     private int estimatedMinutes(Task task) {
         return task.getEstimatedMinutes() == null ? 0 : task.getEstimatedMinutes();
+    }
+
+    private int aggregateEstimatedMinutes(Task task, List<Task> subtasks) {
+        return estimatedMinutes(task) + subtasks.stream().mapToInt(this::estimatedMinutes).sum();
     }
 
     private double roundHours(double value) {

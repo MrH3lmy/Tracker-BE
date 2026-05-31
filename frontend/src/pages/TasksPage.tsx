@@ -5,7 +5,8 @@ import { QueryState } from '../components/QueryState';
 import { type TaskTab, useTaskBlockersQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { isTaskStatus, TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; startDate?: string; estimatedMinutes?: number; actualMinutes?: number; riskLevel?: RiskLevel; riskReason?: string; track?: string; phase?: string; parentTaskId?: number; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; startDate?: string; estimatedMinutes?: number; actualMinutes?: number; riskLevel?: RiskLevel; riskReason?: string; track?: string; phase?: string; parentTaskId?: number; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; subtaskIds?: number[]; subtaskCount?: number; completedSubtaskCount?: number; subtaskProgressPercent?: number; }
+interface TaskTreeNode extends TaskRecord { subtasks: TaskTreeNode[]; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
 interface BlockerWarning { type: string; title: string; taskId?: number; taskTitle?: string; status?: TaskStatus; priorityScore?: number; message: string; recommendation: string; relatedTaskIds?: number[]; }
 interface BlockerAnalysis { warnings: BlockerWarning[]; dependencyCount: number; }
@@ -47,12 +48,33 @@ const renderDueDate = (task: TaskRecord, overdue = isOverdue(task)) => {
 
 const uniqueOptions = (tasks: TaskRecord[], key: 'area' | 'effort') => Array.from(new Set(tasks.map((task) => task[key]).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
 
-const sortTasksForBoard = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
+const sortTasksForBoard = <T extends TaskRecord>(tasks: T[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
 
 const taskMatchesSearch = (task: TaskRecord, searchTerm: string) => {
   const needle = searchTerm.trim().toLowerCase();
   if (!needle) return true;
   return [task.title, task.description, task.area, task.track, task.phase, task.riskReason].some((value) => value?.toLowerCase().includes(needle));
+};
+
+const buildTaskTree = (tasks: TaskRecord[]): TaskTreeNode[] => {
+  const nodes = new Map<number, TaskTreeNode>();
+  tasks.forEach((task) => nodes.set(task.id, { ...task, subtasks: [] }));
+  const roots: TaskTreeNode[] = [];
+  nodes.forEach((node) => {
+    const parent = node.parentTaskId ? nodes.get(node.parentTaskId) : undefined;
+    if (parent) parent.subtasks.push(node);
+    else roots.push(node);
+  });
+  nodes.forEach((node) => { node.subtasks = sortTasksForBoard(node.subtasks); });
+  return sortTasksForBoard(roots);
+};
+
+const subtaskSummary = (task: TaskRecord) => {
+  const total = task.subtaskCount ?? task.subtaskIds?.length ?? 0;
+  if (total === 0) return null;
+  const completed = task.completedSubtaskCount ?? 0;
+  const percent = task.subtaskProgressPercent ?? Math.round((completed * 100) / total);
+  return `${completed}/${total} subtasks (${percent}%)`;
 };
 
 export function TasksPage() {
@@ -120,10 +142,11 @@ export function TasksPage() {
     return relatedTasks.some((task) => taskMatchesSearch(task, search));
   }), [duplicates, search]);
   const activeFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all'].filter(Boolean).length;
+  const taskTree = useMemo(() => buildTaskTree(filteredTasks), [filteredTasks]);
   const boardColumns = useMemo(() => TASK_STATUS_VALUES.map((columnStatus) => ({
     status: columnStatus,
-    tasks: sortTasksForBoard(filteredTasks.filter((task) => task.status === columnStatus)),
-  })), [filteredTasks]);
+    tasks: taskTree.filter((task) => task.status === columnStatus),
+  })), [taskTree]);
   const inspectorHistory = [removeDependency.data, addDependency.data, moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, blockersQuery.data, query.data]
     .filter((result): result is ApiCallResult<unknown> => Boolean(result));
 
@@ -186,6 +209,12 @@ export function TasksPage() {
     window.requestAnimationFrame(() => titleRef.current?.focus());
   };
 
+  const startSubtask = (task: TaskRecord) => {
+    setParentTaskId(String(task.id));
+    setCreateOpen(true);
+    window.requestAnimationFrame(() => titleRef.current?.focus());
+  };
+
   const moveTaskTo = (taskId: number, targetStatus: TaskStatus, position: number) => {
     const task = tasks.find((candidate) => candidate.id === taskId);
     if (!task || !isTaskStatus(targetStatus)) return;
@@ -219,6 +248,102 @@ export function TasksPage() {
     setDraggingTaskId(null);
     if (!Number.isFinite(taskId)) return;
     moveTaskTo(taskId, targetStatus, position);
+  };
+
+  const renderSubtaskProgress = (task: TaskRecord) => {
+    const summary = subtaskSummary(task);
+    if (!summary) return null;
+    return <p className="task-description subtask-progress">{summary}</p>;
+  };
+
+  const renderBoardTask = (task: TaskTreeNode, columnStatus: TaskStatus, index: number, depth = 0) => {
+    const overdue = isOverdue(task);
+    return (
+      <article
+        key={task.id}
+        className={`task-board-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''} ${draggingTaskId === task.id ? 'dragging' : ''}`.trim()}
+        draggable={!busy}
+        onDragStart={(event) => handleDragStart(event, task.id)}
+        onDragEnd={() => setDraggingTaskId(null)}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => handleDrop(event, columnStatus, index)}
+        style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}
+      >
+        <div className="task-board-card-title">
+          <strong>#{task.id} {task.title}</strong>
+          {task.important && <span className="task-important-pill">Important</span>}
+        </div>
+        {task.description && <p className="task-description">{task.description}</p>}
+        {renderSubtaskProgress(task)}
+        {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className="task-description">Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
+        <dl className="task-board-meta">
+          <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
+          <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</dd></div>
+          <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
+          <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
+          <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
+          <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
+          <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
+          <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
+          <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+          <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
+        </dl>
+        <div className="task-actions"><button type="button" onClick={() => startSubtask(task)} disabled={busy}>Add subtask</button></div>
+        {task.subtasks.length > 0 && <div className="subtask-list">{task.subtasks.map((subtask, subtaskIndex) => renderBoardTask(subtask, columnStatus, subtaskIndex, depth + 1))}</div>}
+      </article>
+    );
+  };
+
+  const renderListTask = (task: TaskTreeNode, depth = 0) => {
+    const overdue = isOverdue(task);
+    return (
+      <article key={task.id} className={`task-list-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''}`.trim()} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
+        <div className="task-list-primary">
+          <span className="task-id">#{task.id}</span>
+          <div>
+            <div className="task-card-title">
+              <strong>{task.title}</strong>
+              {task.important && <span className="task-important-pill">Important</span>}
+            </div>
+            {task.description && <p className="task-description">{task.description}</p>}
+            {renderSubtaskProgress(task)}
+          </div>
+        </div>
+        <div className="task-list-metric" data-label="Status"><span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span></div>
+        <div className="task-list-metric" data-label="Due date"><span className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</span></div>
+        <div className="task-list-metric" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
+        <div className="task-list-metric" data-label="Risk"><span>{formatValue(task.riskLevel)}</span>{task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}</div>
+        <div className="task-actions" aria-label={`Actions for ${task.title}`}>
+          <button type="button" onClick={() => completeTask.mutate(task.id)} disabled={busy}>Complete</button>
+          <button type="button" onClick={() => startSubtask(task)} disabled={busy}>Add subtask</button>
+          <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
+          <select id={`changeStatus-${task.id}`} disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value && isTaskStatus(e.target.value)) changeStatus.mutate({ id: task.id, status: e.target.value }); }}>
+            <option value="">Set status...</option>
+            {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
+          </select>
+          <button type="button" onClick={() => snoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
+          {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => removeDependency.mutate({ id: task.id, blocksTaskId })} disabled={busy}>Unlink #{blocksTaskId}</button>)}
+          <button type="button" onClick={() => deleteTask.mutate(task.id)} disabled={busy}>Delete</button>
+        </div>
+        <details className="task-card-details">
+          <summary>More details</summary>
+          <dl className="task-detail-grid">
+            <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
+            <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
+            <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
+            <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
+            <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
+            <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
+            <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+            <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
+            <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+            <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+            <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
+          </dl>
+        </details>
+        {task.subtasks.length > 0 && <div className="subtask-list">{task.subtasks.map((subtask) => renderListTask(subtask, depth + 1))}</div>}
+      </article>
+    );
   };
 
   return (
@@ -427,39 +552,7 @@ export function TasksPage() {
                   <strong>{column.tasks.length}</strong>
                 </header>
                 <div className="task-board-card-list">
-                  {column.tasks.map((task, index) => {
-                    const overdue = isOverdue(task);
-                    return (
-                      <article
-                        key={task.id}
-                        className={`task-board-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''} ${draggingTaskId === task.id ? 'dragging' : ''}`.trim()}
-                        draggable={!busy}
-                        onDragStart={(event) => handleDragStart(event, task.id)}
-                        onDragEnd={() => setDraggingTaskId(null)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => handleDrop(event, column.status, index)}
-                      >
-                        <div className="task-board-card-title">
-                          <strong>#{task.id} {task.title}</strong>
-                          {task.important && <span className="task-important-pill">Important</span>}
-                        </div>
-                        {task.description && <p className="task-description">{task.description}</p>}
-                        {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className="task-description">Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
-                        <dl className="task-board-meta">
-                          <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
-                          <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</dd></div>
-                          <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
-                          <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
-                          <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
-                          <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
-                          <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
-                          <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
-                          <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
-                          <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
-                        </dl>
-                      </article>
-                    );
-                  })}
+                  {column.tasks.map((task, index) => renderBoardTask(task, column.status, index))}
                   {column.tasks.length === 0 && <p className="task-board-empty">Drop tasks here.</p>}
                 </div>
               </section>
@@ -477,64 +570,7 @@ export function TasksPage() {
                 <span>Actions</span>
               </div>
               <div className="task-list-body">
-                {filteredTasks.map((task) => {
-                  const overdue = isOverdue(task);
-                  return (
-                    <article key={task.id} className={`task-list-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''}`.trim()}>
-                      <div className="task-list-primary">
-                        <span className="task-id">#{task.id}</span>
-                        <div>
-                          <div className="task-card-title">
-                            <strong>{task.title}</strong>
-                            {task.important && <span className="task-important-pill">Important</span>}
-                          </div>
-                          {task.description && <p className="task-description">{task.description}</p>}
-                        </div>
-                      </div>
-
-                      <div className="task-list-metric" data-label="Status">
-                        <span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span>
-                      </div>
-                      <div className="task-list-metric" data-label="Due date">
-                        <span className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</span>
-                      </div>
-                      <div className="task-list-metric" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
-                      <div className="task-list-metric" data-label="Risk">
-                        <span>{formatValue(task.riskLevel)}</span>
-                        {task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}
-                      </div>
-
-                      <div className="task-actions" aria-label={`Actions for ${task.title}`}>
-                        <button type="button" onClick={() => completeTask.mutate(task.id)} disabled={busy}>Complete</button>
-                        <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
-                        <select id={`changeStatus-${task.id}`} disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value && isTaskStatus(e.target.value)) changeStatus.mutate({ id: task.id, status: e.target.value }); }}>
-                          <option value="">Set status...</option>
-                          {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
-                        </select>
-                        <button type="button" onClick={() => snoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
-                        {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => removeDependency.mutate({ id: task.id, blocksTaskId })} disabled={busy}>Unlink #{blocksTaskId}</button>)}
-                        <button type="button" onClick={() => deleteTask.mutate(task.id)} disabled={busy}>Delete</button>
-                      </div>
-
-                      <details className="task-card-details">
-                        <summary>More details</summary>
-                        <dl className="task-detail-grid">
-                          <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
-                          <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
-                          <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
-                          <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
-                          <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
-                          <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
-                          <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
-                          <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
-                          <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-                          <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-                          <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
-                        </dl>
-                      </details>
-                    </article>
-                  );
-                })}
+                {taskTree.map((task) => renderListTask(task))}
               </div>
             </div>
           </div>
