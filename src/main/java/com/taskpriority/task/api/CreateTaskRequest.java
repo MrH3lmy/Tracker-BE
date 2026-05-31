@@ -31,6 +31,7 @@ public record CreateTaskRequest(
         LocalDate followUpDate,
         Long boardColumnId,
         Integer position,
+        List<Long> dependencyIds,
         @Valid RecurrenceRuleRequest recurrence
 ) {
     @AssertTrue(message = "blockedReason is recommended when status is BLOCKED")

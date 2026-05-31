@@ -44,7 +44,9 @@ public class TaskApiMapper {
                 task.getAgeFlag(),
                 task.getPriorityReason(),
                 task.getBoardColumnId(),
-                task.getPosition()
+                task.getPosition(),
+                task.getDependencyIds(),
+                task.getBlockingTaskIds()
         );
     }
 

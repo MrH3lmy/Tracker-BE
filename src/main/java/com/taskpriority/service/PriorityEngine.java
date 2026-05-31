@@ -20,6 +20,10 @@ public class PriorityEngine {
     }
 
     public PriorityComputation compute(Task task) {
+        return compute(task, new DependencyContext(0, 0));
+    }
+
+    public PriorityComputation compute(Task task, DependencyContext dependencies) {
         LocalDate today = LocalDate.now();
 
         Integer daysLeft = task.getDueDate() == null ? null : (int) ChronoUnit.DAYS.between(today, task.getDueDate());
@@ -31,12 +35,13 @@ public class PriorityEngine {
         int effortPenalty = effortPenalty(task.getEffort());
         int statusPenalty = statusPenalty(task.getStatus());
         int followUpScore = followUpScore(task, today);
+        int blockerScore = blockerScore(task, dependencies, today);
 
-        int total = dueScore + importanceScore + followUpScore - effortPenalty - statusPenalty;
+        int total = dueScore + importanceScore + followUpScore + blockerScore - effortPenalty - statusPenalty;
         PriorityCategory category = category(task.isImportant(), urgent);
         AgeFlag ageFlag = ageFlag(task, today);
 
-        String reason = reason(task, daysLeft, overdue, urgent, dueScore, importanceScore, followUpScore, effortPenalty, statusPenalty, total, category, ageFlag);
+        String reason = reason(task, daysLeft, overdue, urgent, dueScore, importanceScore, followUpScore, blockerScore, dependencies, effortPenalty, statusPenalty, total, category, ageFlag);
         return new PriorityComputation(daysLeft, overdue, urgent, total, category, ageFlag, reason);
     }
 
@@ -56,6 +61,28 @@ public class PriorityEngine {
         if (days < 0) return get("follow_up.weight.overdue", 20);
         if (days <= get("follow_up.days.due.threshold", 0)) return get("follow_up.weight.due", 10);
         return 0;
+    }
+
+    private int blockerScore(Task task, DependencyContext dependencies, LocalDate today) {
+        int score = 0;
+        if (task.getStatus() == Status.BLOCKED && dependencies.dependencyCount() > 0) {
+            score -= get("dependency.penalty.blocked", 20);
+        }
+        if (dependencies.blockingCount() > 0) {
+            score += dependencies.blockingCount() * get("dependency.weight.blocks_task", 15);
+        }
+        if (task.getStatus() == Status.WAITING && task.getCreatedDate() != null) {
+            long waitingDays = ChronoUnit.DAYS.between(task.getCreatedDate().toLocalDate(), today);
+            if (waitingDays >= get("waiting.days.stale.threshold", 7)) {
+                score += get("waiting.weight.stale", 12);
+            }
+        }
+        if ((task.getStatus() == Status.WAITING || task.getStatus() == Status.BLOCKED)
+                && task.getFollowUpDate() != null
+                && task.getFollowUpDate().isBefore(today)) {
+            score += get("follow_up.weight.overdue_follow_up", 10);
+        }
+        return score;
     }
 
     private int statusPenalty(Status status) {
@@ -93,14 +120,15 @@ public class PriorityEngine {
     }
 
     private String reason(Task task, Integer daysLeft, boolean overdue, boolean urgent,
-                          int dueScore, int importanceScore, int followUpScore,
-                          int effortPenalty, int statusPenalty, int total,
+                          int dueScore, int importanceScore, int followUpScore, int blockerScore,
+                          DependencyContext dependencies, int effortPenalty, int statusPenalty, int total,
                           PriorityCategory category, AgeFlag ageFlag) {
         List<String> parts = new ArrayList<>();
         parts.add("status=" + task.getStatus());
         parts.add("important=" + task.isImportant() + "(+" + importanceScore + ")");
         parts.add("due=" + (daysLeft == null ? "none" : daysLeft + "d") + "(+" + dueScore + ")");
         parts.add("followUp=" + (task.getFollowUpDate() == null ? "none" : task.getFollowUpDate()) + "(+" + followUpScore + ")");
+        parts.add("dependencies=blockedBy:" + dependencies.dependencyCount() + ",blocks:" + dependencies.blockingCount() + "(" + (blockerScore >= 0 ? "+" : "") + blockerScore + ")");
         parts.add("effort=" + task.getEffort() + "(-" + effortPenalty + ")");
         parts.add("statusPenalty=(-" + statusPenalty + ")");
         parts.add("flags=[overdue=" + overdue + ",urgent=" + urgent + ",age=" + ageFlag + "]");
@@ -114,6 +142,8 @@ public class PriorityEngine {
                 .map(PriorityScoringSetting::getSettingValue)
                 .orElse(defaultValue);
     }
+
+    public record DependencyContext(int dependencyCount, int blockingCount) {}
 
     public record PriorityComputation(
             Integer daysLeft,

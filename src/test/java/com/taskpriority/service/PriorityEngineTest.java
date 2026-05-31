@@ -38,7 +38,7 @@ class PriorityEngineTest {
         assertEquals(1, c.daysLeft());
         assertFalse(c.overdue());
         assertTrue(c.urgent());
-        assertEquals(70, c.priorityScore());
+        assertEquals(82, c.priorityScore());
         assertEquals(PriorityCategory.DO_NOW, c.priorityCategory());
         assertEquals(AgeFlag.AGING, c.ageFlag());
         assertTrue(c.priorityReason().contains("followUp=" + LocalDate.now() + "(+10)"));
@@ -57,7 +57,7 @@ class PriorityEngineTest {
         assertNull(c.daysLeft());
         assertFalse(c.overdue());
         assertFalse(c.urgent());
-        assertEquals(-10, c.priorityScore());
+        assertEquals(0, c.priorityScore());
         assertEquals(PriorityCategory.DELETE, c.priorityCategory());
         assertEquals(AgeFlag.STALE, c.ageFlag());
         assertTrue(c.priorityReason().contains("status=BLOCKED"));

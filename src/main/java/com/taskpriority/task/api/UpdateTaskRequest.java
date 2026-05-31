@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public record UpdateTaskRequest(
         @NotBlank(message = "is required")
@@ -25,6 +26,7 @@ public record UpdateTaskRequest(
         LocalDate followUpDate,
         Long boardColumnId,
         Integer position,
+        List<Long> dependencyIds,
         @Valid CreateTaskRequest.RecurrenceRuleRequest recurrence
 ) {
     @AssertTrue(message = "blockedReason is recommended when status is BLOCKED")

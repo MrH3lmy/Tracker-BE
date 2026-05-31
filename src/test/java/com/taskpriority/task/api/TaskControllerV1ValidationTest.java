@@ -3,6 +3,7 @@ package com.taskpriority.task.api;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Task;
 import com.taskpriority.service.TaskService;
+import com.taskpriority.service.BlockerAnalysisService;
 import com.taskpriority.task.application.DuplicateDetectionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class TaskControllerV1ValidationTest {
 
     @MockBean
     private DuplicateDetectionService duplicateDetectionService;
+
+    @MockBean
+    private BlockerAnalysisService blockerAnalysisService;
 
     @Test
     void createReturnsBadRequestWithStandardizedErrorWhenTitleMissing() throws Exception {
