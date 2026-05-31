@@ -5,8 +5,8 @@
 
 body {
   margin: 0;
-  background: #fafafa;
-  color: #111;
+  background: var(--gradient-page);
+  color: var(--color-text);
 }
 
 * {

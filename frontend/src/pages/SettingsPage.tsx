@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
+import { useTheme } from '../themeContext';
+import { isAppTheme, THEME_OPTIONS, THEME_SETTING_KEY } from '../theme';
 import { validateSettingsPayload } from '../validation/settings';
 
 export function SettingsPage() {
   const settingsQuery = useSettingsQuery(true);
   const saveMutation = useSaveSettingsMutation();
+  const { theme, setTheme } = useTheme();
   const [body, setBody] = useState('{}');
 
   useEffect(() => {
@@ -19,6 +22,19 @@ export function SettingsPage() {
   const bodyValidation = useMemo(() => validateSettingsPayload(body), [body]);
   const canSubmit = !saveMutation.isPending && bodyValidation.errors.length === 0;
   const hasValidationErrors = bodyValidation.errors.length > 0;
+
+  const handleThemeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextTheme = event.target.value;
+    if (!isAppTheme(nextTheme)) return;
+
+    setTheme(nextTheme);
+    const currentSettings = bodyValidation.parsed ?? (settingsQuery.data?.ok && settingsQuery.data.data && typeof settingsQuery.data.data === 'object' && !Array.isArray(settingsQuery.data.data)
+      ? settingsQuery.data.data as Record<string, unknown>
+      : {});
+    const updatedSettings = { ...currentSettings, [THEME_SETTING_KEY]: nextTheme };
+    setBody(JSON.stringify(updatedSettings, null, 2));
+    saveMutation.mutate(updatedSettings);
+  };
 
   return (
     <div className="page-pattern settings-page">
@@ -42,6 +58,19 @@ export function SettingsPage() {
           <button type="button" className="secondary-action" onClick={() => settingsQuery.refetch()} disabled={settingsQuery.isFetching}>
             {settingsQuery.isFetching ? 'Loading...' : 'Reload settings'}
           </button>
+        </div>
+
+
+        <div className="theme-selector-card">
+          <label className="field-stack" htmlFor="themeSelector">
+            <span>Interface theme</span>
+            <select id="themeSelector" value={theme} onChange={handleThemeChange} disabled={saveMutation.isPending}>
+              {THEME_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted">Saved as <code>{THEME_SETTING_KEY}</code>. {THEME_OPTIONS.find((option) => option.value === theme)?.description}</p>
         </div>
 
         <div className={`validation-banner ${hasValidationErrors ? 'invalid' : 'valid'}`} role="status">
