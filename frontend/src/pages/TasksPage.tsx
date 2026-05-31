@@ -205,9 +205,13 @@ export function TasksPage() {
             columns={boardColumns}
             busy={busy}
             draggingTaskId={boardState.draggingTaskId}
+            dropTarget={boardState.dropTarget}
             onDragStart={boardState.handleDragStart}
-            onDragEnd={() => boardState.setDraggingTaskId(null)}
+            onDragOver={boardState.handleDragOver}
+            onDragEnd={boardState.handleDragEnd}
             onDrop={boardState.handleDrop}
+            onClearDropTarget={boardState.clearDropTarget}
+            onMoveTaskTo={boardState.moveTaskTo}
             onStartSubtask={(task: TaskTreeNode) => startSubtask(task)}
           />
         ) : (

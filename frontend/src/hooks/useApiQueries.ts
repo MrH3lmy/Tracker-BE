@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiJson, apiText, type ApiCallResult } from '../apiClient';
+import type { TaskRecord } from '../components/tasks/taskTypes';
+import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
+
+type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
+type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 
 export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
@@ -33,6 +38,44 @@ const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['matrix'] });
 };
 
+const sortTasksForPositioning = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
+
+const applyOptimisticTaskMove = (cached: ApiCallResult<unknown> | undefined, { id, body }: MoveTaskVariables) => {
+  if (!cached || !Array.isArray(cached.data)) return cached;
+  const tasks = cached.data as TaskRecord[];
+  const movingTask = tasks.find((task) => task.id === id);
+  if (!movingTask) return cached;
+
+  const targetStatus = body.status && isTaskStatus(body.status) ? body.status : movingTask.status;
+  if (!targetStatus) return cached;
+
+  const sourceStatus = movingTask.status;
+  const remainingTasks = tasks.filter((task) => task.id !== id);
+  const targetTasks = sortTasksForPositioning(remainingTasks.filter((task) => task.status === targetStatus));
+  const targetPosition = Math.max(0, Math.min(body.position ?? targetTasks.length, targetTasks.length));
+  const movedTask: TaskRecord = {
+    ...movingTask,
+    status: targetStatus,
+    boardColumnId: body.boardColumnId ?? movingTask.boardColumnId,
+  };
+  const targetOrder = [...targetTasks.slice(0, targetPosition), movedTask, ...targetTasks.slice(targetPosition)];
+  const positionById = new Map<number, number>();
+
+  targetOrder.forEach((task, index) => positionById.set(task.id, index));
+  if (sourceStatus && sourceStatus !== targetStatus) {
+    sortTasksForPositioning(remainingTasks.filter((task) => task.status === sourceStatus)).forEach((task, index) => positionById.set(task.id, index));
+  }
+
+  return {
+    ...cached,
+    data: tasks.map((task) => {
+      const updatedTask = task.id === id ? movedTask : task;
+      const optimisticPosition = positionById.get(updatedTask.id);
+      return optimisticPosition === undefined ? updatedTask : { ...updatedTask, position: optimisticPosition };
+    }),
+  } satisfies ApiCallResult<unknown>;
+};
+
 export function useTaskMutations() {
   const qc = useQueryClient();
   const onSuccess = () => invalidateTaskFamily(qc);
@@ -42,7 +85,19 @@ export function useTaskMutations() {
     deleteTask: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}`), onSuccess }),
     completeTask: useMutation({ mutationFn: (id: number) => apiJson('PATCH', `/api/v1/tasks/${id}/complete`), onSuccess }),
     changeStatus: useMutation({ mutationFn: ({ id, status }: { id: number; status: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/status?status=${encodeURIComponent(status)}`), onSuccess }),
-    moveTask: useMutation({ mutationFn: ({ id, body }: { id: number; body: { status?: string; boardColumnId?: number; position?: number } }) => apiJson('PATCH', `/api/v1/tasks/${id}/move`, body), onSuccess }),
+    moveTask: useMutation<ApiCallResult<unknown>, Error, MoveTaskVariables, MoveTaskContext>({
+      mutationFn: ({ id, body }) => apiJson('PATCH', `/api/v1/tasks/${id}/move`, body),
+      onMutate: async (variables) => {
+        await qc.cancelQueries({ queryKey: queryKeys.tasks('active') });
+        const previousActive = qc.getQueryData<ApiCallResult<unknown>>(queryKeys.tasks('active'));
+        qc.setQueryData<ApiCallResult<unknown> | undefined>(queryKeys.tasks('active'), (cached) => applyOptimisticTaskMove(cached, variables));
+        return { previousActive };
+      },
+      onError: (_error, _variables, context) => {
+        if (context?.previousActive) qc.setQueryData(queryKeys.tasks('active'), context.previousActive);
+      },
+      onSettled: () => invalidateTaskFamily(qc),
+    }),
     addDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('POST', `/api/v1/tasks/${id}/dependencies`, { blocksTaskId }), onSuccess }),
     removeDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('DELETE', `/api/v1/tasks/${id}/dependencies/${blocksTaskId}`), onSuccess }),
   };
