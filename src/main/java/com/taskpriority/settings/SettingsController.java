@@ -9,6 +9,6 @@ import java.util.Map;
 public class SettingsController {
     private final SettingsService settingsService;
     public SettingsController(SettingsService settingsService){this.settingsService=settingsService;}
-    @GetMapping public Map<String,String> get(){ return settingsService.getAll(); }
-    @PutMapping public Map<String,String> update(@RequestBody Map<String,String> updates){ return settingsService.update(updates); }
+    @GetMapping public Map<String,Object> get(){ return settingsService.getAll(); }
+    @PutMapping public Map<String,Object> update(@RequestBody Map<String,Object> updates){ return settingsService.update(updates); }
 }
