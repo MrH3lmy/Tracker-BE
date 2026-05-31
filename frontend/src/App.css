@@ -2163,3 +2163,122 @@ code {
     padding: 0 var(--space-4) var(--space-4);
   }
 }
+
+.project-board-wrapper {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.project-board-summary,
+.project-board-column,
+.planner-task-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-panel);
+}
+
+.project-board-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.project-board-summary h3,
+.project-board-summary p,
+.planner-task-card h4,
+.planner-task-card p,
+.project-board-column p {
+  margin: 0;
+}
+
+.capacity-metrics,
+.capacity-strip,
+.dependency-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.capacity-metrics span,
+.capacity-strip span,
+.dependency-list span {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.35rem 0.6rem;
+  background: var(--color-bg-soft);
+  font-weight: 700;
+}
+
+.project-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.project-board-column {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-board-column.overloaded-track,
+.project-board-summary.risk-high,
+.planner-task-card.risk-high {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+}
+
+.project-board-column.risk-medium,
+.project-board-summary.risk-medium,
+.planner-task-card.risk-medium {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-soft);
+}
+
+.planner-task-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.risk-pill.risk-low {
+  background: var(--color-status-success-bg);
+  color: var(--color-success);
+}
+
+.risk-pill.risk-medium {
+  background: var(--color-status-warning-bg);
+  color: var(--color-warning);
+}
+
+.risk-pill.risk-high {
+  background: var(--color-status-danger-bg);
+  color: var(--color-danger-strong);
+}
+
+.risk-reason {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.blocker-text {
+  border-color: var(--color-danger-border) !important;
+  color: var(--color-danger-strong);
+}

@@ -11,7 +11,7 @@ public class TaskApiMapper {
         Task task = new Task();
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.startDate(),
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
-                request.track(), request.parentTaskId(), request.important(), request.status(), request.area(),
+                request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
                 request.boardColumnId(), request.position(), request.recurrence(), true);
         return task;
@@ -20,7 +20,7 @@ public class TaskApiMapper {
     public void applyUpdateRequest(Task existing, UpdateTaskRequest request) {
         applyCommonFields(existing, request.title(), request.description(), request.dueDate(), request.startDate(),
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
-                request.track(), request.parentTaskId(), request.important(), request.status(), request.area(),
+                request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
                 request.boardColumnId(), request.position(), request.recurrence(), false);
     }
@@ -37,6 +37,7 @@ public class TaskApiMapper {
                 task.getRiskLevel(),
                 task.getRiskReason(),
                 task.getTrack(),
+                task.getPhase(),
                 task.getParentTaskId(),
                 task.getCreatedDate(),
                 task.getCompletedDate(),
@@ -64,7 +65,7 @@ public class TaskApiMapper {
     private void applyCommonFields(Task task, String title, String description, java.time.LocalDate dueDate,
                                    java.time.LocalDate startDate, Integer estimatedMinutes, Integer actualMinutes,
                                    com.taskpriority.model.RiskLevel riskLevel, String riskReason, String track,
-                                   Long parentTaskId, boolean important, com.taskpriority.model.Status status,
+                                   String phase, Long parentTaskId, boolean important, com.taskpriority.model.Status status,
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
                                    String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
                                    Long boardColumnId, Integer position,
@@ -79,6 +80,7 @@ public class TaskApiMapper {
         if (riskLevel != null) task.setRiskLevel(riskLevel);
         task.setRiskReason(riskReason);
         task.setTrack(track);
+        task.setPhase(phase);
         task.setParentTaskId(parentTaskId);
         task.setImportant(important);
         if (status != null) task.setStatus(status);

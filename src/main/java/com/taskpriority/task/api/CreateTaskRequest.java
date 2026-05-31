@@ -35,6 +35,8 @@ public record CreateTaskRequest(
         String riskReason,
         @Size(max = 120, message = "track must be at most 120 characters")
         String track,
+        @Size(max = 120, message = "phase must be at most 120 characters")
+        String phase,
         @Positive(message = "parentTaskId must be greater than 0")
         Long parentTaskId,
         boolean important,
