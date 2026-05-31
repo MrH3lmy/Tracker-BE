@@ -29,7 +29,7 @@ interface ApiRequestOptions {
   timeoutMs?: number;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 function isJsonResponse(contentType: string | null): boolean {
   if (!contentType) return false;
@@ -76,7 +76,9 @@ async function readResponseBody(response: Response, downloadFileName?: string): 
 }
 
 async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequestOptions): Promise<ApiCallResult<T>> {
-  const url = `${API_BASE_URL}${path}`;
+  const normalizedBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const url = `${normalizedBaseUrl}${normalizedPath}`;
   const startedAt = performance.now();
   const headers: Record<string, string> = {};
   if (options?.contentType) headers['Content-Type'] = options.contentType;

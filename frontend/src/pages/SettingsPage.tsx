@@ -10,7 +10,10 @@ export function SettingsPage() {
   const [body, setBody] = useState('{}');
 
   useEffect(() => {
-    if (settingsQuery.data?.ok) setBody(JSON.stringify(settingsQuery.data.data ?? {}, null, 2));
+    if (settingsQuery.data?.ok) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- keep the editable JSON text synchronized with the latest loaded settings payload.
+      setBody(JSON.stringify(settingsQuery.data.data ?? {}, null, 2));
+    }
   }, [settingsQuery.data]);
 
   const bodyValidation = useMemo(() => validateSettingsPayload(body), [body]);
