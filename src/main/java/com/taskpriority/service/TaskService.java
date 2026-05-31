@@ -5,7 +5,8 @@ import com.taskpriority.model.*;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.task.application.RecurrenceService;
-import com.taskpriority.service.PriorityEngine;
+import com.taskpriority.task.api.TaskApiMapper;
+import com.taskpriority.task.api.UpdateTaskRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +25,14 @@ public class TaskService {
     private final BoardColumnRepository boardColumnRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
+    private final TaskApiMapper taskApiMapper;
 
-    public TaskService(TaskRepository taskRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService) {
+    public TaskService(TaskRepository taskRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper) {
         this.taskRepository = taskRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
+        this.taskApiMapper = taskApiMapper;
     }
 
     @Transactional
@@ -41,6 +44,13 @@ public class TaskService {
         }
         computeDerivedFields(task);
         return taskRepository.save(task);
+    }
+
+    @Transactional
+    public Task updateTask(Long id, UpdateTaskRequest request) {
+        Task existing = findById(id);
+        taskApiMapper.applyUpdateRequest(existing, request);
+        return save(existing);
     }
 
     @Transactional(readOnly = true)

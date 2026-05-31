@@ -25,7 +25,7 @@ public class TaskControllerV1 {
     @GetMapping public List<TaskResponse> all(){ return taskService.findAll().stream().map(mapper::toResponse).toList(); }
     @GetMapping("/{id}") public TaskResponse byId(@PathVariable Long id){ return mapper.toResponse(taskService.findById(id)); }
     @PostMapping public ResponseEntity<TaskResponse> create(@Validated @RequestBody CreateTaskRequest r){ Task s=taskService.save(mapper.fromCreateRequest(r));return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(s));}
-    @PutMapping("/{id}") public TaskResponse update(@PathVariable Long id,@Validated @RequestBody UpdateTaskRequest r){return mapper.toResponse(taskService.save(mapper.fromUpdateRequest(id,r)));}
+    @PutMapping("/{id}") public TaskResponse update(@PathVariable Long id,@Validated @RequestBody UpdateTaskRequest r){return mapper.toResponse(taskService.updateTask(id,r));}
     @DeleteMapping("/{id}") public ResponseEntity<Void> delete(@PathVariable Long id){taskService.delete(id);return ResponseEntity.noContent().build();}
     @PatchMapping("/{id}/complete") public TaskResponse complete(@PathVariable Long id){return mapper.toResponse(taskService.markComplete(id));}
     @PatchMapping("/{id}/status") public TaskResponse status(@PathVariable Long id,@RequestParam Status status){return mapper.toResponse(taskService.updateStatus(id,status));}

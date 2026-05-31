@@ -81,8 +81,7 @@ class TaskControllerJsonTest {
                 null, null, null, null, false, false, 10, com.taskpriority.model.PriorityCategory.DO_NOW, null, null, 3L, 2000
         );
 
-        when(taskApiMapper.fromUpdateRequest(any(), any())).thenReturn(new com.taskpriority.model.Task());
-        when(taskService.save(any())).thenReturn(new com.taskpriority.model.Task());
+        when(taskService.updateTask(any(), any())).thenReturn(new com.taskpriority.model.Task());
         when(taskApiMapper.toResponse(any())).thenReturn(response);
 
         var payload = objectMapper.writeValueAsString(new java.util.LinkedHashMap<String, Object>() {{

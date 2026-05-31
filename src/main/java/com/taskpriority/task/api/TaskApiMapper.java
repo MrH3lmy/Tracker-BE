@@ -11,17 +11,14 @@ public class TaskApiMapper {
         Task task = new Task();
         applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence());
+                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence(), true);
         return task;
     }
 
-    public Task fromUpdateRequest(Long id, UpdateTaskRequest request) {
-        Task task = new Task();
-        task.setId(id);
-        applyCommonFields(task, request.title(), request.description(), request.dueDate(), request.important(),
+    public void applyUpdateRequest(Task existing, UpdateTaskRequest request) {
+        applyCommonFields(existing, request.title(), request.description(), request.dueDate(), request.important(),
                 request.status(), request.area(), request.effort(), request.blockedReason(), request.waitingOn(),
-                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence());
-        return task;
+                request.followUpDate(), request.boardColumnId(), request.position(), request.recurrence(), false);
     }
 
     public TaskResponse toResponse(Task task) {
@@ -56,7 +53,8 @@ public class TaskApiMapper {
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
                                    String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
                                    Long boardColumnId, Integer position,
-                                   CreateTaskRequest.RecurrenceRuleRequest recurrence) {
+                                   CreateTaskRequest.RecurrenceRuleRequest recurrence,
+                                   boolean clearRecurrenceWhenMissing) {
         task.setTitle(title);
         task.setDescription(description);
         task.setDueDate(dueDate);
@@ -77,7 +75,7 @@ public class TaskApiMapper {
             recurrenceRule.setDayOfMonth(recurrence.dayOfMonth());
             recurrenceRule.setAnnualDate(recurrence.annualDate());
             task.setRecurrenceRule(recurrenceRule);
-        } else {
+        } else if (clearRecurrenceWhenMissing) {
             task.setRecurrenceRule(null);
         }
     }
