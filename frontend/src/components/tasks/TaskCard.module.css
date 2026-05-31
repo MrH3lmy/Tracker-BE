@@ -1,0 +1,22 @@
+.card {
+  transform-origin: center;
+  will-change: opacity, transform;
+  transition: opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.dragging {
+  opacity: 0.46;
+  transform: rotate(1.5deg) scale(0.98);
+}
+
+.keyboardControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.keyboardControls button {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.55rem;
+}
