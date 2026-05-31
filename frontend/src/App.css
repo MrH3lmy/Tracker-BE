@@ -64,6 +64,13 @@
   --color-warning-soft: #fffbeb;
   --color-danger-soft: #fef2f2;
   --color-success-soft: #f0fdf4;
+  --color-status-warning-text: #78350f;
+  --color-status-danger-text: #7f1d1d;
+  --color-status-success-text: #14532d;
+  --color-task-important-bg: #fffbeb;
+  --color-task-overdue-bg: #fef2f2;
+  --color-task-important-accent: #b45309;
+  --color-task-overdue-accent: #b91c1c;
   --gradient-page: radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 30rem), linear-gradient(135deg, #f8fbff 0%, #eef4ff 52%, #e0f2fe 100%);
   --gradient-primary: linear-gradient(135deg, #2563eb 0%, #14b8a6 100%);
   --gradient-surface: linear-gradient(180deg, #ffffff 0%, var(--color-bg-soft) 100%);
@@ -126,6 +133,13 @@
   --color-warning-soft: #422006;
   --color-danger-soft: #450a0a;
   --color-success-soft: #052e16;
+  --color-status-warning-text: #fde68a;
+  --color-status-danger-text: #fecaca;
+  --color-status-success-text: #bbf7d0;
+  --color-task-important-bg: #2f1f05;
+  --color-task-overdue-bg: #3b0a0a;
+  --color-task-important-accent: #fbbf24;
+  --color-task-overdue-accent: #f87171;
   --gradient-page: radial-gradient(circle at top left, rgba(96, 165, 250, 0.18), transparent 30rem), linear-gradient(135deg, #020617 0%, #111827 52%, #0f172a 100%);
   --gradient-primary: linear-gradient(135deg, #60a5fa 0%, #2dd4bf 100%);
   --gradient-surface: linear-gradient(180deg, #172033 0%, var(--color-bg-soft) 100%);
@@ -188,6 +202,13 @@
   --color-warning-soft: #332f00;
   --color-danger-soft: #330000;
   --color-success-soft: #003300;
+  --color-status-warning-text: #ffff00;
+  --color-status-danger-text: #ffb3b3;
+  --color-status-success-text: #7dff7a;
+  --color-task-important-bg: #1f1f00;
+  --color-task-overdue-bg: #260000;
+  --color-task-important-accent: #ffff00;
+  --color-task-overdue-accent: #ff7a7a;
   --gradient-page: #000000;
   --gradient-primary: linear-gradient(135deg, #ffff00 0%, #00ffff 100%);
   --gradient-surface: #000000;
@@ -883,12 +904,28 @@ th {
   margin: 0;
 }
 
+.task-row-important,
+.task-row-important td {
+  background: var(--color-task-important-bg);
+}
+
 .task-row-important {
-  background: var(--color-warning-soft);
+  border-inline-start: 0.35rem solid var(--color-task-important-accent);
+  box-shadow: inset 0.35rem 0 0 color-mix(in srgb, var(--color-task-important-accent) 16%, transparent), var(--shadow-sm);
+}
+
+.task-row-overdue,
+.task-row-overdue td {
+  background: var(--color-task-overdue-bg);
 }
 
 .task-row-overdue {
-  background: var(--color-danger-soft);
+  border-inline-start: 0.35rem solid var(--color-task-overdue-accent);
+  box-shadow: inset 0.35rem 0 0 color-mix(in srgb, var(--color-task-overdue-accent) 18%, transparent), var(--shadow-sm);
+}
+
+.task-row-important.task-row-overdue {
+  border-inline-start-color: var(--color-task-overdue-accent);
 }
 
 .task-description {
@@ -899,8 +936,15 @@ th {
 }
 
 .task-status-badge {
-  border: 1px solid transparent;
+  gap: 0.35rem;
+  border: 1px solid currentColor;
   text-transform: capitalize;
+}
+
+.task-status-badge::before {
+  display: inline-block;
+  font-size: 0.9em;
+  line-height: 1;
 }
 
 .status-task-backlog,
@@ -917,17 +961,31 @@ th {
 
 .status-task-waiting {
   background: var(--color-status-warning-bg);
-  color: var(--color-warning);
+  color: var(--color-status-warning-text);
+}
+
+.status-task-waiting::before {
+  content: "⏳";
 }
 
 .status-task-blocked {
   background: var(--color-status-danger-bg);
-  color: var(--color-danger-strong);
+  color: var(--color-status-danger-text);
+  border-style: dashed;
+}
+
+.status-task-blocked::before {
+  content: "⛔";
 }
 
 .status-task-done {
   background: var(--color-status-success-bg);
-  color: var(--color-success);
+  color: var(--color-status-success-text);
+}
+
+.status-task-done::before {
+  content: "✓";
+  font-weight: 900;
 }
 
 .status-task-cancelled {
@@ -939,17 +997,41 @@ th {
 .task-important-pill {
   display: inline-flex;
   align-items: center;
+  gap: 0.3rem;
+  border: 1px solid currentColor;
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   background: var(--color-status-warning-bg);
-  color: var(--color-warning);
+  color: var(--color-status-warning-text);
   font-size: 0.82rem;
   font-weight: 800;
 }
 
+.task-important-pill::before {
+  content: "★";
+  font-size: 0.85em;
+  line-height: 1;
+}
+
 .task-date-overdue {
-  color: var(--color-danger);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-block-end: 2px solid currentColor;
+  color: var(--color-status-danger-text);
   font-weight: 800;
+}
+
+.task-date-overdue::before {
+  content: "⚠";
+  line-height: 1;
+}
+
+.task-overdue-label {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .task-actions {
