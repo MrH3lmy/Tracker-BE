@@ -9,6 +9,7 @@ public record ProjectPlanResponse(
         int remainingWorkingDays,
         double totalEstimatedHours,
         double availableCapacityHours,
+        PlanningCalendarResponse calendar,
         PlannerRiskResponse risk,
         List<PlannerColumnResponse> columns
 ) {}

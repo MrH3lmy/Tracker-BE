@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
-import { latestResult, usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
+import { latestResult, usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
 
 interface TaskPreview {
   id?: number | string;
@@ -48,11 +48,17 @@ interface PlannerColumn {
 
 interface ProjectBoard {
   dailyCapacityHours?: number;
+  calendar?: CalendarExclusions;
   remainingWorkingDays?: number;
   totalEstimatedHours?: number;
   availableCapacityHours?: number;
   risk?: PlannerRisk;
   columns?: unknown;
+}
+
+interface CalendarExclusions {
+  excludedWeekdays?: unknown;
+  holidayDates?: unknown;
 }
 
 interface RecommendationPreview {
@@ -121,6 +127,31 @@ const asIds = (value: unknown): Array<string | number> => Array.isArray(value) ?
 const formatHours = (value?: number | null) => typeof value === 'number' ? `${value.toFixed(1)}h` : 'No estimate';
 const riskClass = (level?: string) => `risk-${(level ?? 'LOW').toLowerCase()}`;
 const taskKey = (task: TaskPreview, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
+
+
+const weekdayLabel = (weekday: string) => weekday.charAt(0).toUpperCase() + weekday.slice(1).toLowerCase();
+
+function CalendarExclusionSummary({ data }: { data: unknown }) {
+  const record = isRecord(data) ? data : {};
+  const calendar = isRecord(record.calendar) ? record.calendar : record;
+  const excludedWeekdays = asStrings(calendar.excludedWeekdays).map(weekdayLabel);
+  const holidayDates = asStrings(calendar.holidayDates);
+  const dailyCapacity = typeof record.dailyCapacityHours === 'number' ? record.dailyCapacityHours : typeof record.defaultDailyCapacityHours === 'number' ? record.defaultDailyCapacityHours : undefined;
+
+  return (
+    <div className="calendar-exclusion-summary" aria-label="Active calendar exclusions">
+      <div>
+        <p className="eyebrow">Active calendar exclusions</p>
+        <p className="muted">Planning skips these weekdays and holiday dates when calculating schedule capacity and risk.</p>
+      </div>
+      <div className="task-preview-meta">
+        <span className="pill">Weekdays: {excludedWeekdays.length ? excludedWeekdays.join(', ') : 'None'}</span>
+        <span className="pill">Holidays: {holidayDates.length ? holidayDates.map((date) => formatPlannerDate(date, date)).join(', ') : 'None'}</span>
+        {typeof dailyCapacity === 'number' && <span className="pill">Capacity: {formatHours(dailyCapacity)} / day</span>}
+      </div>
+    </div>
+  );
+}
 
 function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage: string }) {
   if (tasks.length === 0) return <p className="muted">{emptyMessage}</p>;
@@ -280,6 +311,7 @@ function ProjectBoardView({ data }: { data: unknown }) {
 
   return (
     <div className="project-board-wrapper">
+      <CalendarExclusionSummary data={board} />
       <div className={`project-board-summary ${riskClass(board.risk?.level)}`}>
         <div>
           <p className="eyebrow">Schedule capacity</p>
@@ -358,6 +390,7 @@ export function PlanningPage() {
   const today = usePlanningTodayQuery(selected === 'today');
   const weekly = usePlanningWeeklyQuery(selected === 'weekly');
   const recommendations = usePlanningRecommendationsQuery(true);
+  const settings = useSettingsQuery(true);
   const active = selected === 'board' ? board : selected === 'today' ? today : weekly;
   const result = latestResult(board.data, today.data, weekly.data, recommendations.data);
   const hasData = Boolean(active.data?.ok && active.data.data);
@@ -390,6 +423,7 @@ export function PlanningPage() {
           </div>
         </div>
         <QueryState isLoading={active.isLoading || active.isFetching} isError={Boolean(active.data && !active.data.ok)} isEmpty={!active.isLoading && Boolean(active.data && !active.data.data)} />
+        {selected !== 'board' && <CalendarExclusionSummary data={settings.data?.data} />}
         {hasData && (selected === 'board' ? <ProjectBoardView data={active.data?.data} /> : selected === 'today' ? <TodayPlanningView data={active.data?.data} /> : <WeeklyPlanningView data={active.data?.data} />)}
       </section>
 

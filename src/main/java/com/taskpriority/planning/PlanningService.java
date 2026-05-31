@@ -10,9 +10,7 @@ import com.taskpriority.service.TaskService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -23,17 +21,18 @@ import java.util.stream.Collectors;
 
 @Service
 public class PlanningService {
-    private static final double DAILY_CAPACITY_HOURS = 6.0;
     private static final double MEDIUM_RISK_UTILIZATION = 0.85;
 
     private final TaskRepository taskRepository;
     private final TaskDependencyRepository taskDependencyRepository;
     private final TaskService taskService;
+    private final WorkingCalendarService workingCalendarService;
 
-    public PlanningService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService) {
+    public PlanningService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService, WorkingCalendarService workingCalendarService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.taskService = taskService;
+        this.workingCalendarService = workingCalendarService;
     }
 
     @Transactional(readOnly = true)
@@ -51,12 +50,17 @@ public class PlanningService {
     @Transactional(readOnly = true)
     public List<TaskService.DailyPlan> getWeeklyPlan() {
         LocalDate start = LocalDate.now();
-        LocalDate end = start.plusDays(6);
-        List<Task> tasks = taskRepository.findByDueDateBetween(start, end);
+        WorkingCalendarService.CalendarSettings calendarSettings = workingCalendarService.getCalendarSettings();
+        List<LocalDate> planningDates = workingCalendarService.nextWorkingDays(start, 7, calendarSettings);
+        if (planningDates.isEmpty()) return List.of();
+        LocalDate end = planningDates.get(planningDates.size() - 1);
+        List<Task> tasks = taskRepository.findByDueDateBetween(planningDates.get(0), end).stream()
+                .filter(task -> workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings))
+                .toList();
         tasks.forEach(taskService::computeDerivedFields);
         Map<LocalDate, List<Task>> byDate = tasks.stream().collect(Collectors.groupingBy(Task::getDueDate));
         List<TaskService.DailyPlan> plan = new ArrayList<>();
-        for (int i = 0; i <= 6; i++) plan.add(new TaskService.DailyPlan(start.plusDays(i), byDate.getOrDefault(start.plusDays(i), List.of())));
+        for (LocalDate date : planningDates) plan.add(new TaskService.DailyPlan(date, byDate.getOrDefault(date, List.of())));
         return plan;
     }
 
@@ -88,31 +92,37 @@ public class PlanningService {
                 LinkedHashMap::new,
                 Collectors.toList()));
 
+        WorkingCalendarService.CalendarSettings calendarSettings = workingCalendarService.getCalendarSettings();
         List<PlannerColumnResponse> columns = tasksByColumn.entrySet().stream()
-                .map(entry -> toColumnResponse(entry.getKey(), entry.getValue(), dependencyIdsByTask, blockingTaskIdsByTask, today))
+                .map(entry -> toColumnResponse(entry.getKey(), entry.getValue(), dependencyIdsByTask, blockingTaskIdsByTask, today, calendarSettings))
                 .toList();
 
         double totalEstimatedHours = roundHours(tasks.stream().mapToInt(this::estimatedMinutes).sum() / 60.0);
         LocalDate latestDueDate = latestDueDate(tasks);
-        int remainingWorkingDays = remainingWorkingDays(today, latestDueDate);
-        double availableCapacityHours = roundHours(remainingWorkingDays * DAILY_CAPACITY_HOURS);
+        int remainingWorkingDays = remainingWorkingDays(today, latestDueDate, calendarSettings);
+        double availableCapacityHours = roundHours(remainingWorkingDays * calendarSettings.defaultDailyCapacityHours());
         PlannerRiskResponse risk = capacityRisk(totalEstimatedHours, availableCapacityHours, remainingWorkingDays, "project board");
+        PlanningCalendarResponse calendar = new PlanningCalendarResponse(
+                calendarSettings.excludedWeekdays().stream().map(Enum::name).toList(),
+                calendarSettings.holidayDates()
+        );
 
-        return new ProjectPlanResponse(today, DAILY_CAPACITY_HOURS, remainingWorkingDays, totalEstimatedHours,
-                availableCapacityHours, risk, columns);
+        return new ProjectPlanResponse(today, calendarSettings.defaultDailyCapacityHours(), remainingWorkingDays, totalEstimatedHours,
+                availableCapacityHours, calendar, risk, columns);
     }
 
     private PlannerColumnResponse toColumnResponse(ColumnKey key, List<Task> tasks, Map<Long, List<Long>> dependencyIdsByTask,
-                                                   Map<Long, List<Long>> blockingTaskIdsByTask, LocalDate today) {
+                                                   Map<Long, List<Long>> blockingTaskIdsByTask, LocalDate today,
+                                                   WorkingCalendarService.CalendarSettings calendarSettings) {
         double totalEstimatedHours = roundHours(tasks.stream().mapToInt(this::estimatedMinutes).sum() / 60.0);
         LocalDate latestDueDate = latestDueDate(tasks);
-        int remainingWorkingDays = remainingWorkingDays(today, latestDueDate);
-        double availableCapacityHours = roundHours(remainingWorkingDays * DAILY_CAPACITY_HOURS);
+        int remainingWorkingDays = remainingWorkingDays(today, latestDueDate, calendarSettings);
+        double availableCapacityHours = roundHours(remainingWorkingDays * calendarSettings.defaultDailyCapacityHours());
         PlannerRiskResponse columnRisk = capacityRisk(totalEstimatedHours, availableCapacityHours, remainingWorkingDays,
                 "%s / %s / %s".formatted(key.track(), key.phase(), key.status()));
 
         List<PlannerTaskResponse> taskResponses = tasks.stream()
-                .map(task -> toPlannerTaskResponse(task, columnRisk, dependencyIdsByTask, blockingTaskIdsByTask, today))
+                .map(task -> toPlannerTaskResponse(task, columnRisk, dependencyIdsByTask, blockingTaskIdsByTask, today, calendarSettings))
                 .toList();
 
         return new PlannerColumnResponse(key.key(), key.track(), key.phase(), key.status(), tasks.size(), totalEstimatedHours,
@@ -122,18 +132,20 @@ public class PlanningService {
     private PlannerTaskResponse toPlannerTaskResponse(Task task, PlannerRiskResponse columnRisk,
                                                       Map<Long, List<Long>> dependencyIdsByTask,
                                                       Map<Long, List<Long>> blockingTaskIdsByTask,
-                                                      LocalDate today) {
+                                                      LocalDate today,
+                                                      WorkingCalendarService.CalendarSettings calendarSettings) {
         List<Long> dependencyIds = sortedIds(dependencyIdsByTask.get(task.getId()));
         List<Long> blockingTaskIds = sortedIds(blockingTaskIdsByTask.get(task.getId()));
         List<String> blockers = blockersFor(task, dependencyIds);
-        PlannerRiskResponse risk = taskRisk(task, columnRisk, blockers, today);
+        PlannerRiskResponse risk = taskRisk(task, columnRisk, blockers, today, calendarSettings);
 
         return new PlannerTaskResponse(task.getId(), task.getTitle(), task.getStatus(), normalize(task.getTrack()), normalize(phaseFor(task)),
                 task.getStartDate(), task.getDueDate(), task.getEstimatedMinutes(), roundHours(estimatedMinutes(task) / 60.0),
                 risk, dependencyIds, blockingTaskIds, blockers);
     }
 
-    private PlannerRiskResponse taskRisk(Task task, PlannerRiskResponse columnRisk, List<String> blockers, LocalDate today) {
+    private PlannerRiskResponse taskRisk(Task task, PlannerRiskResponse columnRisk, List<String> blockers, LocalDate today,
+                                         WorkingCalendarService.CalendarSettings calendarSettings) {
         PlannerRiskResponse.Level persistedLevel = mapRiskLevel(task.getRiskLevel());
         List<String> reasons = new ArrayList<>();
         PlannerRiskResponse.Level level = persistedLevel;
@@ -146,6 +158,10 @@ public class PlanningService {
         if (task.getDueDate() != null && task.getDueDate().isBefore(today)) {
             level = max(level, PlannerRiskResponse.Level.HIGH);
             reasons.add("Due date has passed.");
+        }
+        if (task.getDueDate() != null && !workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings)) {
+            level = max(level, PlannerRiskResponse.Level.MEDIUM);
+            reasons.add("Due date falls on an excluded calendar day.");
         }
         if (columnRisk.level() != PlannerRiskResponse.Level.LOW) {
             level = max(level, columnRisk.level());
@@ -177,14 +193,8 @@ public class PlanningService {
                 "%s fits available capacity with %.1f estimated hours against %.1f capacity hours.".formatted(scope, estimatedHours, availableCapacityHours));
     }
 
-    private int remainingWorkingDays(LocalDate today, LocalDate dueDate) {
-        if (dueDate == null || dueDate.isBefore(today)) return 0;
-        int days = 0;
-        for (long offset = 0; offset <= ChronoUnit.DAYS.between(today, dueDate); offset++) {
-            LocalDate date = today.plusDays(offset);
-            if (date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY) days++;
-        }
-        return days;
+    private int remainingWorkingDays(LocalDate today, LocalDate dueDate, WorkingCalendarService.CalendarSettings calendarSettings) {
+        return workingCalendarService.countWorkingDaysInclusive(today, dueDate, calendarSettings);
     }
 
     private LocalDate latestDueDate(List<Task> tasks) {

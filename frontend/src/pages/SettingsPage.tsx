@@ -4,7 +4,20 @@ import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
 import { isAppTheme, THEME_OPTIONS, THEME_SETTING_KEY } from '../theme';
-import { validateSettingsPayload } from '../validation/settings';
+import { DEFAULT_DAILY_CAPACITY_HOURS_KEY, EXCLUDED_WEEKDAYS_KEY, HOLIDAY_DATES_KEY, validateSettingsPayload } from '../validation/settings';
+
+const WEEKDAY_OPTIONS = [
+  { value: 'MONDAY', label: 'Mon' },
+  { value: 'TUESDAY', label: 'Tue' },
+  { value: 'WEDNESDAY', label: 'Wed' },
+  { value: 'THURSDAY', label: 'Thu' },
+  { value: 'FRIDAY', label: 'Fri' },
+  { value: 'SATURDAY', label: 'Sat' },
+  { value: 'SUNDAY', label: 'Sun' },
+];
+
+const asStringArray = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+const asNumber = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
 export function SettingsPage() {
   const settingsQuery = useSettingsQuery(true);
@@ -22,15 +35,22 @@ export function SettingsPage() {
   const bodyValidation = useMemo(() => validateSettingsPayload(body), [body]);
   const canSubmit = !saveMutation.isPending && bodyValidation.errors.length === 0;
   const hasValidationErrors = bodyValidation.errors.length > 0;
+  const currentSettings = bodyValidation.parsed ?? (settingsQuery.data?.ok && settingsQuery.data.data && typeof settingsQuery.data.data === 'object' && !Array.isArray(settingsQuery.data.data)
+    ? settingsQuery.data.data as Record<string, unknown>
+    : {});
+  const excludedWeekdays = asStringArray(currentSettings[EXCLUDED_WEEKDAYS_KEY]).map((weekday) => weekday.toUpperCase());
+  const holidayDates = asStringArray(currentSettings[HOLIDAY_DATES_KEY]);
+  const dailyCapacityHours = asNumber(currentSettings[DEFAULT_DAILY_CAPACITY_HOURS_KEY], 6);
+
+  const updateSettingBody = (updates: Record<string, unknown>) => {
+    setBody(JSON.stringify({ ...currentSettings, ...updates }, null, 2));
+  };
 
   const handleThemeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextTheme = event.target.value;
     if (!isAppTheme(nextTheme)) return;
 
     setTheme(nextTheme);
-    const currentSettings = bodyValidation.parsed ?? (settingsQuery.data?.ok && settingsQuery.data.data && typeof settingsQuery.data.data === 'object' && !Array.isArray(settingsQuery.data.data)
-      ? settingsQuery.data.data as Record<string, unknown>
-      : {});
     const updatedSettings = { ...currentSettings, [THEME_SETTING_KEY]: nextTheme };
     setBody(JSON.stringify(updatedSettings, null, 2));
     saveMutation.mutate(updatedSettings);
@@ -60,6 +80,57 @@ export function SettingsPage() {
           </button>
         </div>
 
+
+        <div className="calendar-settings-card" aria-label="Calendar exclusions">
+          <div>
+            <p className="eyebrow">Planning calendar</p>
+            <h4>Calendar exclusions</h4>
+            <p className="muted">Choose the non-working weekdays and one-off holidays that planning capacity should skip.</p>
+          </div>
+          <fieldset className="weekday-checkbox-grid">
+            <legend>Excluded weekdays</legend>
+            {WEEKDAY_OPTIONS.map((weekday) => (
+              <label key={weekday.value} className="checkbox-pill">
+                <input
+                  type="checkbox"
+                  checked={excludedWeekdays.includes(weekday.value)}
+                  onChange={(event) => {
+                    const next = event.target.checked
+                      ? [...new Set([...excludedWeekdays, weekday.value])]
+                      : excludedWeekdays.filter((value) => value !== weekday.value);
+                    updateSettingBody({ [EXCLUDED_WEEKDAYS_KEY]: WEEKDAY_OPTIONS.filter((option) => next.includes(option.value)).map((option) => option.value) });
+                  }}
+                />
+                <span>{weekday.label}</span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="calendar-settings-grid">
+            <label className="field-stack" htmlFor="dailyCapacityHours">
+              <span>Daily capacity hours</span>
+              <input
+                id="dailyCapacityHours"
+                type="number"
+                min="0.5"
+                max="24"
+                step="0.5"
+                value={dailyCapacityHours}
+                onChange={(event) => updateSettingBody({ [DEFAULT_DAILY_CAPACITY_HOURS_KEY]: Number(event.target.value) })}
+              />
+            </label>
+            <label className="field-stack" htmlFor="holidayDates">
+              <span>Holiday dates</span>
+              <textarea
+                id="holidayDates"
+                rows={4}
+                value={holidayDates.join('\n')}
+                placeholder="2026-01-01"
+                onChange={(event) => updateSettingBody({ [HOLIDAY_DATES_KEY]: event.target.value.split(/\n|,/).map((value) => value.trim()).filter(Boolean) })}
+              />
+            </label>
+          </div>
+          <p className="muted">Saved as <code>{EXCLUDED_WEEKDAYS_KEY}</code>, <code>{HOLIDAY_DATES_KEY}</code>, and <code>{DEFAULT_DAILY_CAPACITY_HOURS_KEY}</code>.</p>
+        </div>
 
         <div className="theme-selector-card">
           <label className="field-stack" htmlFor="themeSelector">
