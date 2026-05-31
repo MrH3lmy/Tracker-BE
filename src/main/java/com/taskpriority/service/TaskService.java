@@ -42,6 +42,9 @@ public class TaskService {
     @Transactional
     public Task save(Task task) {
         validateParentTask(task);
+        if (task.getStatus() == Status.DONE) {
+            validateCanComplete(task);
+        }
         recurrenceService.applyRecurrenceDefaults(task);
         alignBoardColumn(task);
         if (task.getPosition() <= 0) {
@@ -73,6 +76,33 @@ public class TaskService {
         return taskRepository.findById(id)
                 .map(t -> { computeDerivedFields(t); return t; })
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Task> findSubtasks(Long parentTaskId) {
+        if (!taskRepository.existsById(parentTaskId)) {
+            throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
+        }
+        return taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(parentTaskId).stream()
+                .peek(this::computeDerivedFields)
+                .toList();
+    }
+
+    @Transactional
+    public Task createSubtask(Long parentTaskId, Task subtask) {
+        if (!taskRepository.existsById(parentTaskId)) {
+            throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
+        }
+        subtask.setParentTaskId(parentTaskId);
+        return save(subtask);
+    }
+
+    @Transactional
+    public Task updateParent(Long id, Long parentTaskId) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        task.setParentTaskId(parentTaskId);
+        return save(task);
     }
 
     @Transactional
@@ -157,6 +187,9 @@ public class TaskService {
         }
 
         if (resolvedStatus != null) {
+            if (resolvedStatus == Status.DONE) {
+                validateCanComplete(task);
+            }
             task.setStatus(resolvedStatus);
             if (resolvedStatus == Status.DONE && task.getCompletedDate() == null) {
                 task.setCompletedDate(LocalDateTime.now());
@@ -195,8 +228,24 @@ public class TaskService {
         if (task.getId() != null && task.getId().equals(parentTaskId)) {
             throw new IllegalArgumentException("A task cannot be its own parent");
         }
-        if (!taskRepository.existsById(parentTaskId)) {
-            throw new ResourceNotFoundException("Parent task with id " + parentTaskId + " not found");
+        Task parent = taskRepository.findById(parentTaskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Parent task with id " + parentTaskId + " not found"));
+        while (parent.getParentTaskId() != null) {
+            if (task.getId() != null && task.getId().equals(parent.getParentTaskId())) {
+                throw new IllegalArgumentException("Parent assignment would create a cycle");
+            }
+            Long ancestorId = parent.getParentTaskId();
+            parent = taskRepository.findById(ancestorId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent task with id " + ancestorId + " not found"));
+        }
+    }
+
+    private void validateCanComplete(Task task) {
+        if (task.getId() == null) {
+            return;
+        }
+        if (taskRepository.existsByParentTaskIdAndStatusNotIn(task.getId(), List.of(Status.DONE, Status.CANCELLED))) {
+            throw new IllegalArgumentException("Complete or cancel all subtasks before completing the parent task");
         }
     }
 
@@ -243,6 +292,10 @@ public class TaskService {
             task.setBlockingTaskIds(taskDependencyRepository.findByBlocksTaskId(task.getId()).stream()
                     .map(dependency -> dependency.getTask().getId())
                     .toList());
+            List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(task.getId());
+            task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
+            task.setSubtaskCount(subtasks.size());
+            task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
         }
         PriorityEngine.PriorityComputation c = priorityEngine.compute(task, new PriorityEngine.DependencyContext(task.getDependencyIds().size(), task.getBlockingTaskIds().size()));
         task.setDaysLeft(c.daysLeft());task.setOverdue(c.overdue());task.setUrgent(c.urgent());task.setPriorityScore(c.priorityScore());task.setPriorityCategory(c.priorityCategory());task.setAgeFlag(c.ageFlag());task.setPriorityReason(c.priorityReason());

@@ -22,4 +22,14 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByBoardColumnIdOrderByPositionAscIdAsc(Long boardColumnId);
 
     List<Task> findByStatusOrderByPositionAscIdAsc(Status status);
+
+    List<Task> findByParentTaskIdOrderByPositionAscIdAsc(Long parentTaskId);
+
+    List<Task> findByParentTaskIdIsNullOrderByPositionAscIdAsc();
+
+    long countByParentTaskId(Long parentTaskId);
+
+    long countByParentTaskIdAndStatus(Long parentTaskId, Status status);
+
+    boolean existsByParentTaskIdAndStatusNotIn(Long parentTaskId, List<Status> statuses);
 }

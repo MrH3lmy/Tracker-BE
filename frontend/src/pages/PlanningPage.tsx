@@ -27,6 +27,11 @@ interface PlannerTask {
   dueDate?: string | null;
   estimatedMinutes?: number | null;
   estimatedHours?: number;
+  parentTaskId?: number | string | null;
+  subtaskCount?: number;
+  completedSubtaskCount?: number;
+  subtaskProgressPercent?: number;
+  aggregateEstimatedHours?: number;
   risk?: PlannerRisk;
   dependencyIds?: unknown;
   blockingTaskIds?: unknown;
@@ -364,6 +369,9 @@ function ProjectBoardView({ data }: { data: unknown }) {
                           {task.status && <span className="pill">{task.status}</span>}
                           <span className="pill">Due {formatPlannerDate(task.dueDate, 'No due date')}</span>
                           <span className="pill">Estimate {formatHours(task.estimatedHours)}</span>
+                          {typeof task.aggregateEstimatedHours === 'number' && task.aggregateEstimatedHours !== task.estimatedHours && <span className="pill">With subtasks {formatHours(task.aggregateEstimatedHours)}</span>}
+                          {typeof task.subtaskCount === 'number' && task.subtaskCount > 0 && <span className="pill">Subtasks {task.completedSubtaskCount ?? 0}/{task.subtaskCount} ({task.subtaskProgressPercent ?? 0}%)</span>}
+                          {task.parentTaskId && <span className="pill">Parent #{task.parentTaskId}</span>}
                         </div>
                         {task.risk?.reason && <p className="risk-reason">{task.risk.reason}</p>}
                         <div className="dependency-list">

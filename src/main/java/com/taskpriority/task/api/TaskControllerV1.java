@@ -32,6 +32,9 @@ public class TaskControllerV1 {
     @PatchMapping("/{id}/complete") public TaskResponse complete(@PathVariable Long id){return mapper.toResponse(taskService.markComplete(id));}
     @PatchMapping("/{id}/status") public TaskResponse status(@PathVariable Long id,@RequestParam Status status){return mapper.toResponse(taskService.updateStatus(id,status));}
     @PatchMapping("/{id}/move") public TaskResponse move(@PathVariable Long id,@Validated @RequestBody MoveTaskRequest request){return mapper.toResponse(taskService.moveTask(id, request.status(), request.boardColumnId(), request.position()));}
+    @GetMapping("/{id}/subtasks") public List<TaskResponse> subtasks(@PathVariable Long id){return taskService.findSubtasks(id).stream().map(mapper::toResponse).toList();}
+    @PostMapping("/{id}/subtasks") public ResponseEntity<TaskResponse> createSubtask(@PathVariable Long id,@Validated @RequestBody CreateTaskRequest r){ Task s=taskService.createSubtask(id, mapper.fromCreateRequest(r)); if (r.dependencyIds() != null) { s = taskService.replaceDependencies(s.getId(), r.dependencyIds()); } return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(s));}
+    @PatchMapping("/{id}/parent") public TaskResponse updateParent(@PathVariable Long id,@Validated @RequestBody UpdateTaskParentRequest request){return mapper.toResponse(taskService.updateParent(id, request.parentTaskId()));}
     @GetMapping("/archive") public List<TaskResponse> archive(){ return taskService.getArchive().stream().map(mapper::toResponse).toList(); }
     @GetMapping("/duplicates") public List<DuplicateDetectionService.DuplicateGroup> duplicates(){ return duplicateDetectionService.findPotentialDuplicates(); }
     @GetMapping("/blockers") public BlockerAnalysisService.BlockerAnalysis blockers(){ return blockerAnalysisService.analyze(); }

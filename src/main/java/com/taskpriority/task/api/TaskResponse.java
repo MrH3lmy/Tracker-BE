@@ -43,7 +43,11 @@ public record TaskResponse(
         Long boardColumnId,
         int position,
         List<Long> dependencyIds,
-        List<Long> blockingTaskIds
+        List<Long> blockingTaskIds,
+        List<Long> subtaskIds,
+        int subtaskCount,
+        int completedSubtaskCount,
+        int subtaskProgressPercent
 ) {
     public TaskResponse(
             Long id,
@@ -72,6 +76,6 @@ public record TaskResponse(
         this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, createdDate,
                 completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
-                List.of(), List.of());
+                List.of(), List.of(), List.of(), 0, 0, 0);
     }
 }

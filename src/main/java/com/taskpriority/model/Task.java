@@ -138,6 +138,15 @@ public class Task {
     @Transient
     private List<Long> blockingTaskIds = new ArrayList<>();
 
+    @Transient
+    private List<Long> subtaskIds = new ArrayList<>();
+
+    @Transient
+    private int subtaskCount;
+
+    @Transient
+    private int completedSubtaskCount;
+
     public Task() {}
     public Task(@NotBlank String title) { this.title = title; }
 
@@ -209,4 +218,11 @@ public class Task {
     public void setDependencyIds(List<Long> dependencyIds) { this.dependencyIds = dependencyIds == null ? new ArrayList<>() : dependencyIds; }
     public List<Long> getBlockingTaskIds() { return blockingTaskIds; }
     public void setBlockingTaskIds(List<Long> blockingTaskIds) { this.blockingTaskIds = blockingTaskIds == null ? new ArrayList<>() : blockingTaskIds; }
+    public List<Long> getSubtaskIds() { return subtaskIds; }
+    public void setSubtaskIds(List<Long> subtaskIds) { this.subtaskIds = subtaskIds == null ? new ArrayList<>() : subtaskIds; }
+    public int getSubtaskCount() { return subtaskCount; }
+    public void setSubtaskCount(int subtaskCount) { this.subtaskCount = subtaskCount; }
+    public int getCompletedSubtaskCount() { return completedSubtaskCount; }
+    public void setCompletedSubtaskCount(int completedSubtaskCount) { this.completedSubtaskCount = completedSubtaskCount; }
+    public int getSubtaskProgressPercent() { return subtaskCount == 0 ? 0 : (int) Math.round((completedSubtaskCount * 100.0) / subtaskCount); }
 }
