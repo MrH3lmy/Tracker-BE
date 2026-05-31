@@ -172,7 +172,7 @@ public class TaskService {
         task.setDaysLeft(c.daysLeft());task.setOverdue(c.overdue());task.setUrgent(c.urgent());task.setPriorityScore(c.priorityScore());task.setPriorityCategory(c.priorityCategory());task.setAgeFlag(c.ageFlag());task.setPriorityReason(c.priorityReason());
     }
 
-    public record DashboardSummary(int totalTasks, int activeTasks, int completedTasks, int overdueTasks, int dueToday, int dueThisWeek, int importantTasks, int deletedTasks, double completionRate, Map<Status, Long> byStatus, Map<PriorityCategory, Long> byPriorityCategory) {}
+    public record DashboardSummary(int totalTasks, int activeTasks, int completedTasks, int overdueTasks, int dueToday, int dueThisWeek, int importantTasks, int deletedTasks, int blockedTasks, int waitingTasks, double completionRate, Map<Status, Long> byStatus, Map<PriorityCategory, Long> byPriorityCategory) {}
     public record TodayView(List<Task> overdue, List<Task> dueToday, List<Task> topPriority) {}
     public record DailyPlan(LocalDate date, List<Task> tasks) {}
 }
