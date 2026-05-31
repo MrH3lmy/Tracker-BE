@@ -36,6 +36,41 @@ interface DailyPlan {
   tasks?: unknown;
 }
 
+const plannerDateFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const parsePlannerDate = (value?: string | null): Date | null => {
+  if (!value) return null;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return null;
+
+  if (isoDateOnlyPattern.test(trimmedValue)) {
+    const [year, month, day] = trimmedValue.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) {
+      return date;
+    }
+
+    return null;
+  }
+
+  const date = new Date(trimmedValue);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatPlannerDate = (value?: string | null, fallback = 'Date unavailable') => {
+  const date = parsePlannerDate(value);
+  return date ? plannerDateFormatter.format(date) : fallback;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asTasks = (value: unknown): TaskPreview[] => Array.isArray(value) ? value.filter(isRecord) as TaskPreview[] : [];
 const asRecommendations = (value: unknown): RecommendationPreview[] => Array.isArray(value) ? value.filter(isRecord) as RecommendationPreview[] : [];
@@ -54,7 +89,7 @@ function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage:
             {task.description && <p>{task.description}</p>}
           </div>
           <div className="task-preview-meta">
-            {task.dueDate && <span className="pill">Due {task.dueDate}</span>}
+            {task.dueDate && <span className="pill">Due {formatPlannerDate(task.dueDate, 'Due date unavailable')}</span>}
             {task.status && <span className="pill">{task.status}</span>}
             {typeof task.priorityScore === 'number' && <span className="pill">Score {task.priorityScore}</span>}
             {task.important && <span className="pill">Important</span>}
@@ -95,7 +130,7 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
               <h4>{topRecommendation.task?.title ?? 'Untitled task'}</h4>
               {topRecommendation.explanation && <p>{topRecommendation.explanation}</p>}
               <div className="task-preview-meta">
-                {topRecommendation.task?.dueDate && <span className="pill">Due {topRecommendation.task.dueDate}</span>}
+                {topRecommendation.task?.dueDate && <span className="pill">Due {formatPlannerDate(topRecommendation.task.dueDate, 'Due date unavailable')}</span>}
                 {topRecommendation.task?.status && <span className="pill">{topRecommendation.task.status}</span>}
                 {typeof topRecommendation.task?.priorityScore === 'number' && <span className="pill">Score {topRecommendation.task.priorityScore}</span>}
                 {typeof topRecommendation.confidence === 'number' && <span className="pill">{Math.round(topRecommendation.confidence * 100)}% confidence</span>}
@@ -127,6 +162,11 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
                       <span className="status-badge status-other">#{recommendation.rank ?? index + 2}</span>
                     </div>
                     {recommendation.explanation && <p className="muted">{recommendation.explanation}</p>}
+                    {recommendation.task?.dueDate && (
+                      <div className="task-preview-meta">
+                        <span className="pill">Due {formatPlannerDate(recommendation.task.dueDate, 'Due date unavailable')}</span>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>
@@ -176,7 +216,7 @@ function WeeklyPlanningView({ data }: { data: unknown }) {
           <section key={plan.date ?? index} className="planning-section-card">
             <div className="section-card-header">
               <div>
-                <h3>{plan.date ?? `Day ${index + 1}`}</h3>
+                <h3>{formatPlannerDate(plan.date, `Day ${index + 1}`)}</h3>
                 <p>{tasks.length} planned task{tasks.length === 1 ? '' : 's'}</p>
               </div>
               <span className="status-badge status-other">{tasks.length}</span>
