@@ -39,6 +39,12 @@ const isOverdue = (task: TaskRecord) => {
   return due.getTime() < Date.now();
 };
 
+const renderDueDate = (task: TaskRecord, overdue = isOverdue(task)) => {
+  const formattedDate = formatDate(task.dueDate);
+  if (!overdue) return formattedDate;
+  return <><span className="task-overdue-label">Overdue</span><span>{formattedDate}</span></>;
+};
+
 const uniqueOptions = (tasks: TaskRecord[], key: 'area' | 'effort') => Array.from(new Set(tasks.map((task) => task[key]).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b));
 
 const sortTasksForBoard = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
@@ -441,7 +447,7 @@ export function TasksPage() {
                         {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className="task-description">Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
                         <dl className="task-board-meta">
                           <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
-                          <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</dd></div>
+                          <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</dd></div>
                           <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
                           <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
                           <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
@@ -490,7 +496,7 @@ export function TasksPage() {
                         <span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span>
                       </div>
                       <div className="task-list-metric" data-label="Due date">
-                        <span className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</span>
+                        <span className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</span>
                       </div>
                       <div className="task-list-metric" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
                       <div className="task-list-metric" data-label="Risk">
