@@ -23,6 +23,8 @@ import java.util.List;
         @Index(name = "idx_tasks_status_position", columnList = "status, position"),
         @Index(name = "idx_tasks_start_date", columnList = "start_date"),
         @Index(name = "idx_tasks_risk_level", columnList = "risk_level"),
+        @Index(name = "idx_tasks_track", columnList = "track"),
+        @Index(name = "idx_tasks_phase", columnList = "phase"),
         @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id")
 })
 public class Task {
@@ -59,6 +61,9 @@ public class Task {
 
     @Column(length = 120)
     private String track;
+
+    @Column(length = 120)
+    private String phase;
 
     @Column(name = "parent_task_id")
     private Long parentTaskId;
@@ -156,6 +161,8 @@ public class Task {
     public void setRiskReason(String riskReason) { this.riskReason = riskReason; }
     public String getTrack() { return track; }
     public void setTrack(String track) { this.track = track; }
+    public String getPhase() { return phase; }
+    public void setPhase(String phase) { this.phase = phase; }
     public Long getParentTaskId() { return parentTaskId; }
     public void setParentTaskId(Long parentTaskId) { this.parentTaskId = parentTaskId; }
     public LocalDateTime getCreatedDate() { return createdDate; }

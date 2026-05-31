@@ -9,6 +9,7 @@ export const queryKeys = {
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
+  planningProjectBoard: ['planning', 'project-board'] as const,
   matrix: ['matrix'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
   settings: ['settings'] as const,
@@ -21,6 +22,7 @@ export const useTaskBlockersQuery = () => useQuery({ queryKey: queryKeys.taskBlo
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
+export const usePlanningProjectBoardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningProjectBoard, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/project-board'), enabled });
 export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.matrix, queryFn: () => apiJson<unknown>('GET', '/api/v1/matrix'), enabled });
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });

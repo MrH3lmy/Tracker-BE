@@ -5,7 +5,7 @@ import { QueryState } from '../components/QueryState';
 import { type TaskTab, useTaskBlockersQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { isTaskStatus, TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; startDate?: string; estimatedMinutes?: number; actualMinutes?: number; riskLevel?: RiskLevel; riskReason?: string; track?: string; parentTaskId?: number; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; startDate?: string; estimatedMinutes?: number; actualMinutes?: number; riskLevel?: RiskLevel; riskReason?: string; track?: string; phase?: string; parentTaskId?: number; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
 interface BlockerWarning { type: string; title: string; taskId?: number; taskTitle?: string; status?: TaskStatus; priorityScore?: number; message: string; recommendation: string; relatedTaskIds?: number[]; }
 interface BlockerAnalysis { warnings: BlockerWarning[]; dependencyCount: number; }
@@ -46,7 +46,7 @@ const sortTasksForBoard = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.
 const taskMatchesSearch = (task: TaskRecord, searchTerm: string) => {
   const needle = searchTerm.trim().toLowerCase();
   if (!needle) return true;
-  return [task.title, task.description, task.area, task.track, task.riskReason].some((value) => value?.toLowerCase().includes(needle));
+  return [task.title, task.description, task.area, task.track, task.phase, task.riskReason].some((value) => value?.toLowerCase().includes(needle));
 };
 
 export function TasksPage() {
@@ -61,6 +61,7 @@ export function TasksPage() {
   const [riskLevel, setRiskLevel] = useState<'' | RiskLevel>('');
   const [riskReason, setRiskReason] = useState('');
   const [track, setTrack] = useState('');
+  const [phase, setPhase] = useState('');
   const [parentTaskId, setParentTaskId] = useState('');
   const [important, setImportant] = useState(false);
   const [area, setArea] = useState('');
@@ -141,6 +142,7 @@ export function TasksPage() {
       riskLevel: riskLevel || undefined,
       riskReason: riskReason || undefined,
       track: track || undefined,
+      phase: phase || undefined,
       parentTaskId: toOptionalNumber(parentTaskId),
       important,
       area: area || undefined,
@@ -160,6 +162,7 @@ export function TasksPage() {
         setRiskLevel('');
         setRiskReason('');
         setTrack('');
+        setPhase('');
         setParentTaskId('');
         setImportant(false);
         setArea('');
@@ -308,8 +311,10 @@ export function TasksPage() {
             </select>
             <label htmlFor="taskRiskReason">Risk reason</label>
             <input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={riskReason} onChange={(e) => setRiskReason(e.target.value)} disabled={busy} maxLength={500} />
-            <label htmlFor="taskTrack">Track / phase</label>
-            <input id="taskTrack" placeholder="Discovery, build, launch" value={track} onChange={(e) => setTrack(e.target.value)} disabled={busy} maxLength={120} />
+            <label htmlFor="taskTrack">Track</label>
+            <input id="taskTrack" placeholder="Product, marketing, migration" value={track} onChange={(e) => setTrack(e.target.value)} disabled={busy} maxLength={120} />
+            <label htmlFor="taskPhase">Phase</label>
+            <input id="taskPhase" placeholder="Discovery, build, launch" value={phase} onChange={(e) => setPhase(e.target.value)} disabled={busy} maxLength={120} />
             <label htmlFor="taskParentTask">Parent task</label>
             <select id="taskParentTask" value={parentTaskId} onChange={(e) => setParentTaskId(e.target.value)} disabled={busy}>
               <option value="">No parent</option>
@@ -441,6 +446,7 @@ export function TasksPage() {
                           <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
                           <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
                           <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
+                          <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
                           <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
                           <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
                           <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
@@ -467,6 +473,7 @@ export function TasksPage() {
                   <th>Actual</th>
                   <th>Risk</th>
                   <th>Track</th>
+                  <th>Phase</th>
                   <th>Parent</th>
                   <th>Important</th>
                   <th>Area</th>
@@ -494,6 +501,7 @@ export function TasksPage() {
                       <td data-label="Actual">{formatValue(task.actualMinutes)}</td>
                       <td data-label="Risk">{formatValue(task.riskLevel)}{task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}</td>
                       <td data-label="Track">{formatValue(task.track)}</td>
+                      <td data-label="Phase">{formatValue(task.phase)}</td>
                       <td data-label="Parent">{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</td>
                       <td data-label="Important">{task.important ? <span className="task-important-pill">Important</span> : '—'}</td>
                       <td data-label="Area">{formatValue(task.area)}</td>

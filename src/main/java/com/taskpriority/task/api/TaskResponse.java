@@ -22,6 +22,7 @@ public record TaskResponse(
         RiskLevel riskLevel,
         String riskReason,
         String track,
+        String phase,
         Long parentTaskId,
         LocalDateTime createdDate,
         LocalDateTime completedDate,
@@ -68,7 +69,7 @@ public record TaskResponse(
             Long boardColumnId,
             int position
     ) {
-        this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, createdDate,
+        this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, createdDate,
                 completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
                 List.of(), List.of());

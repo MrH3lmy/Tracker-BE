@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
-import { latestResult, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
+import { latestResult, usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery } from '../hooks/useApiQueries';
 
 interface TaskPreview {
   id?: number | string;
@@ -13,6 +13,46 @@ interface TaskPreview {
   priorityCategory?: string;
   priorityReason?: string | null;
   important?: boolean;
+}
+
+interface PlannerRisk {
+  level?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
+  reason?: string;
+}
+
+interface PlannerTask {
+  id?: number | string;
+  title?: string;
+  status?: string;
+  dueDate?: string | null;
+  estimatedMinutes?: number | null;
+  estimatedHours?: number;
+  risk?: PlannerRisk;
+  dependencyIds?: unknown;
+  blockingTaskIds?: unknown;
+  blockers?: unknown;
+}
+
+interface PlannerColumn {
+  key?: string;
+  track?: string;
+  phase?: string;
+  status?: string;
+  taskCount?: number;
+  totalEstimatedHours?: number;
+  remainingWorkingDays?: number;
+  availableCapacityHours?: number;
+  risk?: PlannerRisk;
+  tasks?: unknown;
+}
+
+interface ProjectBoard {
+  dailyCapacityHours?: number;
+  remainingWorkingDays?: number;
+  totalEstimatedHours?: number;
+  availableCapacityHours?: number;
+  risk?: PlannerRisk;
+  columns?: unknown;
 }
 
 interface RecommendationPreview {
@@ -75,6 +115,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const asTasks = (value: unknown): TaskPreview[] => Array.isArray(value) ? value.filter(isRecord) as TaskPreview[] : [];
 const asRecommendations = (value: unknown): RecommendationPreview[] => Array.isArray(value) ? value.filter(isRecord) as RecommendationPreview[] : [];
 const asStrings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+const asPlannerColumns = (value: unknown): PlannerColumn[] => Array.isArray(value) ? value.filter(isRecord) as PlannerColumn[] : [];
+const asPlannerTasks = (value: unknown): PlannerTask[] => Array.isArray(value) ? value.filter(isRecord) as PlannerTask[] : [];
+const asIds = (value: unknown): Array<string | number> => Array.isArray(value) ? value.filter((item): item is string | number => typeof item === 'string' || typeof item === 'number') : [];
+const formatHours = (value?: number | null) => typeof value === 'number' ? `${value.toFixed(1)}h` : 'No estimate';
+const riskClass = (level?: string) => `risk-${(level ?? 'LOW').toLowerCase()}`;
 const taskKey = (task: TaskPreview, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
 
 function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage: string }) {
@@ -229,13 +274,92 @@ function WeeklyPlanningView({ data }: { data: unknown }) {
   );
 }
 
+function ProjectBoardView({ data }: { data: unknown }) {
+  const board = isRecord(data) ? data as ProjectBoard : {};
+  const columns = asPlannerColumns(board.columns);
+
+  return (
+    <div className="project-board-wrapper">
+      <div className={`project-board-summary ${riskClass(board.risk?.level)}`}>
+        <div>
+          <p className="eyebrow">Schedule capacity</p>
+          <h3>{formatHours(board.totalEstimatedHours)} estimated / {formatHours(board.availableCapacityHours)} available</h3>
+          <p>{board.risk?.reason ?? 'Capacity is calculated from remaining working days and task estimates.'}</p>
+        </div>
+        <div className="capacity-metrics" aria-label="Capacity metrics">
+          <span><strong>{board.remainingWorkingDays ?? 0}</strong> working days</span>
+          <span><strong>{formatHours(board.dailyCapacityHours)}</strong> per day</span>
+          <span className={`risk-pill ${riskClass(board.risk?.level)}`}>{board.risk?.level ?? 'LOW'} risk</span>
+        </div>
+      </div>
+
+      {columns.length === 0 ? (
+        <p className="muted">No active project tasks are available for the board.</p>
+      ) : (
+        <div className="project-board-grid" role="list" aria-label="Project planner columns">
+          {columns.map((column, index) => {
+            const tasks = asPlannerTasks(column.tasks);
+            const overloaded = column.risk?.level === 'HIGH';
+            return (
+              <section key={column.key ?? `${column.track}-${column.phase}-${index}`} className={`project-board-column ${riskClass(column.risk?.level)} ${overloaded ? 'overloaded-track' : ''}`} role="listitem">
+                <div className="section-card-header compact">
+                  <div>
+                    <p className="eyebrow">{column.track ?? 'Unassigned track'}</p>
+                    <h3>{column.phase ?? 'Unassigned phase'}</h3>
+                    {column.status && <p className="muted">Status lane: {column.status}</p>}
+                  </div>
+                  <span className={`risk-pill ${riskClass(column.risk?.level)}`}>{column.risk?.level ?? 'LOW'}</span>
+                </div>
+                <div className="capacity-strip">
+                  <span>{formatHours(column.totalEstimatedHours)} estimate</span>
+                  <span>{formatHours(column.availableCapacityHours)} capacity</span>
+                  <span>{column.remainingWorkingDays ?? 0} days</span>
+                </div>
+                {column.risk?.reason && <p className="risk-reason">{column.risk.reason}</p>}
+
+                <div className="mini-card-list">
+                  {tasks.map((task, taskIndex) => {
+                    const blockers = asStrings(task.blockers);
+                    const dependencies = asIds(task.dependencyIds);
+                    const blocking = asIds(task.blockingTaskIds);
+                    return (
+                      <article key={task.id ?? `${task.title}-${taskIndex}`} className={`planner-task-card ${riskClass(task.risk?.level)}`}>
+                        <div className="section-card-header compact">
+                          <h4>{task.title ?? 'Untitled task'}</h4>
+                          <span className={`risk-pill ${riskClass(task.risk?.level)}`}>{task.risk?.level ?? 'LOW'}</span>
+                        </div>
+                        <div className="task-preview-meta">
+                          {task.status && <span className="pill">{task.status}</span>}
+                          <span className="pill">Due {formatPlannerDate(task.dueDate, 'No due date')}</span>
+                          <span className="pill">Estimate {formatHours(task.estimatedHours)}</span>
+                        </div>
+                        {task.risk?.reason && <p className="risk-reason">{task.risk.reason}</p>}
+                        <div className="dependency-list">
+                          <span>Dependencies: {dependencies.length ? dependencies.join(', ') : 'None'}</span>
+                          <span>Blocks: {blocking.length ? blocking.join(', ') : 'None'}</span>
+                          {blockers.length > 0 && <span className="blocker-text">Blockers: {blockers.join('; ')}</span>}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PlanningPage() {
-  const [selected, setSelected] = useState<'today' | 'weekly'>('today');
+  const [selected, setSelected] = useState<'board' | 'today' | 'weekly'>('board');
+  const board = usePlanningProjectBoardQuery(selected === 'board');
   const today = usePlanningTodayQuery(selected === 'today');
   const weekly = usePlanningWeeklyQuery(selected === 'weekly');
   const recommendations = usePlanningRecommendationsQuery(true);
-  const active = selected === 'today' ? today : weekly;
-  const result = latestResult(today.data, weekly.data, recommendations.data);
+  const active = selected === 'board' ? board : selected === 'today' ? today : weekly;
+  const result = latestResult(board.data, today.data, weekly.data, recommendations.data);
   const hasData = Boolean(active.data?.ok && active.data.data);
 
   return (
@@ -247,7 +371,7 @@ export function PlanningPage() {
           <p>Review today’s focus or generate a seven-day plan before inspecting the raw API response.</p>
         </div>
         <button type="button" className="button-primary" onClick={() => active.refetch()} disabled={active.isFetching}>
-          {active.isFetching ? 'Refreshing...' : selected === 'today' ? 'Refresh today' : 'Refresh weekly'}
+          {active.isFetching ? 'Refreshing...' : selected === 'board' ? 'Refresh board' : selected === 'today' ? 'Refresh today' : 'Refresh weekly'}
         </button>
       </header>
 
@@ -257,15 +381,16 @@ export function PlanningPage() {
         <div className="section-header">
           <div>
             <h3 id="planning-content-title">Plan view</h3>
-            <p className="muted">Switch between focused daily triage and the weekly schedule.</p>
+            <p className="muted">Switch between project capacity, focused daily triage, and the weekly schedule.</p>
           </div>
           <div className="segmented-control" role="group" aria-label="Planning mode">
+            <button type="button" className={selected === 'board' ? 'active' : undefined} onClick={() => setSelected('board')} disabled={active.isFetching}>Project board</button>
             <button type="button" className={selected === 'today' ? 'active' : undefined} onClick={() => setSelected('today')} disabled={active.isFetching}>Today</button>
             <button type="button" className={selected === 'weekly' ? 'active' : undefined} onClick={() => setSelected('weekly')} disabled={active.isFetching}>Weekly</button>
           </div>
         </div>
         <QueryState isLoading={active.isLoading || active.isFetching} isError={Boolean(active.data && !active.data.ok)} isEmpty={!active.isLoading && Boolean(active.data && !active.data.data)} />
-        {hasData && (selected === 'today' ? <TodayPlanningView data={active.data?.data} /> : <WeeklyPlanningView data={active.data?.data} />)}
+        {hasData && (selected === 'board' ? <ProjectBoardView data={active.data?.data} /> : selected === 'today' ? <TodayPlanningView data={active.data?.data} /> : <WeeklyPlanningView data={active.data?.data} />)}
       </section>
 
       <section className="page-card diagnostics-card" aria-labelledby="planning-diagnostics-title">
