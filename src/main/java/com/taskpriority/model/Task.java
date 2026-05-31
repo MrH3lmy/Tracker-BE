@@ -20,7 +20,10 @@ import java.util.List;
         @Index(name = "idx_tasks_deleted", columnList = "deleted"),
         @Index(name = "idx_tasks_board_column_id", columnList = "board_column_id"),
         @Index(name = "idx_tasks_board_column_position", columnList = "board_column_id, position"),
-        @Index(name = "idx_tasks_status_position", columnList = "status, position")
+        @Index(name = "idx_tasks_status_position", columnList = "status, position"),
+        @Index(name = "idx_tasks_start_date", columnList = "start_date"),
+        @Index(name = "idx_tasks_risk_level", columnList = "risk_level"),
+        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id")
 })
 public class Task {
 
@@ -37,6 +40,28 @@ public class Task {
 
     @Column(name = "due_date")
     private LocalDate dueDate;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "estimated_minutes")
+    private Integer estimatedMinutes;
+
+    @Column(name = "actual_minutes")
+    private Integer actualMinutes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_level", nullable = false)
+    private RiskLevel riskLevel = RiskLevel.LOW;
+
+    @Column(name = "risk_reason", length = 500)
+    private String riskReason;
+
+    @Column(length = 120)
+    private String track;
+
+    @Column(name = "parent_task_id")
+    private Long parentTaskId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
@@ -119,6 +144,20 @@ public class Task {
     public void setDescription(String description) { this.description = description; }
     public LocalDate getDueDate() { return dueDate; }
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
+    public LocalDate getStartDate() { return startDate; }
+    public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+    public Integer getEstimatedMinutes() { return estimatedMinutes; }
+    public void setEstimatedMinutes(Integer estimatedMinutes) { this.estimatedMinutes = estimatedMinutes; }
+    public Integer getActualMinutes() { return actualMinutes; }
+    public void setActualMinutes(Integer actualMinutes) { this.actualMinutes = actualMinutes; }
+    public RiskLevel getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(RiskLevel riskLevel) { this.riskLevel = riskLevel; }
+    public String getRiskReason() { return riskReason; }
+    public void setRiskReason(String riskReason) { this.riskReason = riskReason; }
+    public String getTrack() { return track; }
+    public void setTrack(String track) { this.track = track; }
+    public Long getParentTaskId() { return parentTaskId; }
+    public void setParentTaskId(Long parentTaskId) { this.parentTaskId = parentTaskId; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
     public LocalDateTime getCompletedDate() { return completedDate; }

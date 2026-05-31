@@ -4,6 +4,7 @@ import com.taskpriority.model.AgeFlag;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Effort;
 import com.taskpriority.model.PriorityCategory;
+import com.taskpriority.model.RiskLevel;
 import com.taskpriority.model.Status;
 
 import java.time.LocalDate;
@@ -15,6 +16,13 @@ public record TaskResponse(
         String title,
         String description,
         LocalDate dueDate,
+        LocalDate startDate,
+        Integer estimatedMinutes,
+        Integer actualMinutes,
+        RiskLevel riskLevel,
+        String riskReason,
+        String track,
+        Long parentTaskId,
         LocalDateTime createdDate,
         LocalDateTime completedDate,
         boolean important,
@@ -60,8 +68,9 @@ public record TaskResponse(
             Long boardColumnId,
             int position
     ) {
-        this(id, title, description, dueDate, createdDate, completedDate, important, status, area, effort,
-                blockedReason, waitingOn, followUpDate, daysLeft, overdue, urgent, priorityScore, priorityCategory,
-                ageFlag, priorityReason, boardColumnId, position, List.of(), List.of());
+        this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, createdDate,
+                completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
+                overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
+                List.of(), List.of());
     }
 }

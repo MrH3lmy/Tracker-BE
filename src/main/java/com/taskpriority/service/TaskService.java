@@ -41,6 +41,7 @@ public class TaskService {
 
     @Transactional
     public Task save(Task task) {
+        validateParentTask(task);
         recurrenceService.applyRecurrenceDefaults(task);
         alignBoardColumn(task);
         if (task.getPosition() <= 0) {
@@ -184,6 +185,19 @@ public class TaskService {
     public Map<PriorityCategory, List<Task>> getMatrixView() {
         return taskRepository.findAll().stream().filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED).peek(this::computeDerivedFields)
                 .collect(Collectors.groupingBy(Task::getPriorityCategory));
+    }
+
+    private void validateParentTask(Task task) {
+        Long parentTaskId = task.getParentTaskId();
+        if (parentTaskId == null) {
+            return;
+        }
+        if (task.getId() != null && task.getId().equals(parentTaskId)) {
+            throw new IllegalArgumentException("A task cannot be its own parent");
+        }
+        if (!taskRepository.existsById(parentTaskId)) {
+            throw new ResourceNotFoundException("Parent task with id " + parentTaskId + " not found");
+        }
     }
 
     private void alignBoardColumn(Task task) {

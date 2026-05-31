@@ -5,13 +5,18 @@ import { QueryState } from '../components/QueryState';
 import { type TaskTab, useTaskBlockersQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { isTaskStatus, TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
-interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
+interface TaskRecord { id: number; title: string; description?: string; status?: TaskStatus; dueDate?: string; startDate?: string; estimatedMinutes?: number; actualMinutes?: number; riskLevel?: RiskLevel; riskReason?: string; track?: string; parentTaskId?: number; important?: boolean; area?: string; effort?: string; blockedReason?: string; waitingOn?: string; followUpDate?: string; boardColumnId?: number; position?: number; dependencyIds?: number[]; blockingTaskIds?: number[]; priorityScore?: number; }
 interface DuplicateGroup { representative: TaskRecord; duplicates: TaskRecord[]; }
 interface BlockerWarning { type: string; title: string; taskId?: number; taskTitle?: string; status?: TaskStatus; priorityScore?: number; message: string; recommendation: string; relatedTaskIds?: number[]; }
 interface BlockerAnalysis { warnings: BlockerWarning[]; dependencyCount: number; }
 
 type FilterValue = 'all' | string;
 type ViewMode = 'board' | 'list';
+type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+const RISK_LEVEL_VALUES: RiskLevel[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const AREA_VALUES = ['WORK', 'STUDY', 'PERSONAL', 'HEALTH', 'FAMILY'];
+const EFFORT_VALUES = ['QUICK', 'MEDIUM', 'DEEP_WORK', 'LARGE'];
 
 const formatValue = (value?: string | boolean | number | null) => {
   if (value === true) return 'Yes';
@@ -41,7 +46,7 @@ const sortTasksForBoard = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.
 const taskMatchesSearch = (task: TaskRecord, searchTerm: string) => {
   const needle = searchTerm.trim().toLowerCase();
   if (!needle) return true;
-  return [task.title, task.description, task.area].some((value) => value?.toLowerCase().includes(needle));
+  return [task.title, task.description, task.area, task.track, task.riskReason].some((value) => value?.toLowerCase().includes(needle));
 };
 
 export function TasksPage() {
@@ -49,6 +54,20 @@ export function TasksPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'' | TaskStatus>('');
+  const [dueDate, setDueDate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [estimatedMinutes, setEstimatedMinutes] = useState('');
+  const [actualMinutes, setActualMinutes] = useState('');
+  const [riskLevel, setRiskLevel] = useState<'' | RiskLevel>('');
+  const [riskReason, setRiskReason] = useState('');
+  const [track, setTrack] = useState('');
+  const [parentTaskId, setParentTaskId] = useState('');
+  const [important, setImportant] = useState(false);
+  const [area, setArea] = useState('');
+  const [effort, setEffort] = useState('');
+  const [blockedReason, setBlockedReason] = useState('');
+  const [waitingOn, setWaitingOn] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
@@ -107,7 +126,50 @@ export function TasksPage() {
       titleRef.current?.focus();
       return;
     }
-    createTask.mutate({ title: title.trim(), description: description || undefined, status: status || undefined });
+    const toOptionalNumber = (value: string) => {
+      if (!value.trim()) return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    createTask.mutate({
+      title: title.trim(),
+      description: description || undefined,
+      dueDate: dueDate || undefined,
+      startDate: startDate || undefined,
+      estimatedMinutes: toOptionalNumber(estimatedMinutes),
+      actualMinutes: toOptionalNumber(actualMinutes),
+      riskLevel: riskLevel || undefined,
+      riskReason: riskReason || undefined,
+      track: track || undefined,
+      parentTaskId: toOptionalNumber(parentTaskId),
+      important,
+      area: area || undefined,
+      effort: effort || undefined,
+      blockedReason: blockedReason || undefined,
+      waitingOn: waitingOn || undefined,
+      followUpDate: followUpDate || undefined,
+      status: status || undefined,
+    }, {
+      onSuccess: () => {
+        setTitle('');
+        setDescription('');
+        setDueDate('');
+        setStartDate('');
+        setEstimatedMinutes('');
+        setActualMinutes('');
+        setRiskLevel('');
+        setRiskReason('');
+        setTrack('');
+        setParentTaskId('');
+        setImportant(false);
+        setArea('');
+        setEffort('');
+        setBlockedReason('');
+        setWaitingOn('');
+        setFollowUpDate('');
+        setStatus('');
+      },
+    });
   };
 
   const showCreatePanel = () => {
@@ -231,6 +293,46 @@ export function TasksPage() {
               <option value="">(no status)</option>
               {TASK_STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            <label htmlFor="taskStartDate">Start date</label>
+            <input id="taskStartDate" type="date" value={startDate} max={dueDate || undefined} onChange={(e) => setStartDate(e.target.value)} disabled={busy} />
+            <label htmlFor="taskDueDate">Due date</label>
+            <input id="taskDueDate" type="date" value={dueDate} min={startDate || undefined} onChange={(e) => setDueDate(e.target.value)} disabled={busy} />
+            <label htmlFor="taskEstimatedMinutes">Estimated minutes</label>
+            <input id="taskEstimatedMinutes" type="number" min="0" step="15" placeholder="120" value={estimatedMinutes} onChange={(e) => setEstimatedMinutes(e.target.value)} disabled={busy} />
+            <label htmlFor="taskActualMinutes">Actual minutes</label>
+            <input id="taskActualMinutes" type="number" min="0" step="15" placeholder="90" value={actualMinutes} onChange={(e) => setActualMinutes(e.target.value)} disabled={busy} />
+            <label htmlFor="taskRiskLevel">Risk level</label>
+            <select id="taskRiskLevel" value={riskLevel} onChange={(e) => setRiskLevel(e.target.value as '' | RiskLevel)} disabled={busy}>
+              <option value="">(default low)</option>
+              {RISK_LEVEL_VALUES.map((level) => <option key={level} value={level}>{level}</option>)}
+            </select>
+            <label htmlFor="taskRiskReason">Risk reason</label>
+            <input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={riskReason} onChange={(e) => setRiskReason(e.target.value)} disabled={busy} maxLength={500} />
+            <label htmlFor="taskTrack">Track / phase</label>
+            <input id="taskTrack" placeholder="Discovery, build, launch" value={track} onChange={(e) => setTrack(e.target.value)} disabled={busy} maxLength={120} />
+            <label htmlFor="taskParentTask">Parent task</label>
+            <select id="taskParentTask" value={parentTaskId} onChange={(e) => setParentTaskId(e.target.value)} disabled={busy}>
+              <option value="">No parent</option>
+              {activeTasks.map((task) => <option key={`parent-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}
+            </select>
+            <label htmlFor="taskImportant">Important</label>
+            <input id="taskImportant" type="checkbox" checked={important} onChange={(e) => setImportant(e.target.checked)} disabled={busy} />
+            <label htmlFor="taskArea">Area</label>
+            <select id="taskArea" value={area} onChange={(e) => setArea(e.target.value)} disabled={busy}>
+              <option value="">(default personal)</option>
+              {AREA_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <label htmlFor="taskEffort">Effort</label>
+            <select id="taskEffort" value={effort} onChange={(e) => setEffort(e.target.value)} disabled={busy}>
+              <option value="">(default medium)</option>
+              {EFFORT_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            <label htmlFor="taskBlockedReason">Blocked reason</label>
+            <input id="taskBlockedReason" placeholder="Why this task is blocked" value={blockedReason} onChange={(e) => setBlockedReason(e.target.value)} disabled={busy} />
+            <label htmlFor="taskWaitingOn">Waiting on</label>
+            <input id="taskWaitingOn" placeholder="Person, vendor, or event" value={waitingOn} onChange={(e) => setWaitingOn(e.target.value)} disabled={busy} />
+            <label htmlFor="taskFollowUpDate">Follow-up date</label>
+            <input id="taskFollowUpDate" type="date" value={followUpDate} min={startDate || undefined} onChange={(e) => setFollowUpDate(e.target.value)} disabled={busy} />
           </div>
           <div className="task-create-actions">
             <button className="button-primary" type="button" onClick={submitCreate} disabled={busy}>{createTask.isPending ? 'Creating...' : 'Create task'}</button>
@@ -331,9 +433,14 @@ export function TasksPage() {
                           {task.important && <span className="task-important-pill">Important</span>}
                         </div>
                         {task.description && <p className="task-description">{task.description}</p>}
-                        {(task.dependencyIds?.length || task.blockingTaskIds?.length) ? <p className="task-description">Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
+                        {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className="task-description">Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
                         <dl className="task-board-meta">
+                          <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
                           <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</dd></div>
+                          <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
+                          <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
+                          <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
+                          <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
                           <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
                           <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
                           <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
@@ -354,7 +461,13 @@ export function TasksPage() {
                   <th>ID</th>
                   <th>Title</th>
                   <th>Status</th>
+                  <th>Start date</th>
                   <th>Due date</th>
+                  <th>Estimate</th>
+                  <th>Actual</th>
+                  <th>Risk</th>
+                  <th>Track</th>
+                  <th>Parent</th>
                   <th>Important</th>
                   <th>Area</th>
                   <th>Effort</th>
@@ -375,7 +488,13 @@ export function TasksPage() {
                         {task.description && <p className="task-description">{task.description}</p>}
                       </td>
                       <td data-label="Status"><span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span></td>
+                      <td data-label="Start date">{formatDate(task.startDate)}</td>
                       <td data-label="Due date"><span className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</span></td>
+                      <td data-label="Estimate">{formatValue(task.estimatedMinutes)}</td>
+                      <td data-label="Actual">{formatValue(task.actualMinutes)}</td>
+                      <td data-label="Risk">{formatValue(task.riskLevel)}{task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}</td>
+                      <td data-label="Track">{formatValue(task.track)}</td>
+                      <td data-label="Parent">{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</td>
                       <td data-label="Important">{task.important ? <span className="task-important-pill">Important</span> : '—'}</td>
                       <td data-label="Area">{formatValue(task.area)}</td>
                       <td data-label="Effort">{formatValue(task.effort)}</td>
