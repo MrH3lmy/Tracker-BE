@@ -38,7 +38,7 @@ public class TaskController {
 
     @PutMapping("/{id}")
     public ResponseEntity<TaskResponse> updateTask(@PathVariable Long id, @Validated @RequestBody UpdateTaskRequest request) {
-        Task saved = taskService.save(taskApiMapper.fromUpdateRequest(id, request));
+        Task saved = taskService.updateTask(id, request);
         return ResponseEntity.ok(taskApiMapper.toResponse(saved));
     }
 }
