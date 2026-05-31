@@ -461,76 +461,76 @@ export function TasksPage() {
           </div>
         ) : (
           <div className="task-table-shell">
-            <table className="task-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Start date</th>
-                  <th>Due date</th>
-                  <th>Estimate</th>
-                  <th>Actual</th>
-                  <th>Risk</th>
-                  <th>Track</th>
-                  <th>Phase</th>
-                  <th>Parent</th>
-                  <th>Important</th>
-                  <th>Area</th>
-                  <th>Effort</th>
-                  <th>Waiting on</th>
-                  <th>Dependencies</th>
-                  <th>Follow-up</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <div className="task-table" aria-label="Task list">
+              <div className="task-list-header">
+                <span>Task</span>
+                <span>Status</span>
+                <span>Due</span>
+                <span>Estimate</span>
+                <span>Risk</span>
+                <span>Actions</span>
+              </div>
+              <div className="task-list-body">
                 {filteredTasks.map((task) => {
                   const overdue = isOverdue(task);
                   return (
-                    <tr key={task.id} className={`${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''}`.trim()}>
-                      <td data-label="ID">#{task.id}</td>
-                      <td data-label="Title">
-                        <strong>{task.title}</strong>
-                        {task.description && <p className="task-description">{task.description}</p>}
-                      </td>
-                      <td data-label="Status"><span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span></td>
-                      <td data-label="Start date">{formatDate(task.startDate)}</td>
-                      <td data-label="Due date"><span className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</span></td>
-                      <td data-label="Estimate">{formatValue(task.estimatedMinutes)}</td>
-                      <td data-label="Actual">{formatValue(task.actualMinutes)}</td>
-                      <td data-label="Risk">{formatValue(task.riskLevel)}{task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}</td>
-                      <td data-label="Track">{formatValue(task.track)}</td>
-                      <td data-label="Phase">{formatValue(task.phase)}</td>
-                      <td data-label="Parent">{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</td>
-                      <td data-label="Important">{task.important ? <span className="task-important-pill">Important</span> : '—'}</td>
-                      <td data-label="Area">{formatValue(task.area)}</td>
-                      <td data-label="Effort">{formatValue(task.effort)}</td>
-                      <td data-label="Waiting on">{formatValue(task.waitingOn ?? task.blockedReason)}</td>
-                      <td data-label="Dependencies">
-                        <span>Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</span>
-                        <br />
-                        <span>Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</span>
-                      </td>
-                      <td data-label="Follow-up">{formatDate(task.followUpDate)}</td>
-                      <td data-label="Actions">
-                        <div className="task-actions">
-                          <button type="button" onClick={() => completeTask.mutate(task.id)} disabled={busy}>Complete</button>
-                          <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
-                          <select id={`changeStatus-${task.id}`} disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value && isTaskStatus(e.target.value)) changeStatus.mutate({ id: task.id, status: e.target.value }); }}>
-                            <option value="">Set status...</option>
-                            {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
-                          </select>
-                          <button type="button" onClick={() => snoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
-                          {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => removeDependency.mutate({ id: task.id, blocksTaskId })} disabled={busy}>Unlink #{blocksTaskId}</button>)}
-                          <button type="button" onClick={() => deleteTask.mutate(task.id)} disabled={busy}>Delete</button>
+                    <article key={task.id} className={`task-list-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''}`.trim()}>
+                      <div className="task-list-primary">
+                        <span className="task-id">#{task.id}</span>
+                        <div>
+                          <div className="task-card-title">
+                            <strong>{task.title}</strong>
+                            {task.important && <span className="task-important-pill">Important</span>}
+                          </div>
+                          {task.description && <p className="task-description">{task.description}</p>}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+
+                      <div className="task-list-metric" data-label="Status">
+                        <span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span>
+                      </div>
+                      <div className="task-list-metric" data-label="Due date">
+                        <span className={overdue ? 'task-date-overdue' : ''}>{formatDate(task.dueDate)}</span>
+                      </div>
+                      <div className="task-list-metric" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
+                      <div className="task-list-metric" data-label="Risk">
+                        <span>{formatValue(task.riskLevel)}</span>
+                        {task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}
+                      </div>
+
+                      <div className="task-actions" aria-label={`Actions for ${task.title}`}>
+                        <button type="button" onClick={() => completeTask.mutate(task.id)} disabled={busy}>Complete</button>
+                        <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
+                        <select id={`changeStatus-${task.id}`} disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value && isTaskStatus(e.target.value)) changeStatus.mutate({ id: task.id, status: e.target.value }); }}>
+                          <option value="">Set status...</option>
+                          {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
+                        </select>
+                        <button type="button" onClick={() => snoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
+                        {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => removeDependency.mutate({ id: task.id, blocksTaskId })} disabled={busy}>Unlink #{blocksTaskId}</button>)}
+                        <button type="button" onClick={() => deleteTask.mutate(task.id)} disabled={busy}>Delete</button>
+                      </div>
+
+                      <details className="task-card-details">
+                        <summary>More details</summary>
+                        <dl className="task-detail-grid">
+                          <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
+                          <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
+                          <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
+                          <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
+                          <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
+                          <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
+                          <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+                          <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
+                          <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+                          <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+                          <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
+                        </dl>
+                      </details>
+                    </article>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
         )}
       </section>
