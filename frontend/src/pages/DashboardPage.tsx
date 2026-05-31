@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiJson, type ApiCallResult } from '../apiClient';
+import { ProgressBar } from '../components/ProgressBar';
 import { RequestInspector } from '../components/RequestInspector';
+import { StackedProgressBar, type StackedProgressSegment } from '../components/StackedProgressBar';
 import { appRoutes } from '../router/routes';
 
 interface ToolCard {
@@ -15,6 +17,14 @@ interface DashboardMetric {
   label: string;
   value: string;
   hint?: string;
+}
+
+interface DashboardSummaryView {
+  completionRate?: number;
+  byStatus: StackedProgressSegment[];
+  byPriorityCategory: StackedProgressSegment[];
+  blockedTasks?: number;
+  waitingTasks?: number;
 }
 
 const toolMetadata: Record<string, Pick<ToolCard, 'icon' | 'description'>> = {
@@ -60,6 +70,31 @@ const metricLabels: Record<string, string> = {
   plannedTasks: 'Planned tasks',
   imported: 'Imported items',
   importedTasks: 'Imported items',
+  completionRate: 'Completion rate',
+  byStatus: 'Tasks by status',
+  byPriorityCategory: 'Tasks by priority',
+  blockedTasks: 'Blocked tasks',
+  waitingTasks: 'Waiting tasks',
+};
+
+const statusOrder = ['BACKLOG', 'NOT_STARTED', 'IN_PROGRESS', 'WAITING', 'BLOCKED', 'DONE', 'CANCELLED'];
+const priorityOrder = ['DO_NOW', 'SCHEDULE', 'DELEGATE', 'DELETE'];
+
+const statusVariants: Record<string, StackedProgressSegment['variant']> = {
+  BACKLOG: 'neutral',
+  NOT_STARTED: 'primary',
+  IN_PROGRESS: 'accent',
+  WAITING: 'warning',
+  BLOCKED: 'danger',
+  DONE: 'success',
+  CANCELLED: 'neutral',
+};
+
+const priorityVariants: Record<string, StackedProgressSegment['variant']> = {
+  DO_NOW: 'danger',
+  SCHEDULE: 'warning',
+  DELEGATE: 'accent',
+  DELETE: 'neutral',
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,6 +115,70 @@ function formatMetricValue(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string') return value;
   return JSON.stringify(value);
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return undefined;
+}
+
+function normalizeCompletionRate(value: unknown): number | undefined {
+  const numericValue = toNumber(value);
+  if (numericValue === undefined) return undefined;
+
+  return Math.min(Math.max(numericValue <= 1 ? numericValue * 100 : numericValue, 0), 100);
+}
+
+function countFromRecord(record: Record<string, unknown>, key: string): number | undefined {
+  return toNumber(record[key]) ?? toNumber(record[key.toLowerCase()]) ?? toNumber(record[titleize(key)]);
+}
+
+function segmentsFromRecord(
+  value: unknown,
+  preferredOrder: string[],
+  variants: Record<string, StackedProgressSegment['variant']>,
+): StackedProgressSegment[] {
+  if (!isRecord(value)) return [];
+
+  return Object.entries(value)
+    .map(([key, rawValue]) => ({ key, value: toNumber(rawValue) }))
+    .filter((entry): entry is { key: string; value: number } => entry.value !== undefined && entry.value >= 0)
+    .sort((first, second) => {
+      const firstIndex = preferredOrder.indexOf(first.key);
+      const secondIndex = preferredOrder.indexOf(second.key);
+      if (firstIndex === -1 && secondIndex === -1) return first.key.localeCompare(second.key);
+      if (firstIndex === -1) return 1;
+      if (secondIndex === -1) return -1;
+      return firstIndex - secondIndex;
+    })
+    .map(({ key, value }) => ({
+      label: titleize(key),
+      value,
+      variant: variants[key] ?? 'primary',
+    }));
+}
+
+function extractDashboardSummary(data: unknown): DashboardSummaryView {
+  if (!isRecord(data)) {
+    return { byStatus: [], byPriorityCategory: [] };
+  }
+
+  const byStatus = segmentsFromRecord(data.byStatus, statusOrder, statusVariants);
+  const byPriorityCategory = segmentsFromRecord(data.byPriorityCategory, priorityOrder, priorityVariants);
+  const byStatusRecord = isRecord(data.byStatus) ? data.byStatus : undefined;
+
+  return {
+    completionRate: normalizeCompletionRate(data.completionRate),
+    byStatus,
+    byPriorityCategory,
+    blockedTasks: toNumber(data.blockedTasks) ?? (byStatusRecord ? countFromRecord(byStatusRecord, 'BLOCKED') : undefined),
+    waitingTasks: toNumber(data.waitingTasks) ?? (byStatusRecord ? countFromRecord(byStatusRecord, 'WAITING') : undefined),
+  };
 }
 
 function collectMetrics(data: unknown, parentLabel?: string): DashboardMetric[] {
@@ -131,6 +230,13 @@ export function DashboardPage() {
   ), []);
 
   const metrics = useMemo(() => collectMetrics(result?.data).slice(0, 8), [result?.data]);
+  const dashboardSummary = useMemo(() => extractDashboardSummary(result?.data), [result?.data]);
+  const hasProgressSummary = dashboardSummary.completionRate !== undefined
+    || dashboardSummary.byStatus.length > 0
+    || dashboardSummary.byPriorityCategory.length > 0
+    || dashboardSummary.blockedTasks !== undefined
+    || dashboardSummary.waitingTasks !== undefined;
+  const blockedWaitingTotal = (dashboardSummary.blockedTasks ?? 0) + (dashboardSummary.waitingTasks ?? 0);
   const hasRawPreview = result?.data !== undefined && result?.data !== null;
 
   const checkApi = async () => {
@@ -213,6 +319,42 @@ export function DashboardPage() {
               <h4>No structured metrics yet</h4>
               <p>Refresh the dashboard endpoint to render numeric, boolean, string, or list summaries when available.</p>
             </div>
+          )}
+
+          {hasProgressSummary && (
+            <section className="dashboard-progress-panel" aria-labelledby="dashboard-progress-title">
+              <div className="section-header compact">
+                <div>
+                  <p className="eyebrow">Progress</p>
+                  <h4 id="dashboard-progress-title">Task completion and distribution</h4>
+                </div>
+              </div>
+              <div className="dashboard-progress-grid">
+                {dashboardSummary.completionRate !== undefined && (
+                  <ProgressBar
+                    label="Completion rate"
+                    value={dashboardSummary.completionRate}
+                    helperText="Completed tasks as a share of all dashboard tasks."
+                    variant="success"
+                  />
+                )}
+                {blockedWaitingTotal > 0 && (
+                  <ProgressBar
+                    label="Blocked or waiting"
+                    value={blockedWaitingTotal}
+                    max={dashboardSummary.byStatus.reduce((sum, segment) => sum + segment.value, 0) || blockedWaitingTotal}
+                    helperText={`${formatMetricValue(dashboardSummary.blockedTasks ?? 0)} blocked, ${formatMetricValue(dashboardSummary.waitingTasks ?? 0)} waiting`}
+                    variant={dashboardSummary.blockedTasks ? 'danger' : 'warning'}
+                  />
+                )}
+                {dashboardSummary.byStatus.length > 0 && (
+                  <StackedProgressBar label="By status" segments={dashboardSummary.byStatus} />
+                )}
+                {dashboardSummary.byPriorityCategory.length > 0 && (
+                  <StackedProgressBar label="By priority category" segments={dashboardSummary.byPriorityCategory} />
+                )}
+              </div>
+            </section>
           )}
 
           {hasRawPreview && (

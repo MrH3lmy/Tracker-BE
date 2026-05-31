@@ -30,11 +30,13 @@ public class DashboardService {
         int dueThisWeek = taskRepository.findByDueDateBetween(LocalDate.now(), LocalDate.now().plusDays(6)).size();
         int important = (int) tasks.stream().filter(Task::isImportant).count();
         int deleted = (int) tasks.stream().filter(Task::isDeleted).count();
+        int blocked = (int) tasks.stream().filter(t -> t.getStatus() == Status.BLOCKED).count();
+        int waiting = (int) tasks.stream().filter(t -> t.getStatus() == Status.WAITING).count();
         double completionRate = total == 0 ? 0d : (completed * 100.0) / total;
         Map<Status, Long> byStatus = tasks.stream().collect(Collectors.groupingBy(Task::getStatus, Collectors.counting()));
         Map<com.taskpriority.model.PriorityCategory, Long> byPriorityCategory = tasks.stream()
                 .filter(t -> !t.isDeleted())
                 .collect(Collectors.groupingBy(t -> priorityEngine.compute(t).priorityCategory(), Collectors.counting()));
-        return new TaskService.DashboardSummary(total, active, completed, overdue, dueToday, dueThisWeek, important, deleted, completionRate, byStatus, byPriorityCategory);
+        return new TaskService.DashboardSummary(total, active, completed, overdue, dueToday, dueThisWeek, important, deleted, blocked, waiting, completionRate, byStatus, byPriorityCategory);
     }
 }
