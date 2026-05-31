@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Tracker
+Comment=Start Tracker with Docker and open the web app
+Terminal=true
+Categories=Development;Utility;
+StartupNotify=false
+Exec=bash -c "launcher=\$1; launch_dir=\$(dirname \"\$launcher\"); repo_dir=\$(cd \"\$launch_dir/..\" && pwd); cd \"\$repo_dir\" && ./start-tracker-docker.sh; status=\$?; if [ \$status -ne 0 ]; then echo; echo \"Tracker did not start successfully.\"; echo \"If the message above mentions Docker, install Docker Desktop or start it, then try again.\"; echo; read -r -p \"Press Enter to close this window...\" _; fi; exit \$status" tracker-launcher %k
