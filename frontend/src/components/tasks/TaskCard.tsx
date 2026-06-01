@@ -253,7 +253,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
 
       <section className={styles.subtaskProgress} aria-label={`Subtask progress for ${task.title}`}>
         <div className={styles.subtaskProgressHeader}>
-          <span className={styles.subtaskProgressCount}>{completedSubtaskCount}/{subtaskTotal} subtasks</span>
+          <span className={styles.subtaskProgressCount}>{completedSubtaskCount} / {subtaskTotal} completed</span>
           <span className={styles.subtaskProgressPercent}>{subtaskProgressPercent}%</span>
         </div>
         <div className={styles.subtaskProgressTrack} role="progressbar" aria-valuenow={subtaskProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={summary || `No subtasks for ${task.title}`}>
@@ -275,11 +275,20 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         {task.subtasks.length > 0 ? (
           <details className={styles.subtaskDetails}>
             <summary className={styles.subtaskDetailsSummary}>View all subtasks ({subtaskTotal})</summary>
-            <div className={styles.subtaskList}>
-              {task.subtasks.map((subtask, subtaskIndex) => (
-                <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
-              ))}
-            </div>
+            <ul className={styles.subtaskList} aria-label={`All subtasks for ${task.title}`}>
+              {task.subtasks.map((subtask) => {
+                const complete = isSubtaskComplete(subtask);
+                return (
+                  <li key={subtask.id} className={complete ? styles.subtaskListItemComplete : styles.subtaskListItem}>
+                    <span className={styles.subtaskCheckIcon} aria-hidden="true">{complete ? '✓' : ''}</span>
+                    <span className={styles.subtaskListContent}>
+                      <span className={styles.subtaskListTitle}>#{subtask.id} {subtask.title}</span>
+                      <span className={styles.subtaskListMeta}>{formatValue(subtask.status ?? 'No status')}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </details>
         ) : <span className={styles.subtaskDetailsSummary} aria-disabled="true">View all subtasks (0)</span>}
       </section>
