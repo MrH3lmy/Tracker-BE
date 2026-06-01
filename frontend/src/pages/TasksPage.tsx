@@ -6,7 +6,6 @@ import { QueryState } from '../components/QueryState';
 import { RequestInspector } from '../components/RequestInspector';
 import { BlockerPanel } from '../components/tasks/BlockerPanel';
 import { TaskBoard } from '../components/tasks/TaskBoard';
-import boardStyles from '../components/tasks/TaskBoard.module.css';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
@@ -278,21 +277,45 @@ export function TasksPage() {
 
   return (
     <div className="tasks-page" aria-busy={busy}>
-      <header className="tasks-hero">
-        <div className="tasks-hero-copy">
-          <p className="eyebrow">Task command center</p>
-          <h2>Tasks</h2>
+      <header className="tasks-planner-shell" aria-label="Project planner controls">
+        <div className="tasks-planner-topbar">
+          <div className="tasks-planner-title">
+            <p className="eyebrow">Task command center</p>
+            <h2>Project Planner</h2>
+          </div>
+
+          <nav className="planner-view-tabs" aria-label="Planner views">
+            <button className={tab !== 'duplicates' && viewMode === 'board' ? 'active' : ''} type="button" onClick={() => setViewMode('board')} disabled={tab === 'duplicates'} aria-pressed={tab !== 'duplicates' && viewMode === 'board'}>Board</button>
+            <button className={tab !== 'duplicates' && viewMode === 'list' ? 'active' : ''} type="button" onClick={() => setViewMode('list')} disabled={tab === 'duplicates'} aria-pressed={tab !== 'duplicates' && viewMode === 'list'}>List</button>
+            <button type="button" disabled aria-disabled="true">Calendar</button>
+            <button type="button" disabled aria-disabled="true">Timeline</button>
+            <button type="button" disabled aria-disabled="true">Reports</button>
+          </nav>
+
+          <div className="planner-toolbar" aria-label="Planner actions">
+            <label className="planner-search" htmlFor="plannerTaskSearch">
+              <span className="sr-only">Search tasks</span>
+              <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value.trim(), '')} />
+            </label>
+            <button className="planner-icon-button" type="button" onClick={() => document.getElementById('statusFilter')?.focus()}>
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+            <button className="planner-icon-button" type="button" aria-label="More task actions">•••</button>
+            <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
+              {createOpen ? 'Close new task' : '+ New task'}
+            </button>
+          </div>
+        </div>
+
+        <div className="planner-context-row">
           <p>Capture work, triage effort, and move tasks from active execution to archive without dropping follow-ups.</p>
-          <div className="task-stat-strip" aria-label="Task counts">
+          <div className="task-stat-strip compact" aria-label="Task counts">
             <span className="task-stat"><strong>{activeTasks.length}</strong> Active</span>
             <span className="task-stat"><strong>{archiveTasks.length}</strong> Archived</span>
             <span className="task-stat"><strong>{duplicateCount}</strong> Duplicates</span>
             <span className="task-stat"><strong>{sortedFilteredTasks.length}</strong> In view</span>
           </div>
         </div>
-        <button ref={createButtonRef} className="button-primary" type="button" onClick={showCreatePanel} disabled={busy}>
-          {createOpen ? 'Close new task' : 'New task'}
-        </button>
       </header>
 
       <BlockerPanel
@@ -328,13 +351,7 @@ export function TasksPage() {
             <h3 id="task-list-title">{tab === 'archive' ? 'Archived tasks' : tab === 'duplicates' ? 'Duplicate groups' : 'Active tasks'}</h3>
             <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
           </div>
-          <div className={boardStyles.headerActions}>
-            {tab !== 'duplicates' && (
-              <div className="task-view-toggle" role="group" aria-label="Task display mode">
-                <button className={viewMode === 'board' ? 'active' : ''} type="button" onClick={() => setViewMode('board')}>Board</button>
-                <button className={viewMode === 'list' ? 'active' : ''} type="button" onClick={() => setViewMode('list')}>List</button>
-              </div>
-            )}
+          <div className="task-section-actions">
             <div className="task-view-toggle" role="group" aria-label="Task list view">
               <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeTasks.length}</span></button>
               <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archive <span>{archiveTasks.length}</span></button>
