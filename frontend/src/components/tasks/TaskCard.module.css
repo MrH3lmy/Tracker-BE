@@ -4,6 +4,15 @@
   gap: var(--space-2);
 }
 
+.card,
+.cardShell {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(19, 34, 56, 0.96), rgba(12, 24, 42, 0.96));
+  padding: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
 .card {
   transform-origin: center;
   will-change: opacity, transform;
@@ -12,11 +21,6 @@
 
 .cardShell {
   cursor: grab;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface-raised-soft);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-sm);
 }
 
 .cardShell:active {
@@ -33,17 +37,18 @@
   opacity: 0.35;
 }
 
+.card:active,
 .card:focus-within,
 .card[aria-selected="true"] {
-  border-color: var(--color-blue-glow-border);
-  box-shadow: 0 0 0 3px var(--color-blue-glow-border), var(--shadow-md);
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55), 0 24px 70px rgba(37, 99, 235, 0.18);
 }
 
 .card:focus-visible {
-  border-color: var(--color-primary);
-  outline: 3px solid var(--color-primary);
+  border-color: rgba(59, 130, 246, 0.55);
+  outline: 2px solid rgba(59, 130, 246, 0.55);
   outline-offset: 4px;
-  box-shadow: 0 0 0 6px var(--color-blue-glow-border), var(--shadow-md);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55), 0 24px 70px rgba(37, 99, 235, 0.18);
 }
 
 .keyboardControls {
@@ -124,7 +129,7 @@
 
 .cardTitle {
   color: var(--color-text);
-  font-size: 1.08rem;
+  font-size: 1.25rem;
   font-weight: 950;
   letter-spacing: -0.01em;
   line-height: 1.22;
@@ -156,7 +161,7 @@
 .titleEditor input {
   width: 100%;
   font: inherit;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   font-weight: 900;
   letter-spacing: -0.01em;
 }
@@ -164,7 +169,7 @@
 .description {
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 0.92rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -180,13 +185,15 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  gap: 0.35rem;
-  border: 1px solid currentColor;
+  gap: 0.28rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
-  padding: 0.16rem 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 850;
-  line-height: 1.2;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 0.12rem 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
   text-transform: capitalize;
 }
 
@@ -199,17 +206,19 @@
 .statusTaskBacklog,
 .statusTaskNotStarted,
 .statusTaskUnknown {
-  background: var(--color-chip-neutral-bg);
-  color: var(--color-chip-neutral);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-text-muted);
 }
 
 .statusTaskInProgress {
-  background: var(--color-primary-soft);
+  border-color: rgba(59, 130, 246, 0.38);
+  background: rgba(59, 130, 246, 0.16);
   color: var(--color-primary-strong);
 }
 
 .statusTaskWaiting {
-  background: var(--color-status-warning-bg);
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.1);
   color: var(--color-status-warning-text);
 }
 
@@ -218,9 +227,9 @@
 }
 
 .statusTaskBlocked {
-  background: var(--color-status-danger-bg);
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(248, 113, 113, 0.1);
   color: var(--color-status-danger-text);
-  border-style: dashed;
 }
 
 .statusTaskBlocked::before {
@@ -228,7 +237,8 @@
 }
 
 .statusTaskDone {
-  background: var(--color-status-success-bg);
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(34, 197, 94, 0.1);
   color: var(--color-status-success-text);
 }
 
@@ -238,8 +248,8 @@
 }
 
 .statusTaskCancelled {
-  background: var(--color-status-neutral-bg);
-  color: var(--color-status-neutral);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-text-muted);
   text-decoration: line-through;
 }
 
@@ -248,18 +258,18 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  gap: 0.3rem;
-  border: 1px solid currentColor;
+  gap: 0.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 999px;
-  padding: 0.16rem 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 850;
-  line-height: 1.2;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
 .effortBadge {
-  background: var(--color-chip-neutral-bg);
-  color: var(--color-chip-neutral);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-text-muted);
 }
 
 .effortBadge::before {
@@ -269,18 +279,20 @@
 }
 
 .effortBadgeMedium {
-  background: var(--color-status-warning-bg);
+  border-color: rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.08);
   color: var(--color-status-warning-text);
 }
 
 .effortBadgeHigh {
-  border-width: 2px;
-  background: var(--color-danger-soft);
-  color: var(--color-danger-strong);
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--color-status-danger-text);
 }
 
 .scoreBadge {
-  background: var(--color-primary-soft);
+  border-color: rgba(59, 130, 246, 0.38);
+  background: rgba(59, 130, 246, 0.16);
   color: var(--color-primary-strong);
 }
 
@@ -327,7 +339,7 @@
   color: var(--color-text-muted);
   font-size: 0.72rem;
   font-weight: 850;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -338,7 +350,7 @@
   gap: 0.35rem;
   min-width: 0;
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
@@ -378,7 +390,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  border-block-end: 2px solid currentColor;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.08);
+  padding: 0.05rem 0.35rem;
   color: var(--color-status-danger-text);
   font-weight: 850;
 }
@@ -391,15 +405,15 @@
 .overdueHint {
   display: inline-flex;
   width: fit-content;
-  border: 1px solid currentColor;
+  border: 1px solid rgba(248, 113, 113, 0.24);
   border-radius: 999px;
-  padding: 0.08rem 0.45rem;
-  background: var(--color-status-danger-bg);
+  padding: 0.06rem 0.4rem;
+  background: rgba(248, 113, 113, 0.08);
   color: var(--color-status-danger-text);
-  font-size: 0.72rem;
-  font-weight: 950;
+  font-size: 0.7rem;
+  font-weight: 900;
   letter-spacing: 0.06em;
-  line-height: 1.25;
+  line-height: 1.2;
   text-transform: uppercase;
 }
 
@@ -673,27 +687,36 @@
 }
 
 .rowImportant,
-.rowImportant td {
-  background: var(--color-task-important-bg);
-}
-
-.rowImportant {
-  border-inline-start: 0.35rem solid var(--color-task-important-accent);
-  box-shadow: inset 0.35rem 0 0 color-mix(in srgb, var(--color-task-important-accent) 16%, transparent), var(--shadow-sm);
-}
-
+.rowImportant td,
 .rowOverdue,
 .rowOverdue td {
-  background: var(--color-task-overdue-bg);
+  background: transparent;
 }
 
-.rowOverdue {
-  border-inline-start: 0.35rem solid var(--color-task-overdue-accent);
-  box-shadow: inset 0.35rem 0 0 color-mix(in srgb, var(--color-task-overdue-accent) 18%, transparent), var(--shadow-sm);
-}
-
+.rowImportant,
+.rowOverdue,
 .rowImportant.rowOverdue {
-  border-inline-start-color: var(--color-task-overdue-accent);
+  border-inline-start: 0;
+}
+
+.rowImportant .taskKey,
+.importantPill {
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 0.08rem 0.42rem;
+  color: var(--color-status-warning-text);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.rowOverdue .dateOverdue,
+.rowOverdue .overdueHint {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--color-status-danger-text);
 }
 
 @media (max-width: 42rem) {
