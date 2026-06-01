@@ -1,3 +1,20 @@
+:where(.board, .statusTabs) {
+  --task-bg: #07111f;
+  --task-surface: #0f1b2d;
+  --task-surface-elevated: #132238;
+  --task-surface-soft: #172940;
+  --task-border: rgba(148, 163, 184, 0.18);
+  --task-border-strong: rgba(96, 165, 250, 0.55);
+  --task-text-primary: #f8fafc;
+  --task-text-secondary: #cbd5e1;
+  --task-text-muted: #94a3b8;
+  --task-accent-blue: #3b82f6;
+  --task-accent-blue-soft: rgba(59, 130, 246, 0.16);
+  --task-warning: #f59e0b;
+  --task-danger: #fb7185;
+  --task-success: #22c55e;
+}
+
 .headerActions {
   display: flex;
   flex-wrap: wrap;
@@ -16,20 +33,18 @@
 
 .column {
   min-height: 24rem;
-  border: 1px solid var(--color-blue-glow-border);
+  border: 1px solid var(--task-border);
   border-radius: var(--radius-xl);
-  background: var(--color-surface-navy-deep);
-  background: var(--gradient-board-column);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--task-surface-elevated) 82%, transparent), var(--task-surface));
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(18px);
   transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .dropTarget {
-  border-color: var(--color-primary);
-  background: var(--color-surface-navy-deeper);
-  background: var(--gradient-board-column-active);
-  box-shadow: 0 0 0 3px var(--color-blue-glow-border), var(--shadow-md);
+  border-color: var(--task-border-strong);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--task-surface-elevated) 88%, transparent), color-mix(in srgb, var(--task-accent-blue) 10%, var(--task-surface)));
+  box-shadow: 0 0 0 2px var(--task-accent-blue-soft), var(--shadow-md);
 }
 
 .columnHeader {
@@ -44,7 +59,7 @@
   padding: var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface-navy-deeper) 54%, transparent);
+  background: color-mix(in srgb, var(--task-bg) 72%, transparent);
   backdrop-filter: blur(10px);
 }
 
@@ -62,10 +77,10 @@
   height: 1.35rem;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-primary);
+  color: var(--task-accent-blue);
   font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
@@ -78,10 +93,10 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  color: var(--color-text);
+  background: var(--task-accent-blue-soft);
+  color: var(--task-text-primary);
   font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
@@ -102,7 +117,7 @@
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font: inherit;
   font-size: 1rem;
   font-weight: 900;
@@ -113,10 +128,10 @@
 
 .columnActionButton:hover,
 .columnActionButton:focus-visible {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-soft));
-  color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
+  border-color: transparent;
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
+  box-shadow: none;
   outline: none;
   transform: translateY(-1px);
 }
@@ -137,8 +152,8 @@
 .insertionIndicator {
   min-height: 0.45rem;
   border-radius: 999px;
-  background: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  background: var(--task-accent-blue);
+  box-shadow: 0 0 0 2px var(--task-accent-blue-soft);
 }
 
 .empty {
@@ -148,10 +163,10 @@
   justify-items: center;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-4);
-  border: 1px dashed color-mix(in srgb, var(--color-primary) 22%, var(--color-empty-border-muted));
+  border: 1px dashed var(--task-border);
   border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--color-surface-navy-deeper) 86%, var(--color-primary) 4%);
-  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--task-surface) 82%, transparent);
+  color: var(--task-text-muted);
   text-align: center;
 }
 
@@ -170,13 +185,13 @@
   width: 2.65rem;
   height: 2.65rem;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  border: 1px solid var(--task-border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-navy-deep));
-  color: var(--color-primary);
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
   font-size: 1.05rem;
   font-weight: 900;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 7%, transparent), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .emptyIllustrationCard {
@@ -185,9 +200,9 @@
   bottom: 0.35rem;
   width: 2.9rem;
   height: 1.95rem;
-  border: 1px dashed color-mix(in srgb, var(--color-primary) 24%, var(--color-border-strong));
+  border: 1px dashed var(--task-border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-navy-deep) 78%, var(--color-primary) 6%);
+  background: color-mix(in srgb, var(--task-surface-soft) 72%, transparent);
   transform: rotate(-7deg);
 }
 
@@ -203,13 +218,13 @@
 }
 
 .emptyCopy h4 {
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 1rem;
   font-weight: 900;
 }
 
 .emptyCopy p {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -218,11 +233,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--color-border-strong) 74%, transparent);
+  border: 1px solid var(--task-border);
   border-radius: 999px;
   padding: 0.45rem 0.85rem;
-  background: color-mix(in srgb, var(--color-bg-soft) 82%, transparent);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--task-surface-soft) 72%, transparent);
+  color: var(--task-text-primary);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 900;
@@ -233,19 +248,19 @@
 
 .emptyActionButton:hover,
 .emptyActionButton:focus-visible {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-soft));
-  color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-color: var(--task-border-strong);
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
+  box-shadow: none;
   outline: none;
   transform: translateY(-1px);
 }
 
 .emptyActionButton:disabled,
 .emptyActionButton:disabled:hover {
-  border-color: var(--color-border);
-  background: color-mix(in srgb, var(--color-bg-soft) 72%, transparent);
-  color: var(--color-text-muted);
+  border-color: var(--task-border);
+  background: color-mix(in srgb, var(--task-surface) 72%, transparent);
+  color: var(--task-text-muted);
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -274,11 +289,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--task-border);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-bg-soft);
-  color: var(--color-text);
+  background: var(--task-surface);
+  color: var(--task-text-secondary);
   font: inherit;
   font-weight: 800;
   text-align: left;
@@ -288,15 +303,15 @@
 
 .statusTab:hover,
 .statusTab:focus-visible {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-color: var(--task-border-strong);
+  box-shadow: 0 0 0 2px var(--task-accent-blue-soft);
   outline: none;
 }
 
 .statusTabSelected {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-soft));
-  color: var(--color-primary);
+  border-color: var(--task-border-strong);
+  background: var(--task-accent-blue-soft);
+  color: var(--task-text-primary);
 }
 
 .statusTabLabel {
@@ -312,8 +327,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--color-bg-soft-raised);
-  color: var(--color-text);
+  background: var(--task-surface-soft);
+  color: var(--task-text-primary);
   font-size: 0.85rem;
 }
 
