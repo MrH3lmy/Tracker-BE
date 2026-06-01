@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { ApiCallResult } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { RequestInspector } from '../components/RequestInspector';
@@ -7,23 +8,104 @@ import { TaskBoard } from '../components/tasks/TaskBoard';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
-import type { BlockerAnalysis, CreateTaskPayload, DuplicateGroup, FilterValue, TaskRecord, TaskTreeNode, ViewMode } from '../components/tasks/taskTypes';
-import { buildTaskTree, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
+import type { BlockerAnalysis, CreateTaskPayload, DuplicateGroup, FilterValue, TaskRecord, TaskSortValue, TaskTreeNode, ViewMode } from '../components/tasks/taskTypes';
+import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import { useTaskBlockersQuery, useTaskMutations, useTasksQuery, type TaskTab } from '../hooks/useApiQueries';
 import { useBoardState } from '../hooks/useBoardState';
 import { TASK_STATUS_VALUES } from '../validation/taskStatus';
 
+const DEFAULT_SORT: TaskSortValue = 'position';
+const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
+const SORT_VALUES: TaskSortValue[] = ['position', 'priorityScore', 'dueDate', 'createdDate', 'effort', 'title'];
+const EFFORT_ORDER = new Map([['XS', 0], ['SMALL', 1], ['S', 1], ['LOW', 1], ['QUICK', 1], ['MEDIUM', 2], ['M', 2], ['DEEP_WORK', 3], ['LARGE', 3], ['L', 3], ['HIGH', 3], ['XL', 4]]);
+
+const filterValueFromParams = (searchParams: URLSearchParams, key: 'status' | 'area' | 'effort'): FilterValue => searchParams.get(key) || 'all';
+const dateValueFromParams = (searchParams: URLSearchParams, key: 'dueFrom' | 'dueTo') => searchParams.get(key) || '';
+const overdueValueFromParams = (searchParams: URLSearchParams) => searchParams.get('overdue') === 'true';
+const sortValueFromParams = (searchParams: URLSearchParams): TaskSortValue => {
+  const sort = searchParams.get('sort') as TaskSortValue | null;
+  return sort && SORT_VALUES.includes(sort) ? sort : DEFAULT_SORT;
+};
+
+const updateParam = (params: URLSearchParams, key: string, value: string | boolean, defaultValue: string | boolean) => {
+  if (value === defaultValue || value === '') params.delete(key);
+  else params.set(key, String(value));
+};
+
+const taskDateValue = (value?: string) => {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+};
+
+const taskCreatedDateValue = (task: TaskRecord) => {
+  const time = taskDateValue(task.createdDate);
+  return Number.isFinite(time) ? time : 0;
+};
+
+const effortRank = (task: TaskRecord) => {
+  const effort = task.effort?.toUpperCase();
+  if (!effort) return Number.POSITIVE_INFINITY;
+  return EFFORT_ORDER.get(effort) ?? Number.POSITIVE_INFINITY;
+};
+
+const sortTasks = (tasks: TaskRecord[], sort: TaskSortValue) => [...tasks].sort((a, b) => {
+  if (sort === 'priorityScore') return (b.priorityScore ?? Number.NEGATIVE_INFINITY) - (a.priorityScore ?? Number.NEGATIVE_INFINITY) || a.id - b.id;
+  if (sort === 'dueDate') return taskDateValue(a.dueDate) - taskDateValue(b.dueDate) || a.id - b.id;
+  if (sort === 'createdDate') return taskCreatedDateValue(b) - taskCreatedDateValue(a) || a.id - b.id;
+  if (sort === 'effort') return effortRank(a) - effortRank(b) || a.title.localeCompare(b.title) || a.id - b.id;
+  if (sort === 'title') return a.title.localeCompare(b.title) || a.id - b.id;
+  return (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id;
+});
+
+const isOnOrAfterDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) >= filterDate;
+const isOnOrBeforeDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) <= filterDate;
+
 export function TasksPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<TaskTab>('active');
   const [createOpen, setCreateOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
-  const [areaFilter, setAreaFilter] = useState<FilterValue>('all');
-  const [effortFilter, setEffortFilter] = useState<FilterValue>('all');
+  const search = searchParams.get('q') || '';
+  const statusFilter = filterValueFromParams(searchParams, 'status');
+  const areaFilter = filterValueFromParams(searchParams, 'area');
+  const effortFilter = filterValueFromParams(searchParams, 'effort');
+  const dueFrom = dateValueFromParams(searchParams, 'dueFrom');
+  const dueTo = dateValueFromParams(searchParams, 'dueTo');
+  const overdueOnly = overdueValueFromParams(searchParams);
+  const sort = sortValueFromParams(searchParams);
   const [viewMode, setViewMode] = useState<ViewMode>('board');
   const [dependencyTaskId, setDependencyTaskId] = useState('');
   const [dependencyBlocksTaskId, setDependencyBlocksTaskId] = useState('');
   const createFormRef = useRef<TaskCreateFormHandle>(null);
+
+  const setFilterParam = (key: (typeof FILTER_PARAM_KEYS)[number], value: string | boolean, defaultValue: string | boolean) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      updateParam(next, key, value, defaultValue);
+      return next;
+    }, { replace: true });
+  };
+
+  const clearFilters = () => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      FILTER_PARAM_KEYS.forEach((key) => next.delete(key));
+      return next;
+    }, { replace: true });
+  };
+
+  const applySavedView = (params: string) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      FILTER_PARAM_KEYS.forEach((key) => next.delete(key));
+      const savedParams = new URLSearchParams(params);
+      FILTER_PARAM_KEYS.forEach((key) => {
+        const value = savedParams.get(key);
+        if (value) next.set(key, value);
+      });
+      return next;
+    });
+  };
 
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
@@ -53,14 +135,30 @@ export function TasksPage() {
     if (statusFilter !== 'all' && task.status !== statusFilter) return false;
     if (areaFilter !== 'all' && task.area !== areaFilter) return false;
     if (effortFilter !== 'all' && task.effort !== effortFilter) return false;
+    if (dueFrom && !isOnOrAfterDate(task.dueDate, dueFrom)) return false;
+    if (dueTo && !isOnOrBeforeDate(task.dueDate, dueTo)) return false;
+    if (overdueOnly && !isOverdue(task)) return false;
     return true;
-  }), [areaFilter, effortFilter, search, statusFilter, tasks]);
+  }), [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, statusFilter, tasks]);
+  const sortedFilteredTasks = useMemo(() => sortTasks(filteredTasks, sort), [filteredTasks, sort]);
   const filteredDuplicates = useMemo(() => duplicates.filter((group) => {
     const relatedTasks = [group.representative, ...(group.duplicates ?? [])].filter(Boolean);
     return relatedTasks.some((task) => taskMatchesSearch(task, search));
   }), [duplicates, search]);
-  const activeFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all'].filter(Boolean).length;
-  const taskTree = useMemo(() => buildTaskTree(filteredTasks), [filteredTasks]);
+  const activeFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all', dueFrom, dueTo, overdueOnly, sort !== DEFAULT_SORT].filter(Boolean).length;
+  const serializedFilters = useMemo(() => {
+    const params = new URLSearchParams();
+    updateParam(params, 'q', search.trim(), '');
+    updateParam(params, 'status', statusFilter, 'all');
+    updateParam(params, 'area', areaFilter, 'all');
+    updateParam(params, 'effort', effortFilter, 'all');
+    updateParam(params, 'dueFrom', dueFrom, '');
+    updateParam(params, 'dueTo', dueTo, '');
+    updateParam(params, 'overdue', overdueOnly, false);
+    updateParam(params, 'sort', sort, DEFAULT_SORT);
+    return params.toString();
+  }, [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, sort, statusFilter]);
+  const taskTree = useMemo(() => buildTaskTree(sortedFilteredTasks, (nodes) => nodes), [sortedFilteredTasks]);
   const boardColumns = useMemo(() => TASK_STATUS_VALUES.map((columnStatus) => ({
     status: columnStatus,
     tasks: taskTree.filter((task) => task.status === columnStatus),
@@ -114,7 +212,7 @@ export function TasksPage() {
             <span className="task-stat"><strong>{activeTasks.length}</strong> Active</span>
             <span className="task-stat"><strong>{archiveTasks.length}</strong> Archived</span>
             <span className="task-stat"><strong>{duplicateCount}</strong> Duplicates</span>
-            <span className="task-stat"><strong>{filteredTasks.length}</strong> In view</span>
+            <span className="task-stat"><strong>{sortedFilteredTasks.length}</strong> In view</span>
           </div>
         </div>
         <button className="button-primary" type="button" onClick={showCreatePanel} disabled={busy}>
@@ -153,7 +251,7 @@ export function TasksPage() {
           <div>
             <p className="eyebrow">Work queue</p>
             <h3 id="task-list-title">{tab === 'archive' ? 'Archived tasks' : tab === 'duplicates' ? 'Duplicate groups' : 'Active tasks'}</h3>
-            <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} applied.` : 'Use filters to quickly find the next task to move.'}</p>
+            <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
           </div>
           <div className="task-header-actions">
             {tab !== 'duplicates' && (
@@ -175,19 +273,31 @@ export function TasksPage() {
           statusFilter={statusFilter}
           areaFilter={areaFilter}
           effortFilter={effortFilter}
+          dueFrom={dueFrom}
+          dueTo={dueTo}
+          overdueOnly={overdueOnly}
+          sort={sort}
+          activeFilterCount={activeFilterCount}
           areaOptions={areaOptions}
           effortOptions={effortOptions}
           disabled={tab === 'duplicates'}
-          onSearchChange={setSearch}
-          onStatusFilterChange={setStatusFilter}
-          onAreaFilterChange={setAreaFilter}
-          onEffortFilterChange={setEffortFilter}
+          serializedFilters={serializedFilters}
+          onSearchChange={(value) => setFilterParam('q', value.trim(), '')}
+          onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
+          onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
+          onEffortFilterChange={(value) => setFilterParam('effort', value, 'all')}
+          onDueFromChange={(value) => setFilterParam('dueFrom', value, '')}
+          onDueToChange={(value) => setFilterParam('dueTo', value, '')}
+          onOverdueOnlyChange={(value) => setFilterParam('overdue', value, false)}
+          onSortChange={(value) => setFilterParam('sort', value, DEFAULT_SORT)}
+          onClearAll={clearFilters}
+          onApplySavedView={applySavedView}
         />
 
         <QueryState
           isLoading={query.isLoading || query.isFetching}
           isError={Boolean(query.data && !query.data.ok)}
-          isEmpty={!query.isLoading && ((tab === 'duplicates' && filteredDuplicates.length === 0) || (tab !== 'duplicates' && filteredTasks.length === 0))}
+          isEmpty={!query.isLoading && ((tab === 'duplicates' && filteredDuplicates.length === 0) || (tab !== 'duplicates' && sortedFilteredTasks.length === 0))}
           emptyMessage={activeFilterCount > 0 ? 'No tasks match the current filters.' : 'No tasks available.'}
           successMessage={createTask.data?.ok ? 'Task created successfully.' : undefined}
         />
