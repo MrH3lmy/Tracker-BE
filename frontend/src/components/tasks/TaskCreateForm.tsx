@@ -28,7 +28,8 @@ interface TaskCreateFormState {
 type TaskCreateFormAction =
   | { type: 'field'; field: keyof TaskCreateFormState; value: string | boolean }
   | { type: 'reset' }
-  | { type: 'parent'; parentTaskId: string };
+  | { type: 'parent'; parentTaskId: string }
+  | { type: 'status'; status: '' | CreateTaskPayload['status'] };
 
 const initialState: TaskCreateFormState = {
   title: '',
@@ -57,6 +58,8 @@ const reducer = (state: TaskCreateFormState, action: TaskCreateFormAction): Task
       return { ...state, [action.field]: action.value };
     case 'parent':
       return { ...state, parentTaskId: action.parentTaskId };
+    case 'status':
+      return { ...state, status: action.status };
     case 'reset':
       return initialState;
     default:
@@ -73,6 +76,7 @@ const toOptionalNumber = (value: string) => {
 export interface TaskCreateFormHandle {
   focusTitle: () => void;
   setParentTaskId: (parentTaskId: string) => void;
+  setStatus: (status: '' | CreateTaskPayload['status']) => void;
 }
 
 interface TaskCreateFormProps {
@@ -91,6 +95,7 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
   useImperativeHandle(ref, () => ({
     focusTitle: () => titleRef.current?.focus(),
     setParentTaskId: (parentTaskId: string) => dispatch({ type: 'parent', parentTaskId }),
+    setStatus: (status: '' | CreateTaskPayload['status']) => dispatch({ type: 'status', status }),
   }));
 
   const setField = (field: keyof TaskCreateFormState, value: string | boolean) => dispatch({ type: 'field', field, value });

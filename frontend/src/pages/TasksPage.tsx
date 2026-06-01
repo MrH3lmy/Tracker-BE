@@ -250,6 +250,15 @@ export function TasksPage() {
     });
   };
 
+  const createTaskForStatus = (status: TaskStatus) => {
+    setCreateOpen(true);
+    window.requestAnimationFrame(() => {
+      createFormRef.current?.setParentTaskId('');
+      createFormRef.current?.setStatus(status);
+      createFormRef.current?.focusTitle();
+    });
+  };
+
   const submitCreate = (payload: CreateTaskPayload, onSuccess: () => void) => {
     createTask.mutate(payload, { onSuccess });
   };
@@ -415,6 +424,7 @@ export function TasksPage() {
             onClearDropTarget={boardState.clearDropTarget}
             onMoveTaskTo={boardState.moveTaskTo}
             onStartSubtask={(task: TaskTreeNode) => startSubtask(task)}
+            onCreateTaskForStatus={createTaskForStatus}
             onComplete={(taskId) => completeTask.mutate(taskId)}
             onChangeStatus={changeTaskStatus}
             onUpdateTask={updateTaskFromCard}

@@ -21,6 +21,7 @@ interface BoardColumnProps {
   onClearDropTarget: () => void;
   onMoveTaskTo: (taskId: number, targetStatus: TaskStatus, position: number) => void;
   onStartSubtask: (task: TaskTreeNode) => void;
+  onCreateTaskForStatus: (status: TaskStatus) => void;
   onComplete: (taskId: number) => void;
   onChangeStatus: (taskId: number, status: TaskStatus) => void;
   onUpdateTask: (task: TaskRecord, updates: Partial<TaskRecord>) => void;
@@ -43,7 +44,11 @@ function InsertionIndicator() {
   return <div className={boardStyles.insertionIndicator} role="presentation" />;
 }
 
-export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnProps) {
+function formatStatusLabel(status: TaskStatus) {
+  return status.toLowerCase().replaceAll('_', ' ');
+}
+
+export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onCreateTaskForStatus, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnProps) {
   const isDropTarget = dropTarget?.status === status;
   const columnClasses = [boardStyles.column, isDropTarget ? boardStyles.dropTarget : ''].filter(Boolean).join(' ');
   const previousStatus = statuses[statusIndex - 1];
@@ -67,7 +72,7 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
           <span className={boardStyles.columnCount} aria-label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}>{tasks.length}</span>
         </div>
         <div className={boardStyles.columnActions} aria-label={`${status} column actions`}>
-          <button type="button" className={boardStyles.columnActionButton} aria-label={`Add task to ${status}`} title="Add task">+</button>
+          <button type="button" className={boardStyles.columnActionButton} aria-label={`Add task to ${status}`} title="Add task" onClick={() => onCreateTaskForStatus(status)} disabled={busy}>+</button>
           <button type="button" className={boardStyles.columnActionButton} aria-label={`${status} more actions`} title="More actions">…</button>
         </div>
       </header>
@@ -100,7 +105,21 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
           </div>
         ))}
         {isDropTarget && dropTarget.position === tasks.length && <InsertionIndicator />}
-        {tasks.length === 0 && <p className={boardStyles.empty}>Drop tasks here.</p>}
+        {tasks.length === 0 && (
+          <div className={boardStyles.empty} aria-label={`${status} empty state`}>
+            <div className={boardStyles.emptyIllustration} aria-hidden="true">
+              <span className={boardStyles.emptyIllustrationIcon}>{statusIconByStatus[status]}</span>
+              <span className={boardStyles.emptyIllustrationCard} />
+            </div>
+            <div className={boardStyles.emptyCopy}>
+              <h4>No tasks {formatStatusLabel(status)}</h4>
+              <p>Drag a task here to get started.</p>
+            </div>
+            <button type="button" className={boardStyles.emptyActionButton} onClick={() => onCreateTaskForStatus(status)} disabled={busy}>
+              Add task
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
