@@ -5,6 +5,7 @@ import { QueryState } from '../components/QueryState';
 import { RequestInspector } from '../components/RequestInspector';
 import { BlockerPanel } from '../components/tasks/BlockerPanel';
 import { TaskBoard } from '../components/tasks/TaskBoard';
+import boardStyles from '../components/tasks/TaskBoard.module.css';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
@@ -290,7 +291,7 @@ export function TasksPage() {
             <h3 id="task-list-title">{tab === 'archive' ? 'Archived tasks' : tab === 'duplicates' ? 'Duplicate groups' : 'Active tasks'}</h3>
             <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
           </div>
-          <div className="task-header-actions">
+          <div className={boardStyles.headerActions}>
             {tab !== 'duplicates' && (
               <div className="task-view-toggle" role="group" aria-label="Task display mode">
                 <button className={viewMode === 'board' ? 'active' : ''} type="button" onClick={() => setViewMode('board')}>Board</button>

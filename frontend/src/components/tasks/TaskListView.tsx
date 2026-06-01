@@ -1,5 +1,8 @@
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
+import { taskStatusClassName } from './taskStyleUtils';
+import styles from './TaskListView.module.css';
+import cardStyles from './TaskCard.module.css';
 import { formatDate, formatValue, isOverdue, renderDueDate, subtaskSummary } from './taskUtils';
 
 interface TaskListViewProps {
@@ -18,23 +21,23 @@ function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onCha
   const summary = subtaskSummary(task);
 
   return (
-    <article className={`task-list-card ${task.important ? 'task-row-important' : ''} ${overdue ? 'task-row-overdue' : ''}`.trim()} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
-      <div className="task-list-primary">
-        <span className="task-id">#{task.id}</span>
+    <article className={[styles.card, task.important ? cardStyles.rowImportant : '', overdue ? cardStyles.rowOverdue : ''].filter(Boolean).join(' ')} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
+      <div className={styles.primary}>
+        <span className={styles.id}>#{task.id}</span>
         <div>
-          <div className="task-card-title">
+          <div className={cardStyles.title}>
             <strong>{task.title}</strong>
-            {task.important && <span className="task-important-pill">Important</span>}
+            {task.important && <span className={cardStyles.importantPill}>Important</span>}
           </div>
-          {task.description && <p className="task-description">{task.description}</p>}
-          {summary && <p className="task-description subtask-progress">{summary}</p>}
+          {task.description && <p className={cardStyles.description}>{task.description}</p>}
+          {summary && <p className={cardStyles.description}>{summary}</p>}
         </div>
       </div>
-      <div className="task-list-metric" data-label="Status"><span className={`status-badge task-status-badge status-task-${(task.status ?? 'unknown').toLowerCase().replaceAll('_', '-')}`}>{task.status ?? 'No status'}</span></div>
-      <div className="task-list-metric" data-label="Due date"><span className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</span></div>
-      <div className="task-list-metric" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
-      <div className="task-list-metric" data-label="Risk"><span>{formatValue(task.riskLevel)}</span>{task.riskReason ? <p className="task-description">{task.riskReason}</p> : null}</div>
-      <div className="task-actions" aria-label={`Actions for ${task.title}`}>
+      <div className={styles.metric} data-label="Status"><span className={taskStatusClassName(task.status)}>{task.status ?? 'No status'}</span></div>
+      <div className={styles.metric} data-label="Due date"><span className={overdue ? cardStyles.dateOverdue : ''}>{renderDueDate(task, overdue)}</span></div>
+      <div className={styles.metric} data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
+      <div className={styles.metric} data-label="Risk"><span>{formatValue(task.riskLevel)}</span>{task.riskReason ? <p className={cardStyles.description}>{task.riskReason}</p> : null}</div>
+      <div className={cardStyles.actions} aria-label={`Actions for ${task.title}`}>
         <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
         <button type="button" onClick={() => onStartSubtask(task)} disabled={busy}>Add subtask</button>
         <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
@@ -46,9 +49,9 @@ function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onCha
         {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
         <button type="button" onClick={() => onDelete(task.id)} disabled={busy}>Delete</button>
       </div>
-      <details className="task-card-details">
+      <details className={styles.details}>
         <summary>More details</summary>
-        <dl className="task-detail-grid">
+        <dl className={styles.detailGrid}>
           <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
           <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
           <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
@@ -62,16 +65,16 @@ function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onCha
           <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
         </dl>
       </details>
-      {task.subtasks.length > 0 && <div className="subtask-list">{task.subtasks.map((subtask) => <TaskListItem key={subtask.id} task={subtask} depth={depth + 1} tasks={[]} busy={busy} onComplete={onComplete} onStartSubtask={onStartSubtask} onChangeStatus={onChangeStatus} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />)}</div>}
+      {task.subtasks.length > 0 && <div className={styles.subtaskList}>{task.subtasks.map((subtask) => <TaskListItem key={subtask.id} task={subtask} depth={depth + 1} tasks={[]} busy={busy} onComplete={onComplete} onStartSubtask={onStartSubtask} onChangeStatus={onChangeStatus} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />)}</div>}
     </article>
   );
 }
 
 export function TaskListView(props: TaskListViewProps) {
   return (
-    <div className="task-table-shell">
-      <div className="task-table" aria-label="Task list">
-        <div className="task-list-header">
+    <div className={styles.tableShell}>
+      <div className={styles.table} aria-label="Task list">
+        <div className={styles.header}>
           <span>Task</span>
           <span>Status</span>
           <span>Due</span>
@@ -79,7 +82,7 @@ export function TaskListView(props: TaskListViewProps) {
           <span>Risk</span>
           <span>Actions</span>
         </div>
-        <div className="task-list-body">
+        <div className={styles.body}>
           {props.tasks.map((task) => <TaskListItem key={task.id} {...props} task={task} />)}
         </div>
       </div>

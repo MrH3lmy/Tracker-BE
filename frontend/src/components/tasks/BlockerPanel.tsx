@@ -1,5 +1,7 @@
 import type { TaskStatus } from '../../validation/taskStatus';
 import type { BlockerWarning, TaskRecord } from './taskTypes';
+import cardStyles from './TaskCard.module.css';
+import filterStyles from './TaskFilters.module.css';
 
 interface BlockerPanelProps {
   warnings: BlockerWarning[];
@@ -39,7 +41,7 @@ export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, dep
                   <p>{warning.recommendation}</p>
                   {warning.relatedTaskIds && warning.relatedTaskIds.length > 0 && <p>Related: {warning.relatedTaskIds.map((id) => `#${id}`).join(', ')}</p>}
                   {task && (
-                    <div className="task-actions">
+                    <div className={cardStyles.actions}>
                       <button type="button" disabled={busy} onClick={() => onChangeStatus(task.id, 'IN_PROGRESS')}>Start task</button>
                       <button type="button" disabled={busy} onClick={() => onSnoozeFollowUp(task)}>Follow up tomorrow</button>
                     </div>
@@ -57,7 +59,7 @@ export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, dep
           <h3 id="dependency-links-title">Add a blocker relationship</h3>
           <p>Choose the task that is waiting, then the task that blocks it.</p>
         </div>
-        <div className="task-toolbar">
+        <div className={filterStyles.toolbar}>
           <label htmlFor="dependencyTaskId"><span>Waiting task</span><select id="dependencyTaskId" value={dependencyTaskId} onChange={(e) => onDependencyTaskIdChange(e.target.value)} disabled={busy}><option value="">Select task...</option>{activeTasks.map((task) => <option key={`wait-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
           <label htmlFor="dependencyBlocksTaskId"><span>Blocked by</span><select id="dependencyBlocksTaskId" value={dependencyBlocksTaskId} onChange={(e) => onDependencyBlocksTaskIdChange(e.target.value)} disabled={busy}><option value="">Select blocker...</option>{activeTasks.map((task) => <option key={`blocks-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
           <button type="button" className="button-primary" onClick={onSubmitDependency} disabled={busy || !dependencyTaskId || !dependencyBlocksTaskId || dependencyTaskId === dependencyBlocksTaskId}>Link dependency</button>
