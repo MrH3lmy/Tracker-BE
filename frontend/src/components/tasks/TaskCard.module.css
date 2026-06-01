@@ -302,40 +302,49 @@
   line-height: 1;
 }
 
-.importantInfoGrid,
+.infoGrid,
 .metadataGrid {
   display: grid;
   margin: var(--space-3) 0 0;
-  gap: var(--space-2);
+  border-block: 1px solid var(--color-border);
 }
 
-.importantInfoGrid {
+.infoGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: color-mix(in srgb, var(--color-surface-raised) 44%, transparent);
 }
 
 .metadataGrid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  border-block: 1px solid var(--color-border);
-  padding-block: var(--space-3);
+  grid-template-columns: 1fr;
 }
 
-.importantInfoItem,
 .metaItem {
   display: grid;
   align-content: start;
   gap: 0.25rem;
   min-width: 0;
+  padding: 0.72rem 0;
 }
 
-.importantInfoItem {
-  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-raised) 72%, transparent);
-  padding: var(--space-2);
+.infoGrid .metaItem {
+  padding-inline: var(--space-3);
 }
 
-.importantInfoGrid dt,
-.metadataGrid dt {
+.infoGrid .metaItem + .metaItem {
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.metadataGrid .metaItem {
+  grid-template-columns: minmax(5.5rem, 0.34fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.metadataGrid .metaItem + .metaItem {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+}
+
+.metaLabel {
   color: var(--color-text-muted);
   font-size: 0.72rem;
   font-weight: 850;
@@ -343,13 +352,13 @@
   text-transform: uppercase;
 }
 
-.importantInfoGrid dd,
-.metadataGrid dd {
+.metaValue {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
   margin: 0;
+  color: var(--color-text);
   font-size: 0.9rem;
   font-weight: 700;
 }
@@ -720,8 +729,18 @@
 }
 
 @media (max-width: 42rem) {
-  .importantInfoGrid,
+  .infoGrid,
   .metadataGrid {
+    grid-template-columns: 1fr;
+  }
+
+
+  .infoGrid .metaItem + .metaItem {
+    border-block-start: 1px solid var(--color-border);
+    border-inline-start: 0;
+  }
+
+  .metadataGrid .metaItem {
     grid-template-columns: 1fr;
   }
 }
