@@ -46,6 +46,42 @@ interface TaskMetaItemProps {
   children: ReactNode;
 }
 
+interface IconButtonProps {
+  icon: ReactNode;
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  href?: string;
+  as?: 'button' | 'summary';
+  onClick?: () => void;
+}
+
+function IconButton({ icon, label, title = label, disabled, href, as = 'button', onClick }: IconButtonProps) {
+  const content = <span aria-hidden="true">{icon}</span>;
+
+  if (href) {
+    return (
+      <a className={styles.iconButton} href={href} title={title} aria-label={label}>
+        {content}
+      </a>
+    );
+  }
+
+  if (as === 'summary') {
+    return (
+      <summary className={styles.iconButton} title={title} aria-label={label}>
+        {content}
+      </summary>
+    );
+  }
+
+  return (
+    <button type="button" className={styles.iconButton} onClick={onClick} disabled={disabled} title={title} aria-label={label}>
+      {content}
+    </button>
+  );
+}
+
 function TaskMetaItem({ label, children }: TaskMetaItemProps) {
   return (
     <div className={styles.metaItem}>
@@ -147,7 +183,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const areaSelectId = `task-card-area-${task.id}`;
   const effortSelectId = `task-card-effort-${task.id}`;
   const followUpId = `task-card-follow-up-${task.id}`;
-  const moveHintId = `task-card-move-hint-${task.id}`;
   const metadataTask = task as TaskMetadataFields;
   const assignee = metadataTask.assignee;
   const estimate = getEstimateValue(metadataTask);
@@ -164,12 +199,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
 
   return (
     <div className={frameClasses} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
-      <div className={styles.keyboardControls} aria-label={`Keyboard move controls for task ${task.id}`}>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card" aria-label={`Move ${task.title} before the previous card in ${columnStatus}`}>↑</button>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card" aria-label={`Move ${task.title} after the next card in ${columnStatus}`}>↓</button>
-        <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'} aria-label={previousStatus ? `Move ${task.title} to the top of ${previousStatus}` : `No previous column available for ${task.title}`}>←</button>
-        <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'} aria-label={nextStatus ? `Move ${task.title} to the top of ${nextStatus}` : `No next column available for ${task.title}`}>→</button>
-      </div>
       <article
         className={cardClasses}
         draggable={!busy && !isEditingTitle}
@@ -182,7 +211,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         onDrop={(event) => onDrop(event, columnStatus, getHoveredPosition(event, index))}
         tabIndex={0}
         aria-labelledby={titleId}
-        aria-describedby={moveHintId}
       >
       <div className={styles.cardHeader}>
         <div className={styles.cardTopSection}>
@@ -208,10 +236,11 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
               <strong id={titleId} className={styles.cardTitle}>{task.title}</strong>
             )}
           </div>
-          <div className={styles.cardTopActions}>
-            {task.important ? <span className={styles.bookmarkIcon} title="Bookmarked important task" aria-label="Bookmarked important task">★</span> : null}
-            <button type="button" className={styles.compactIconButton} onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy || isEditingTitle} title="Edit title (Enter saves, Esc cancels)" aria-label={`Edit title for ${task.title}`}>✎</button>
-          </div>
+          {task.important ? (
+            <div className={styles.cardTopActions}>
+              <span className={styles.bookmarkIcon} title="Bookmarked important task" aria-label="Bookmarked important task">★</span>
+            </div>
+          ) : null}
         </div>
         {task.description ? <p className={styles.description}>{task.description}</p> : null}
       </div>
@@ -294,62 +323,43 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       </section>
 
       <div className={styles.cardToolbar} role="toolbar" aria-label={`Task actions for ${task.title}`}>
-        <button
-          type="button"
-          className={styles.toolbarButton}
-          onClick={() => onComplete(task.id)}
-          disabled={busy}
-          title="Complete task (Tab to reach)"
-          aria-label={`Complete ${task.title}`}
-        >
-          <span aria-hidden="true">✓</span>
-        </button>
-        <button
-          type="button"
-          className={styles.toolbarButton}
+        <IconButton
+          icon="＋"
+          label={`Add subtask to ${task.title}`}
+          title="Add subtask"
           onClick={() => onStartSubtask(task)}
           disabled={busy}
-          title="Add subtask (Tab to reach)"
-          aria-label={`Add subtask to ${task.title}`}
-        >
-          <span aria-hidden="true">＋</span>
-        </button>
-        <button
-          type="button"
-          className={styles.toolbarButton}
+        />
+        <IconButton
+          icon="💬"
+          label={`Comments are not available for ${task.title}`}
+          title="Comments are not available from this card"
           disabled
-          title="Comments and task details are not available from this card"
-          aria-label={`Comments and details are not available for ${task.title}`}
-        >
-          <span aria-hidden="true">💬</span>
-        </button>
-        <button
-          type="button"
-          className={styles.toolbarButton}
-          disabled
+        />
+        <IconButton
+          icon="📎"
+          label={`Attachments are not available for ${task.title}`}
           title="Attachments are not available from this card"
-          aria-label={`Attachments are not available for ${task.title}`}
-        >
-          <span aria-hidden="true">📎</span>
-        </button>
-        <a
-          className={styles.toolbarButton}
-          href="#dependency-links-title"
+          disabled
+        />
+        <IconButton
+          icon="🔗"
+          label={`Open dependency link panel for ${task.title}`}
           title="Open dependency link panel"
-          aria-label={`Open dependency link panel for ${task.title}`}
-        >
-          <span aria-hidden="true">🔗</span>
-        </a>
+          href="#dependency-links-title"
+        />
         <details className={`${styles.secondaryMenu} ${styles.toolbarOverflow}`}>
-          <summary className={styles.toolbarButton} title="Open more task actions (Enter/Space)" aria-label={`Open more actions for ${task.title}`}>
-            <span aria-hidden="true">…</span>
-          </summary>
+          <IconButton
+            as="summary"
+            icon="…"
+            label={`Open more actions for ${task.title}`}
+            title="Open more task actions"
+          />
           <div className={styles.secondaryActions}>
             <label htmlFor={`${statusSelectId}-menu`}>Status</label>
             <select id={`${statusSelectId}-menu`} value={task.status ?? columnStatus} onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)} disabled={busy}>
               {TASK_STATUS_VALUES.map((status) => <option key={`${task.id}-menu-${status}`} value={status}>{status}</option>)}
             </select>
-            <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title">Edit title</button>
             <label htmlFor={effortSelectId}>Effort</label>
             <select id={effortSelectId} value={task.effort ?? ''} onChange={(event) => onUpdateTask(task, { effort: event.target.value || undefined })} disabled={busy}>
               <option value="">No effort</option>
@@ -363,6 +373,12 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
             <label htmlFor={followUpId}>Follow-up</label>
             <input id={followUpId} type="date" value={task.followUpDate ?? ''} min={task.startDate?.slice(0, 10)} onChange={(event) => onUpdateTask(task, { followUpDate: event.target.value || undefined })} disabled={busy} title="Set follow-up date" />
             <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy} title="Set follow-up for tomorrow">Follow up tomorrow</button>
+            <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title">Edit title</button>
+            <button type="button" onClick={() => onComplete(task.id)} disabled={busy} title="Complete task">Complete</button>
+            <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card">Move up</button>
+            <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card">Move down</button>
+            <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'}>{previousStatus ? `Move to ${previousStatus}` : 'No previous column'}</button>
+            <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'}>{nextStatus ? `Move to ${nextStatus}` : 'No next column'}</button>
             {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy} title={`Remove dependency on task ${blocksTaskId}`}>Unlink #{blocksTaskId}</button>)}
             <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task">Delete</button>
           </div>

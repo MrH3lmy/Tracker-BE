@@ -33,9 +33,6 @@
   box-shadow: none;
 }
 
-.draggingFrame .keyboardControls {
-  opacity: 0.35;
-}
 
 .card:active,
 .card:focus-within,
@@ -51,51 +48,47 @@
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55), 0 24px 70px rgba(37, 99, 235, 0.18);
 }
 
-.keyboardControls {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-1);
-  min-height: 1.9rem;
-}
-
-.keyboardControls button,
-.compactIconButton {
+.iconButton {
   display: inline-grid;
   place-items: center;
-  width: 1.85rem;
-  min-width: 1.85rem;
-  height: 1.85rem;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
+  width: 2.15rem;
+  min-width: 2.15rem;
+  height: 2.15rem;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--color-surface-raised-soft) 82%, transparent);
+  color: var(--color-primary-strong);
+  cursor: pointer;
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 900;
+  font-size: 1rem;
+  font-weight: 950;
   line-height: 1;
+  text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-.keyboardControls button:hover:not(:disabled),
-.compactIconButton:hover:not(:disabled) {
+.iconButton:hover:not(:disabled),
+.iconButton:focus-visible {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
-.keyboardControls button:disabled,
-.compactIconButton:disabled {
+.iconButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.iconButton:disabled {
   cursor: not-allowed;
-  opacity: 0.42;
+  opacity: 0.45;
 }
 
-.keyboardControls button:focus-visible,
-.compactIconButton:focus-visible,
+.iconButton:focus-visible,
 .subtaskDetailsSummary:focus-visible,
 .secondaryMenu > summary:focus-visible {
   outline: 3px solid var(--color-primary);
   outline-offset: 3px;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
 .cardHeader {
@@ -660,37 +653,10 @@
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-3);
-}
-
-.toolbarButton {
-  display: inline-grid;
-  place-items: center;
-  width: 2.35rem;
-  min-width: 2.35rem;
-  height: 2.35rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
-  border-radius: 999px;
-  background: var(--color-surface-raised-soft);
-  color: var(--color-primary-strong);
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 950;
-  line-height: 1;
-  text-decoration: none;
-}
-
-.toolbarButton:hover:not(:disabled),
-.toolbarButton:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-}
-
-.toolbarButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+  border-radius: 0.95rem;
+  background: color-mix(in srgb, var(--color-surface-raised-soft) 52%, transparent);
+  padding: var(--space-2);
 }
 
 .secondaryMenu {
@@ -707,7 +673,7 @@
 }
 
 .secondaryMenu > summary:focus-visible {
-  border-radius: var(--radius-sm);
+  border-radius: 0.7rem;
 }
 
 .toolbarOverflow {
