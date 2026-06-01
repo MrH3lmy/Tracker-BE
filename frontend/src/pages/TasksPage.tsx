@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { ApiCallResult } from '../apiClient';
+import { useAnnouncement } from '../announcementContext';
 import { QueryState } from '../components/QueryState';
 import { RequestInspector } from '../components/RequestInspector';
 import { BlockerPanel } from '../components/tasks/BlockerPanel';
@@ -11,7 +12,7 @@ import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
 import type { BlockerAnalysis, CreateTaskPayload, DuplicateGroup, FilterValue, TaskRecord, TaskSortValue, TaskTreeNode, ViewMode } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
-import { useTaskBlockersQuery, useTaskMutations, useTasksQuery, type TaskTab } from '../hooks/useApiQueries';
+import { latestResult, useTaskBlockersQuery, useTaskMutations, useTasksQuery, type TaskTab } from '../hooks/useApiQueries';
 import { useBoardState } from '../hooks/useBoardState';
 import { TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
@@ -19,6 +20,23 @@ const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
 const SORT_VALUES: TaskSortValue[] = ['position', 'priorityScore', 'dueDate', 'createdDate', 'effort', 'title'];
 const EFFORT_ORDER = new Map([['XS', 0], ['SMALL', 1], ['S', 1], ['LOW', 1], ['QUICK', 1], ['MEDIUM', 2], ['M', 2], ['DEEP_WORK', 3], ['LARGE', 3], ['L', 3], ['HIGH', 3], ['XL', 4]]);
+
+const mutationSuccessMessage = (method: string, url: string) => {
+  if (method === 'POST' && url.includes('/dependencies')) return 'Dependency added.';
+  if (method === 'DELETE' && url.includes('/dependencies/')) return 'Dependency removed.';
+  if (method === 'POST') return 'Task created successfully.';
+  if (method === 'PUT') return 'Task updated successfully.';
+  if (method === 'DELETE') return 'Task deleted successfully.';
+  if (url.includes('/complete')) return 'Task completed successfully.';
+  if (url.includes('/status')) return 'Task status updated successfully.';
+  if (url.includes('/move')) return 'Task moved successfully.';
+  return 'Task action completed successfully.';
+};
+
+const mutationAnnouncement = (result: ApiCallResult<unknown>) => {
+  if (result.ok) return mutationSuccessMessage(result.request.method, result.request.url);
+  return result.error?.message ?? 'Task action failed.';
+};
 
 const filterValueFromParams = (searchParams: URLSearchParams, key: 'status' | 'area' | 'effort'): FilterValue => searchParams.get(key) || 'all';
 const dateValueFromParams = (searchParams: URLSearchParams, key: 'dueFrom' | 'dueTo') => searchParams.get(key) || '';
@@ -95,6 +113,7 @@ export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<TaskTab>('active');
   const [createOpen, setCreateOpen] = useState(false);
+  const { announce } = useAnnouncement();
   const search = searchParams.get('q') || '';
   const statusFilter = filterValueFromParams(searchParams, 'status');
   const areaFilter = filterValueFromParams(searchParams, 'area');
@@ -107,6 +126,7 @@ export function TasksPage() {
   const [dependencyTaskId, setDependencyTaskId] = useState('');
   const [dependencyBlocksTaskId, setDependencyBlocksTaskId] = useState('');
   const createFormRef = useRef<TaskCreateFormHandle>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
 
   const setFilterParam = (key: (typeof FILTER_PARAM_KEYS)[number], value: string | boolean, defaultValue: string | boolean) => {
     setSearchParams((previous) => {
@@ -193,8 +213,14 @@ export function TasksPage() {
     status: columnStatus,
     tasks: taskTree.filter((task) => task.status === columnStatus),
   })), [taskTree]);
+  const latestMutationResult = latestResult(removeDependency.data, addDependency.data, moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
   const inspectorHistory = [removeDependency.data, addDependency.data, moveTask.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data, blockersQuery.data, query.data]
     .filter((result): result is ApiCallResult<unknown> => Boolean(result));
+
+  useEffect(() => {
+    if (!latestMutationResult) return;
+    announce(mutationAnnouncement(latestMutationResult));
+  }, [announce, latestMutationResult]);
 
   const boardState = useBoardState({
     tasks,
@@ -202,8 +228,19 @@ export function TasksPage() {
   });
 
   const showCreatePanel = () => {
-    setCreateOpen((open) => !open);
-    window.requestAnimationFrame(() => createFormRef.current?.focusTitle());
+    setCreateOpen((open) => {
+      const nextOpen = !open;
+      window.requestAnimationFrame(() => {
+        if (nextOpen) createFormRef.current?.focusTitle();
+        else createButtonRef.current?.focus();
+      });
+      return nextOpen;
+    });
+  };
+
+  const closeCreatePanel = () => {
+    setCreateOpen(false);
+    window.requestAnimationFrame(() => createButtonRef.current?.focus());
   };
 
   const startSubtask = (task: TaskRecord) => {
@@ -253,7 +290,7 @@ export function TasksPage() {
             <span className="task-stat"><strong>{sortedFilteredTasks.length}</strong> In view</span>
           </div>
         </div>
-        <button className="button-primary" type="button" onClick={showCreatePanel} disabled={busy}>
+        <button ref={createButtonRef} className="button-primary" type="button" onClick={showCreatePanel} disabled={busy}>
           {createOpen ? 'Close new task' : 'New task'}
         </button>
       </header>
@@ -278,7 +315,7 @@ export function TasksPage() {
           activeTasks={activeTasks}
           busy={busy}
           isCreating={createTask.isPending}
-          onCancel={() => setCreateOpen(false)}
+          onCancel={closeCreatePanel}
           onCreate={submitCreate}
           onInvalidTitle={() => setCreateOpen(true)}
         />

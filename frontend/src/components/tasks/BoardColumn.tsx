@@ -38,10 +38,12 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
   const columnClasses = [boardStyles.column, isDropTarget ? boardStyles.dropTarget : ''].filter(Boolean).join(' ');
   const previousStatus = statuses[statusIndex - 1];
   const nextStatus = statuses[statusIndex + 1];
+  const headingId = `task-board-column-${status}`;
 
   return (
     <section
       className={columnClasses}
+      aria-labelledby={headingId}
       onDragOver={(event) => onDragOver(event, status, tasks.length)}
       onDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onClearDropTarget();
@@ -49,10 +51,10 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
       onDrop={(event) => onDrop(event, status, tasks.length)}
     >
       <header className={boardStyles.columnHeader}>
-        <span className={taskStatusClassName(status)}>{status}</span>
+        <span id={headingId} className={taskStatusClassName(status)}>{status}</span>
         <strong>{tasks.length}</strong>
       </header>
-      <div className={boardStyles.cardList}>
+      <div className={boardStyles.cardList} aria-label={`${status} tasks`}>
         {tasks.map((task, index) => (
           <div className={boardStyles.cardSlot} key={task.id}>
             {isDropTarget && dropTarget.position === index && <InsertionIndicator />}

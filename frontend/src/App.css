@@ -11,6 +11,33 @@ body {
   color: var(--color-text);
 }
 
+
+:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 1000;
+  transform: translateY(calc(-100% - var(--space-6)));
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-primary-strong);
+  font-weight: 900;
+  padding: var(--space-2) var(--space-4);
+  text-decoration: none;
+  box-shadow: var(--shadow-lg);
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+
 button,
 input,
 select,
@@ -250,6 +277,15 @@ textarea {
 .button-primary:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-1px);
+}
+
+.button-primary:focus-visible,
+.button-secondary:focus-visible,
+.tab:focus-visible,
+.task-view-toggle button:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
 .tabs {
@@ -519,6 +555,12 @@ th {
   cursor: pointer;
   color: var(--color-text-muted);
   font-weight: 800;
+}
+
+.task-inspector > summary:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 .task-inspector > .panel {

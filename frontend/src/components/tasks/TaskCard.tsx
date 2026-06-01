@@ -87,6 +87,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const areaSelectId = `task-card-area-${task.id}`;
   const effortSelectId = `task-card-effort-${task.id}`;
   const followUpId = `task-card-follow-up-${task.id}`;
+  const moveHintId = `task-card-move-hint-${task.id}`;
 
   return (
     <article
@@ -100,7 +101,9 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       }}
       onDrop={(event) => onDrop(event, columnStatus, getHoveredPosition(event, index))}
       style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}
+      tabIndex={0}
       aria-labelledby={titleId}
+      aria-describedby={moveHintId}
     >
       <div className={styles.cardHeader}>
         <div className={`${styles.title} ${styles.boardTitle}`}>
@@ -141,6 +144,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           </select>
         </div>
       </div>
+      <p id={moveHintId} className="sr-only">Use the task move controls to move this card before or after nearby cards, or between adjacent status columns.</p>
       <div className={styles.quickActions} aria-label={`Quick actions for ${task.title}`}>
         <button type="button" onClick={() => onComplete(task.id)} disabled={busy} title="Complete task (Tab to reach)">✓<span className="sr-only">Complete {task.title}</span></button>
         <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title (Enter saves, Esc cancels)">✎<span className="sr-only">Edit title for {task.title}</span></button>
@@ -189,10 +193,10 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         </div>
       </details>
       <div className={styles.keyboardControls} aria-label={`Keyboard move controls for task ${task.id}`}>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move up (Tab to reach)">Move up</button>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move down (Tab to reach)">Move down</button>
-        <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title="Move left (Tab to reach)">Move left</button>
-        <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title="Move right (Tab to reach)">Move right</button>
+        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card" aria-label={`Move ${task.title} before the previous card in ${columnStatus}`}>Move up</button>
+        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card" aria-label={`Move ${task.title} after the next card in ${columnStatus}`}>Move down</button>
+        <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'} aria-label={previousStatus ? `Move ${task.title} to the top of ${previousStatus}` : `No previous column available for ${task.title}`}>Move left</button>
+        <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'} aria-label={nextStatus ? `Move ${task.title} to the top of ${nextStatus}` : `No next column available for ${task.title}`}>Move right</button>
       </div>
       {task.subtasks.length > 0 && (
         <div className={styles.subtaskList}>

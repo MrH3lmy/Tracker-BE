@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { appRoutes, appTabs } from './router/routes';
 import { useSettingsQuery } from './hooks/useApiQueries';
+import { AnnouncementContext } from './announcementContext';
 import { ThemeContext } from './themeContext';
 import {
   applyDocumentTheme,
@@ -18,6 +19,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab a
 export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
+  const [announcement, setAnnouncement] = useState('');
   const settingsQuery = useSettingsQuery(true);
   const hasSyncedSavedTheme = useRef(false);
 
@@ -42,10 +44,13 @@ export default function App() {
   }, [setTheme, settingsQuery.data, theme]);
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
+  const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <div className="app-shell" data-theme={theme}>
+      <AnnouncementContext.Provider value={announcementContextValue}>
+        <a className="skip-link" href="#task-tracker-main">Skip to content</a>
+        <div className="app-shell" data-theme={theme}>
         <aside className="sidebar" aria-label="Primary navigation">
           <div className="brand-lockup">
             <span className="brand-mark" aria-hidden="true">T</span>
@@ -98,7 +103,7 @@ export default function App() {
             ))}
           </nav>
 
-          <main className="content-area">
+          <main id="task-tracker-main" className="content-area" tabIndex={-1}>
             <div className="content-card route-card">
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -106,8 +111,10 @@ export default function App() {
               </Routes>
             </div>
           </main>
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
         </div>
       </div>
+      </AnnouncementContext.Provider>
     </ThemeContext.Provider>
   );
 }
