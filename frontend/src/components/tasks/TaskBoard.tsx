@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react';
 import type { TaskStatus } from '../../validation/taskStatus';
 import type { BoardDropTarget } from '../../hooks/useBoardState';
-import type { BoardColumnData, TaskTreeNode } from './taskTypes';
+import type { BoardColumnData, TaskRecord, TaskTreeNode } from './taskTypes';
 import { BoardColumn } from './BoardColumn';
 
 interface TaskBoardProps {
@@ -16,9 +16,15 @@ interface TaskBoardProps {
   onClearDropTarget: () => void;
   onMoveTaskTo: (taskId: number, targetStatus: TaskStatus, position: number) => void;
   onStartSubtask: (task: TaskTreeNode) => void;
+  onComplete: (taskId: number) => void;
+  onChangeStatus: (taskId: number, status: TaskStatus) => void;
+  onUpdateTask: (task: TaskRecord, updates: Partial<TaskRecord>) => void;
+  onSnoozeFollowUp: (task: TaskTreeNode) => void;
+  onRemoveDependency: (taskId: number, blocksTaskId: number) => void;
+  onDelete: (taskId: number) => void;
 }
 
-export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask }: TaskBoardProps) {
+export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskBoardProps) {
   return (
     <div className="task-board" aria-label="Task status board">
       {columns.map((column, columnIndex) => (
@@ -38,6 +44,12 @@ export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragSta
           onClearDropTarget={onClearDropTarget}
           onMoveTaskTo={onMoveTaskTo}
           onStartSubtask={onStartSubtask}
+          onComplete={onComplete}
+          onChangeStatus={onChangeStatus}
+          onUpdateTask={onUpdateTask}
+          onSnoozeFollowUp={onSnoozeFollowUp}
+          onRemoveDependency={onRemoveDependency}
+          onDelete={onDelete}
         />
       ))}
     </div>
