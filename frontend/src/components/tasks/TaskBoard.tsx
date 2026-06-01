@@ -20,6 +20,7 @@ interface TaskBoardProps {
   onClearDropTarget: () => void;
   onMoveTaskTo: (taskId: number, targetStatus: TaskStatus, position: number) => void;
   onStartSubtask: (task: TaskTreeNode) => void;
+  onCreateTaskForStatus: (status: TaskStatus) => void;
   onComplete: (taskId: number) => void;
   onChangeStatus: (taskId: number, status: TaskStatus) => void;
   onUpdateTask: (task: TaskRecord, updates: Partial<TaskRecord>) => void;
@@ -38,7 +39,7 @@ function isMobileBoardViewport() {
   return typeof window !== 'undefined' && window.matchMedia(MOBILE_BOARD_QUERY).matches;
 }
 
-function BoardColumnRenderer({ column, statusIndex, statuses, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnRendererProps) {
+function BoardColumnRenderer({ column, statusIndex, statuses, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onCreateTaskForStatus, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnRendererProps) {
   return (
     <BoardColumn
       status={column.status}
@@ -55,6 +56,7 @@ function BoardColumnRenderer({ column, statusIndex, statuses, busy, draggingTask
       onClearDropTarget={onClearDropTarget}
       onMoveTaskTo={onMoveTaskTo}
       onStartSubtask={onStartSubtask}
+      onCreateTaskForStatus={onCreateTaskForStatus}
       onComplete={onComplete}
       onChangeStatus={onChangeStatus}
       onUpdateTask={onUpdateTask}
@@ -65,7 +67,7 @@ function BoardColumnRenderer({ column, statusIndex, statuses, busy, draggingTask
   );
 }
 
-export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskBoardProps) {
+export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onCreateTaskForStatus, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskBoardProps) {
   const [selectedMobileStatus, setSelectedMobileStatus] = useState<TaskStatus>(TASK_STATUS_VALUES[0]);
   const [isMobileBoard, setIsMobileBoard] = useState(isMobileBoardViewport);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -114,6 +116,7 @@ export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragSta
     onClearDropTarget,
     onMoveTaskTo,
     onStartSubtask,
+    onCreateTaskForStatus,
     onComplete,
     onChangeStatus,
     onUpdateTask,

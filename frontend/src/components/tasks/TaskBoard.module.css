@@ -142,12 +142,113 @@
 
 .empty {
   display: grid;
-  min-height: 8rem;
+  min-height: 16rem;
   place-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 45%),
+    color-mix(in srgb, var(--color-bg-soft-raised) 68%, transparent);
   color: var(--color-text-muted);
-  font-weight: 800;
+  text-align: center;
+}
+
+.emptyIllustration {
+  position: relative;
+  display: grid;
+  width: 5.75rem;
+  height: 4.5rem;
+  place-items: center;
+}
+
+.emptyIllustrationIcon {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  width: 3.15rem;
+  height: 3.15rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-soft));
+  color: var(--color-primary);
+  font-size: 1.35rem;
+  font-weight: 900;
+  box-shadow: var(--shadow-sm);
+}
+
+.emptyIllustrationCard {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.25rem;
+  width: 3.35rem;
+  height: 2.35rem;
+  border: 1px dashed color-mix(in srgb, var(--color-border-strong) 82%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-soft) 86%, transparent);
+  transform: rotate(-7deg);
+}
+
+.emptyCopy {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 13rem;
+}
+
+.emptyCopy h4,
+.emptyCopy p {
+  margin: 0;
+}
+
+.emptyCopy h4 {
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.emptyCopy p {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.emptyActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-border-strong) 74%, transparent);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  background: color-mix(in srgb, var(--color-bg-soft) 82%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.emptyActionButton:hover,
+.emptyActionButton:focus-visible {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-soft));
+  color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.emptyActionButton:disabled,
+.emptyActionButton:disabled:hover {
+  border-color: var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-soft) 72%, transparent);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 @media (max-width: 780px) {
