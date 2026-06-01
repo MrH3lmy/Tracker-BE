@@ -43,6 +43,24 @@ const subtaskPreviewLimit = 3;
 
 const isSubtaskComplete = (subtask: TaskTreeNode) => subtask.status === 'DONE' || Boolean(subtask.completedDate);
 
+const formatDependencySummary = (task: TaskTreeNode) => {
+  const values: string[] = [];
+
+  if (task.parentTaskId) values.push(`Parent #${task.parentTaskId}`);
+
+  const dependencyIds = task.dependencyIds ?? [];
+  if (dependencyIds.length > 0) {
+    values.push(`Blocked by #${dependencyIds[0]}${dependencyIds.length > 1 ? ` +${dependencyIds.length - 1}` : ''}`);
+  }
+
+  const blockingTaskIds = task.blockingTaskIds ?? [];
+  if (blockingTaskIds.length > 0) {
+    values.push(`Blocks #${blockingTaskIds[0]}${blockingTaskIds.length > 1 ? ` +${blockingTaskIds.length - 1}` : ''}`);
+  }
+
+  return values.join(' · ');
+};
+
 export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index, columnTaskCount, depth = 0, busy, draggingTaskId, onDragStart, onDragOver, onDragEnd, onDrop, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskCardProps) {
   const overdue = isOverdue(task);
   const subtaskTotal = task.subtaskCount ?? task.subtaskIds?.length ?? task.subtasks.length;
@@ -103,6 +121,8 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
     task.effort === 'MEDIUM' ? styles.effortBadgeMedium : '',
     task.effort === 'HIGH' || task.effort === 'DEEP_WORK' || task.effort === 'LARGE' ? styles.effortBadgeHigh : '',
   ].filter(Boolean).join(' ');
+  const hasDependencyRow = Boolean(task.parentTaskId || task.dependencyIds?.length || task.blockingTaskIds?.length);
+  const dependencySummary = hasDependencyRow ? formatDependencySummary(task) : '';
 
   return (
     <article
@@ -170,7 +190,14 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task (Tab to reach)">🗑<span className="sr-only">Delete {task.title}</span></button>
       </div>
       {task.description && <p className={styles.description}>{task.description}</p>}
-      {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className={styles.description}>Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
+      {hasDependencyRow ? (
+        <div className={styles.dependencyRow} aria-label={`Dependencies for ${task.title}: ${dependencySummary}`}>
+          <span className={styles.metaIcon} aria-hidden="true">🔗</span>
+          <span className={styles.dependencyLabel}>Dependencies</span>
+          <span className={styles.dependencyValue}>{dependencySummary}</span>
+          <span className={styles.dependencyChevron} aria-hidden="true">›</span>
+        </div>
+      ) : null}
       <dl className={styles.meta}>
         <div className={styles.metaRow}>
           <div className={styles.metaItem}>
