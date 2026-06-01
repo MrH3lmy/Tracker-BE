@@ -1,4 +1,18 @@
 .cardFrame {
+  --task-bg: #07111f;
+  --task-surface: #0f1b2d;
+  --task-surface-elevated: #132238;
+  --task-surface-soft: #172940;
+  --task-border: rgba(148, 163, 184, 0.18);
+  --task-border-strong: rgba(96, 165, 250, 0.55);
+  --task-text-primary: #f8fafc;
+  --task-text-secondary: #cbd5e1;
+  --task-text-muted: #94a3b8;
+  --task-accent-blue: #3b82f6;
+  --task-accent-blue-soft: rgba(59, 130, 246, 0.16);
+  --task-warning: #f59e0b;
+  --task-danger: #fb7185;
+  --task-success: #22c55e;
   position: relative;
   display: grid;
   gap: var(--space-2);
@@ -6,9 +20,9 @@
 
 .card,
 .cardShell {
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--task-border);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(19, 34, 56, 0.96), rgba(12, 24, 42, 0.96));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--task-surface-elevated) 96%, transparent), color-mix(in srgb, var(--task-surface) 96%, transparent));
   padding: 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
 }
@@ -37,15 +51,15 @@
 .card:active,
 .card:focus-within,
 .card[aria-selected="true"] {
-  border-color: rgba(59, 130, 246, 0.55);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55), 0 24px 70px rgba(37, 99, 235, 0.18);
+  border-color: var(--task-border-strong);
+  box-shadow: 0 0 0 2px var(--task-accent-blue-soft), 0 24px 70px rgba(37, 99, 235, 0.16);
 }
 
 .card:focus-visible {
-  border-color: rgba(59, 130, 246, 0.55);
-  outline: 2px solid rgba(59, 130, 246, 0.55);
+  border-color: var(--task-border-strong);
+  outline: 2px solid var(--task-border-strong);
   outline-offset: 4px;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55), 0 24px 70px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 2px var(--task-accent-blue-soft), 0 24px 70px rgba(37, 99, 235, 0.16);
 }
 
 .iconButton {
@@ -54,10 +68,10 @@
   width: 2.15rem;
   min-width: 2.15rem;
   height: 2.15rem;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border: 1px solid transparent;
   border-radius: 0.7rem;
-  background: color-mix(in srgb, var(--color-surface-raised-soft) 82%, transparent);
-  color: var(--color-primary-strong);
+  background: color-mix(in srgb, var(--task-surface-soft) 82%, transparent);
+  color: var(--task-text-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 1rem;
@@ -69,10 +83,10 @@
 
 .iconButton:hover:not(:disabled),
 .iconButton:focus-visible {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
+  border-color: transparent;
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
+  box-shadow: none;
 }
 
 .iconButton:hover:not(:disabled) {
@@ -87,7 +101,7 @@
 .iconButton:focus-visible,
 .subtaskDetailsSummary:focus-visible,
 .secondaryMenu > summary:focus-visible {
-  outline: 3px solid var(--color-primary);
+  outline: 2px solid var(--task-border-strong);
   outline-offset: 3px;
 }
 
@@ -112,16 +126,16 @@
 .taskKey {
   width: fit-content;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary-soft) 62%, var(--color-surface-raised-soft));
+  background: var(--task-accent-blue-soft);
   padding: 0.16rem 0.48rem;
-  color: var(--color-primary-strong);
+  color: var(--task-accent-blue);
   font-size: 0.72rem;
   font-weight: 950;
   letter-spacing: 0.08em;
 }
 
 .cardTitle {
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 1.25rem;
   font-weight: 950;
   letter-spacing: -0.01em;
@@ -140,8 +154,8 @@
   width: 1.85rem;
   height: 1.85rem;
   border-radius: 999px;
-  background: var(--color-status-warning-bg);
-  color: var(--color-status-warning-text);
+  background: color-mix(in srgb, var(--task-warning) 14%, transparent);
+  color: var(--task-warning);
   font-size: 0.95rem;
   font-weight: 900;
 }
@@ -161,7 +175,7 @@
 
 .description {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.875rem;
   line-height: 1.45;
 }
@@ -179,11 +193,11 @@
   align-items: center;
   width: fit-content;
   gap: 0.28rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.08);
+  background: color-mix(in srgb, var(--task-surface-soft) 62%, transparent);
   padding: 0.12rem 0.45rem;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.15;
@@ -199,20 +213,20 @@
 .statusTaskBacklog,
 .statusTaskNotStarted,
 .statusTaskUnknown {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--task-surface-soft) 62%, transparent);
+  color: var(--task-text-muted);
 }
 
 .statusTaskInProgress {
-  border-color: rgba(59, 130, 246, 0.38);
-  background: rgba(59, 130, 246, 0.16);
-  color: var(--color-primary-strong);
+  border-color: transparent;
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
 }
 
 .statusTaskWaiting {
-  border-color: rgba(245, 158, 11, 0.24);
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--color-status-warning-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-warning) 12%, transparent);
+  color: var(--task-warning);
 }
 
 .statusTaskWaiting::before {
@@ -220,9 +234,9 @@
 }
 
 .statusTaskBlocked {
-  border-color: rgba(248, 113, 113, 0.24);
-  background: rgba(248, 113, 113, 0.1);
-  color: var(--color-status-danger-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-danger) 12%, transparent);
+  color: var(--task-danger);
 }
 
 .statusTaskBlocked::before {
@@ -230,9 +244,9 @@
 }
 
 .statusTaskDone {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--color-status-success-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-success) 12%, transparent);
+  color: var(--task-success);
 }
 
 .statusTaskDone::before {
@@ -241,8 +255,8 @@
 }
 
 .statusTaskCancelled {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--task-surface-soft) 62%, transparent);
+  color: var(--task-text-muted);
   text-decoration: line-through;
 }
 
@@ -252,7 +266,7 @@
   align-items: center;
   width: fit-content;
   gap: 0.25rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 0.12rem 0.45rem;
   font-size: 0.72rem;
@@ -261,8 +275,8 @@
 }
 
 .effortBadge {
-  background: rgba(148, 163, 184, 0.08);
-  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--task-surface-soft) 62%, transparent);
+  color: var(--task-text-muted);
 }
 
 .effortBadge::before {
@@ -272,21 +286,21 @@
 }
 
 .effortBadgeMedium {
-  border-color: rgba(245, 158, 11, 0.2);
-  background: rgba(245, 158, 11, 0.08);
-  color: var(--color-status-warning-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-warning) 10%, transparent);
+  color: var(--task-warning);
 }
 
 .effortBadgeHigh {
-  border-color: rgba(248, 113, 113, 0.22);
-  background: rgba(248, 113, 113, 0.08);
-  color: var(--color-status-danger-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-danger) 10%, transparent);
+  color: var(--task-danger);
 }
 
 .scoreBadge {
-  border-color: rgba(59, 130, 246, 0.38);
-  background: rgba(59, 130, 246, 0.16);
-  color: var(--color-primary-strong);
+  border-color: transparent;
+  background: var(--task-accent-blue-soft);
+  color: var(--task-accent-blue);
 }
 
 .scoreBadge::before {
@@ -299,12 +313,12 @@
 .metadataGrid {
   display: grid;
   margin: var(--space-3) 0 0;
-  border-block: 1px solid var(--color-border);
+  border-block: 1px solid var(--task-border);
 }
 
 .infoGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  background: color-mix(in srgb, var(--color-surface-raised) 44%, transparent);
+  background: color-mix(in srgb, var(--task-surface-soft) 34%, transparent);
 }
 
 .metadataGrid {
@@ -324,7 +338,7 @@
 }
 
 .infoGrid .metaItem + .metaItem {
-  border-inline-start: 1px solid var(--color-border);
+  border-inline-start: 1px solid var(--task-border);
 }
 
 .metadataGrid .metaItem {
@@ -334,11 +348,11 @@
 }
 
 .metadataGrid .metaItem + .metaItem {
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-top: 1px solid var(--task-border);
 }
 
 .metaLabel {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.72rem;
   font-weight: 850;
   letter-spacing: 0.07em;
@@ -351,14 +365,14 @@
   gap: 0.35rem;
   min-width: 0;
   margin: 0;
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 0.9rem;
   font-weight: 700;
 }
 
 .metaIcon {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.95em;
   line-height: 1;
 }
@@ -370,7 +384,7 @@
 }
 
 .metaSubvalue {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -382,8 +396,8 @@
   height: 1.8rem;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
-  color: var(--color-surface-raised);
+  background: linear-gradient(135deg, var(--task-accent-blue), color-mix(in srgb, var(--task-accent-blue) 72%, var(--task-text-primary)));
+  color: var(--task-text-primary);
   font-size: 0.78rem;
   font-weight: 950;
 }
@@ -393,9 +407,9 @@
   align-items: center;
   gap: 0.3rem;
   border-radius: 999px;
-  background: rgba(248, 113, 113, 0.08);
+  background: color-mix(in srgb, var(--task-danger) 10%, transparent);
   padding: 0.05rem 0.35rem;
-  color: var(--color-status-danger-text);
+  color: var(--task-danger);
   font-weight: 850;
 }
 
@@ -407,11 +421,11 @@
 .overdueHint {
   display: inline-flex;
   width: fit-content;
-  border: 1px solid rgba(248, 113, 113, 0.24);
+  border: 0;
   border-radius: 999px;
   padding: 0.06rem 0.4rem;
-  background: rgba(248, 113, 113, 0.08);
-  color: var(--color-status-danger-text);
+  background: color-mix(in srgb, var(--task-danger) 10%, transparent);
+  color: var(--task-danger);
   font-size: 0.7rem;
   font-weight: 900;
   letter-spacing: 0.06em;
@@ -425,8 +439,8 @@
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-top: 1px solid var(--task-border);
+  border-bottom: 1px solid var(--task-border);
   padding: 0.7rem 0;
 }
 
@@ -440,7 +454,7 @@
 
 .dependencyLabel {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.76rem;
   font-weight: 850;
   letter-spacing: 0.06em;
@@ -449,7 +463,7 @@
 
 .dependencyValue {
   overflow: hidden;
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 0.88rem;
   font-weight: 800;
   text-align: right;
@@ -458,7 +472,7 @@
 }
 
 .dependencyChevron {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 1.25rem;
   font-weight: 850;
   line-height: 1;
@@ -468,9 +482,9 @@
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border: 0;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-surface-raised-soft));
+  background: color-mix(in srgb, var(--task-accent-blue) 8%, var(--task-surface-soft));
   padding: var(--space-3);
 }
 
@@ -483,7 +497,7 @@
 
 .subtaskProgressCount,
 .subtaskProgressPercent {
-  color: var(--color-primary-strong);
+  color: var(--task-accent-blue);
   font-size: 0.82rem;
   font-weight: 950;
   line-height: 1.2;
@@ -491,7 +505,7 @@
 
 .subtaskProgressPercent {
   border-radius: 999px;
-  background: var(--color-surface-raised-soft);
+  background: var(--task-surface-soft);
   padding: 0.15rem 0.5rem;
 }
 
@@ -499,14 +513,14 @@
   overflow: hidden;
   height: 0.32rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
+  background: color-mix(in srgb, var(--task-text-muted) 18%, transparent);
 }
 
 .subtaskProgressFill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-strong));
+  background: linear-gradient(90deg, var(--task-accent-blue), color-mix(in srgb, var(--task-accent-blue) 74%, var(--task-text-primary)));
   transition: width 180ms ease;
 }
 
@@ -525,12 +539,12 @@
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 0.84rem;
 }
 
 .subtaskChecklistItemComplete {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
 }
 
 .subtaskChecklistItemComplete .subtaskChecklistTitle {
@@ -542,10 +556,10 @@
   place-items: center;
   width: 1rem;
   height: 1rem;
-  border: 1.5px solid var(--color-primary);
+  border: 1.5px solid var(--task-accent-blue);
   border-radius: 999px;
-  background: var(--color-surface-raised-soft);
-  color: var(--color-primary-strong);
+  background: var(--task-surface-soft);
+  color: var(--task-accent-blue);
   font-size: 0.7rem;
   font-weight: 950;
   line-height: 1;
@@ -559,7 +573,7 @@
 
 .emptySubtaskPreview {
   margin: 0;
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.84rem;
   font-weight: 700;
 }
@@ -572,11 +586,11 @@
   display: inline-flex;
   width: fit-content;
   cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--color-surface-raised-soft);
+  background: var(--task-surface-soft);
   padding: 0.32rem 0.7rem;
-  color: var(--color-primary-strong);
+  color: var(--task-accent-blue);
   font-size: 0.8rem;
   font-weight: 950;
 }
@@ -605,14 +619,14 @@
   align-items: center;
   gap: 0.55rem;
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface-raised-soft) 74%, transparent);
+  background: color-mix(in srgb, var(--task-surface-soft) 70%, transparent);
   padding: 0.48rem 0.58rem;
 }
 
 .subtaskListItemComplete {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
 }
 
 .subtaskListItemComplete .subtaskListTitle {
@@ -627,7 +641,7 @@
 
 .subtaskListTitle {
   overflow: hidden;
-  color: var(--color-text);
+  color: var(--task-text-primary);
   font-size: 0.84rem;
   font-weight: 800;
   text-overflow: ellipsis;
@@ -635,11 +649,11 @@
 }
 
 .subtaskListItemComplete .subtaskListTitle {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
 }
 
 .subtaskListMeta {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -653,9 +667,10 @@
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
-  border-radius: 0.95rem;
-  background: color-mix(in srgb, var(--color-surface-raised-soft) 52%, transparent);
+  border: 0;
+  border-top: 1px solid var(--task-border);
+  border-radius: 0;
+  background: transparent;
   padding: var(--space-2);
 }
 
@@ -695,15 +710,15 @@
   top: calc(100% + var(--space-2));
   right: 0;
   width: min(18rem, calc(100vw - 2rem));
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--task-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  background: var(--task-surface-elevated);
   padding: var(--space-3);
   box-shadow: var(--shadow-md);
 }
 
 .secondaryActions label {
-  color: var(--color-text-muted);
+  color: var(--task-text-muted);
   font-size: 0.78rem;
   font-weight: 850;
   letter-spacing: 0.05em;
@@ -735,11 +750,11 @@
 
 .rowImportant .taskKey,
 .importantPill {
-  border: 1px solid rgba(245, 158, 11, 0.24);
+  border: 0;
   border-radius: 999px;
-  background: rgba(245, 158, 11, 0.1);
+  background: color-mix(in srgb, var(--task-warning) 12%, transparent);
   padding: 0.08rem 0.42rem;
-  color: var(--color-status-warning-text);
+  color: var(--task-warning);
   font-size: 0.7rem;
   font-weight: 900;
   letter-spacing: 0.07em;
@@ -748,9 +763,9 @@
 
 .rowOverdue .dateOverdue,
 .rowOverdue .overdueHint {
-  border-color: rgba(248, 113, 113, 0.24);
-  background: rgba(248, 113, 113, 0.08);
-  color: var(--color-status-danger-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--task-danger) 10%, transparent);
+  color: var(--task-danger);
 }
 
 @media (max-width: 42rem) {
@@ -761,7 +776,7 @@
 
 
   .infoGrid .metaItem + .metaItem {
-    border-block-start: 1px solid var(--color-border);
+    border-block-start: 1px solid var(--task-border);
     border-inline-start: 0;
   }
 
