@@ -43,6 +43,11 @@ const subtaskPreviewLimit = 3;
 
 const isSubtaskComplete = (subtask: TaskTreeNode) => subtask.status === 'DONE' || Boolean(subtask.completedDate);
 
+const formatAssigneeInitial = (assignee: string | number | boolean | null | undefined) => {
+  const value = formatValue(assignee);
+  return value === '—' ? '?' : value.trim().charAt(0).toUpperCase();
+};
+
 const formatDependencySummary = (task: TaskTreeNode) => {
   const values: string[] = [];
 
@@ -68,9 +73,9 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const subtaskProgressPercent = subtaskTotal > 0 ? task.subtaskProgressPercent ?? Math.round((completedSubtaskCount * 100) / subtaskTotal) : 0;
   const summary = subtaskSummary({ ...task, subtaskCount: subtaskTotal, completedSubtaskCount, subtaskProgressPercent });
   const previewSubtasks = task.subtasks.slice(0, subtaskPreviewLimit);
-  const hiddenSubtaskCount = Math.max(subtaskTotal - previewSubtasks.length, 0);
   const isDragging = draggingTaskId === task.id;
   const cardClasses = [styles.cardShell, styles.card, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : '', isDragging ? styles.dragging : ''].filter(Boolean).join(' ');
+  const frameClasses = [styles.cardFrame, isDragging ? styles.draggingFrame : ''].filter(Boolean).join(' ');
   const canMoveUp = !busy && index > 0;
   const canMoveDown = !busy && index < columnTaskCount - 1;
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -116,152 +121,170 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const moveHintId = `task-card-move-hint-${task.id}`;
   const assignee = (task as TaskTreeNode & { assignee?: string | number | boolean | null }).assignee;
   const status = task.status ?? columnStatus;
+  const taskKey = `TAS-${String(task.id).padStart(3, '0')}`;
   const effortBadgeClasses = [
     styles.effortBadge,
     task.effort === 'MEDIUM' ? styles.effortBadgeMedium : '',
     task.effort === 'HIGH' || task.effort === 'DEEP_WORK' || task.effort === 'LARGE' ? styles.effortBadgeHigh : '',
   ].filter(Boolean).join(' ');
   const hasDependencyRow = Boolean(task.parentTaskId || task.dependencyIds?.length || task.blockingTaskIds?.length);
-  const dependencySummary = hasDependencyRow ? formatDependencySummary(task) : '';
+  const dependencySummary = hasDependencyRow ? formatDependencySummary(task) : 'No dependencies';
+  const primaryEffortBadge = task.effort ? `Effort ${formatValue(task.effort)}` : task.priorityScore != null ? `Priority ${formatValue(task.priorityScore)}` : 'No effort set';
 
   return (
-    <article
-      className={cardClasses}
-      draggable={!busy && !isEditingTitle}
-      onDragStart={(event) => onDragStart(event, task.id)}
-      onDragEnd={onDragEnd}
-      onDragOver={(event) => {
-        event.stopPropagation();
-        onDragOver(event, columnStatus, getHoveredPosition(event, index));
-      }}
-      onDrop={(event) => onDrop(event, columnStatus, getHoveredPosition(event, index))}
-      style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}
-      tabIndex={0}
-      aria-labelledby={titleId}
-      aria-describedby={moveHintId}
-    >
+    <div className={frameClasses} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
+      <div className={styles.keyboardControls} aria-label={`Keyboard move controls for task ${task.id}`}>
+        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card" aria-label={`Move ${task.title} before the previous card in ${columnStatus}`}>↑</button>
+        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card" aria-label={`Move ${task.title} after the next card in ${columnStatus}`}>↓</button>
+        <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'} aria-label={previousStatus ? `Move ${task.title} to the top of ${previousStatus}` : `No previous column available for ${task.title}`}>←</button>
+        <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'} aria-label={nextStatus ? `Move ${task.title} to the top of ${nextStatus}` : `No next column available for ${task.title}`}>→</button>
+      </div>
+      <article
+        className={cardClasses}
+        draggable={!busy && !isEditingTitle}
+        onDragStart={(event) => onDragStart(event, task.id)}
+        onDragEnd={onDragEnd}
+        onDragOver={(event) => {
+          event.stopPropagation();
+          onDragOver(event, columnStatus, getHoveredPosition(event, index));
+        }}
+        onDrop={(event) => onDrop(event, columnStatus, getHoveredPosition(event, index))}
+        tabIndex={0}
+        aria-labelledby={titleId}
+        aria-describedby={moveHintId}
+      >
       <div className={styles.cardHeader}>
-        <div className={`${styles.title} ${styles.boardTitle}`}>
-          {isEditingTitle ? (
-            <label className={styles.titleEditor}>
-              <span className="sr-only">Edit title for task {task.id}</span>
-              <input
-                ref={titleInputRef}
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                onBlur={commitTitleEdit}
-                onKeyDown={handleTitleKeyDown}
-                disabled={busy}
-                maxLength={255}
-                title={commitHint}
-                aria-describedby={`${titleId}-hint`}
-              />
-              <span id={`${titleId}-hint`} className="sr-only">{commitHint}</span>
-            </label>
-          ) : (
-            <strong id={titleId}>#{task.id} {task.title}</strong>
-          )}
-          <div className={styles.badgeRow} aria-label={`Task badges for ${task.title}`}>
-            <span className={taskStatusClassName(status)}>{status}</span>
-            {task.effort ? <span className={effortBadgeClasses}>Effort {formatValue(task.effort)}</span> : null}
-            {task.priorityScore != null ? <span className={styles.scoreBadge}>Score {formatValue(task.priorityScore)}</span> : null}
-            {task.important && <span className={styles.importantPill}>Important</span>}
+        <div className={styles.cardTopSection}>
+          <div className={styles.taskIdentity}>
+            <span className={styles.taskKey}>{taskKey}</span>
+            {isEditingTitle ? (
+              <label className={styles.titleEditor}>
+                <span className="sr-only">Edit title for task {task.id}</span>
+                <input
+                  ref={titleInputRef}
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  onBlur={commitTitleEdit}
+                  onKeyDown={handleTitleKeyDown}
+                  disabled={busy}
+                  maxLength={255}
+                  title={commitHint}
+                  aria-describedby={`${titleId}-hint`}
+                />
+                <span id={`${titleId}-hint`} className="sr-only">{commitHint}</span>
+              </label>
+            ) : (
+              <strong id={titleId} className={styles.cardTitle}>{task.title}</strong>
+            )}
+          </div>
+          <div className={styles.cardTopActions}>
+            {task.important ? <span className={styles.bookmarkIcon} title="Bookmarked important task" aria-label="Bookmarked important task">★</span> : null}
+            <button type="button" className={styles.compactIconButton} onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy || isEditingTitle} title="Edit title (Enter saves, Esc cancels)" aria-label={`Edit title for ${task.title}`}>✎</button>
           </div>
         </div>
-        <div className={styles.statusRow}>
-          <label htmlFor={statusSelectId} className="sr-only">Change status for task {task.id}</label>
-          <select
-            id={statusSelectId}
-            className={styles.statusSelect}
-            value={status}
-            onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)}
-            disabled={busy}
-            title="Change status (Tab, then arrows)"
-            aria-label={`Change status for ${task.title}`}
-          >
-            {TASK_STATUS_VALUES.map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </div>
+        {task.description ? <p className={styles.description}>{task.description}</p> : null}
       </div>
-      <p id={moveHintId} className="sr-only">Use the task move controls to move this card before or after nearby cards, or between adjacent status columns.</p>
-      <div className={styles.quickActions} aria-label={`Quick actions for ${task.title}`}>
-        <button type="button" onClick={() => onComplete(task.id)} disabled={busy} title="Complete task (Tab to reach)">✓<span className="sr-only">Complete {task.title}</span></button>
-        <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title (Enter saves, Esc cancels)">✎<span className="sr-only">Edit title for {task.title}</span></button>
-        <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task (Tab to reach)">🗑<span className="sr-only">Delete {task.title}</span></button>
+
+      <div className={styles.badgeRow} aria-label={`Task badges for ${task.title}`}>
+        <span className={taskStatusClassName(status)}>{formatValue(status)}</span>
+        <span className={effortBadgeClasses}>{primaryEffortBadge}</span>
+        {task.priorityScore != null && task.effort ? <span className={styles.scoreBadge}>Priority {formatValue(task.priorityScore)}</span> : null}
       </div>
-      {task.description && <p className={styles.description}>{task.description}</p>}
-      {hasDependencyRow ? (
-        <div className={styles.dependencyRow} aria-label={`Dependencies for ${task.title}: ${dependencySummary}`}>
-          <span className={styles.metaIcon} aria-hidden="true">🔗</span>
-          <span className={styles.dependencyLabel}>Dependencies</span>
-          <span className={styles.dependencyValue}>{dependencySummary}</span>
-          <span className={styles.dependencyChevron} aria-hidden="true">›</span>
+
+      <dl className={styles.importantInfoGrid}>
+        <div className={styles.importantInfoItem}>
+          <dt>Due date</dt>
+          <dd>
+            <span className={styles.metaIcon} aria-hidden="true">📅</span>
+            <span className={styles.metaStack}>
+              <span className={overdue ? styles.dateOverdue : undefined}>{formatDate(task.dueDate)}</span>
+              <span className={overdue ? styles.overdueHint : styles.metaSubvalue}>{overdue ? 'Overdue' : `Start ${formatDate(task.startDate)}`}</span>
+            </span>
+          </dd>
         </div>
-      ) : null}
-      <dl className={styles.meta}>
-        <div className={styles.metaRow}>
-          <div className={styles.metaItem}>
-            <dt>Due date</dt>
-            <dd>
-              <span className={styles.metaIcon} aria-hidden="true">📅</span>
-              <span className={styles.metaStack}>
-                {overdue ? (
-                  <>
-                    <span className={styles.dateOverdue}>{formatDate(task.dueDate)}</span>
-                    <span className={styles.overdueHint}>Overdue</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{formatDate(task.dueDate)}</span>
-                    <span className={styles.metaSubvalue}>Start {formatDate(task.startDate)}</span>
-                  </>
-                )}
-              </span>
-            </dd>
-          </div>
-          {assignee ? (
-            <div className={styles.metaItem}>
-              <dt>Assignee</dt>
-              <dd><span className={styles.metaIcon} aria-hidden="true">👤</span>{formatValue(assignee)}</dd>
-            </div>
-          ) : null}
-          <div className={styles.metaItem}>
-            <dt>Effort</dt>
-            <dd><span className={styles.metaIcon} aria-hidden="true">⚡</span>{formatValue(task.effort)}</dd>
-          </div>
+        <div className={styles.importantInfoItem}>
+          <dt>Assignee</dt>
+          <dd>
+            <span className={styles.assigneeAvatar} aria-hidden="true">{formatAssigneeInitial(assignee)}</span>
+            <span>{formatValue(assignee)}</span>
+          </dd>
         </div>
-        <div className={styles.metaRow}>
-          <div className={styles.metaItem}>
-            <dt>Area</dt>
-            <dd><span className={styles.metaIcon} aria-hidden="true">▣</span>{formatValue(task.area)}</dd>
-          </div>
-          <div className={styles.metaItem}>
-            <dt>Track</dt>
-            <dd><span className={styles.metaIcon} aria-hidden="true">🛤</span>{formatValue(task.track)}</dd>
-          </div>
-          <div className={styles.metaItem}>
-            <dt>Score</dt>
-            <dd><span className={styles.metaIcon} aria-hidden="true">★</span>{formatValue(task.priorityScore)}</dd>
-          </div>
-        </div>
-        {(task.riskLevel || task.phase || task.estimatedMinutes != null || task.actualMinutes != null) ? (
-          <div className={styles.metaRow}>
-            <div className={styles.metaItem}>
-              <dt>Risk</dt>
-              <dd><span className={styles.metaIcon} aria-hidden="true">⚠</span>{formatValue(task.riskLevel)}</dd>
-            </div>
-            <div className={styles.metaItem}>
-              <dt>Phase</dt>
-              <dd><span className={styles.metaIcon} aria-hidden="true">◆</span>{formatValue(task.phase)}</dd>
-            </div>
-            <div className={styles.metaItem}>
-              <dt>Estimate / actual</dt>
-              <dd><span className={styles.metaIcon} aria-hidden="true">⏱</span>{formatValue(task.estimatedMinutes)} / {formatValue(task.actualMinutes)}</dd>
-            </div>
-          </div>
-        ) : null}
       </dl>
+
+      <dl className={styles.metadataGrid}>
+        <div className={styles.metaItem}>
+          <dt>Estimate</dt>
+          <dd><span className={styles.metaIcon} aria-hidden="true">⏱</span>{formatValue(task.estimatedMinutes)}</dd>
+        </div>
+        <div className={styles.metaItem}>
+          <dt>Effort</dt>
+          <dd><span className={styles.metaIcon} aria-hidden="true">⚡</span>{formatValue(task.effort)}</dd>
+        </div>
+        <div className={styles.metaItem}>
+          <dt>Area</dt>
+          <dd><span className={styles.metaIcon} aria-hidden="true">▣</span>{formatValue(task.area)}</dd>
+        </div>
+        <div className={styles.metaItem}>
+          <dt>Track</dt>
+          <dd><span className={styles.metaIcon} aria-hidden="true">🛤</span>{formatValue(task.track)}</dd>
+        </div>
+        <div className={styles.metaItem}>
+          <dt>Score</dt>
+          <dd><span className={styles.metaIcon} aria-hidden="true">★</span>{formatValue(task.priorityScore)}</dd>
+        </div>
+      </dl>
+
+      <div className={styles.dependencyRow} aria-label={`Dependencies for ${task.title}: ${dependencySummary}`}>
+        <span className={styles.metaIcon} aria-hidden="true">🔗</span>
+        <span className={styles.dependencyLabel}>Dependencies</span>
+        <span className={styles.dependencyValue}>{dependencySummary}</span>
+        <span className={styles.dependencyChevron} aria-hidden="true">›</span>
+      </div>
+
+      <section className={styles.subtaskProgress} aria-label={`Subtask progress for ${task.title}`}>
+        <div className={styles.subtaskProgressHeader}>
+          <span className={styles.subtaskProgressCount}>{completedSubtaskCount}/{subtaskTotal} subtasks</span>
+          <span className={styles.subtaskProgressPercent}>{subtaskProgressPercent}%</span>
+        </div>
+        <div className={styles.subtaskProgressTrack} role="progressbar" aria-valuenow={subtaskProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={summary || `No subtasks for ${task.title}`}>
+          <span className={styles.subtaskProgressFill} style={{ width: `${subtaskProgressPercent}%` }} />
+        </div>
+        {previewSubtasks.length > 0 ? (
+          <ul className={styles.subtaskChecklist} aria-label={`Preview subtasks for ${task.title}`}>
+            {previewSubtasks.map((subtask) => {
+              const complete = isSubtaskComplete(subtask);
+              return (
+                <li key={subtask.id} className={complete ? styles.subtaskChecklistItemComplete : styles.subtaskChecklistItem}>
+                  <span className={styles.subtaskCheckIcon} aria-hidden="true">{complete ? '✓' : ''}</span>
+                  <span className={styles.subtaskChecklistTitle}>#{subtask.id} {subtask.title}</span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : <p className={styles.emptySubtaskPreview}>No subtasks yet</p>}
+        {task.subtasks.length > 0 ? (
+          <details className={styles.subtaskDetails}>
+            <summary className={styles.subtaskDetailsSummary}>View all subtasks ({subtaskTotal})</summary>
+            <div className={styles.subtaskList}>
+              {task.subtasks.map((subtask, subtaskIndex) => (
+                <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
+              ))}
+            </div>
+          </details>
+        ) : <span className={styles.subtaskDetailsSummary} aria-disabled="true">View all subtasks (0)</span>}
+      </section>
+
       <div className={styles.cardToolbar} role="toolbar" aria-label={`Task actions for ${task.title}`}>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={() => onComplete(task.id)}
+          disabled={busy}
+          title="Complete task (Tab to reach)"
+          aria-label={`Complete ${task.title}`}
+        >
+          <span aria-hidden="true">✓</span>
+        </button>
         <button
           type="button"
           className={styles.toolbarButton}
@@ -307,6 +330,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
             <select id={`${statusSelectId}-menu`} value={task.status ?? columnStatus} onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)} disabled={busy}>
               {TASK_STATUS_VALUES.map((status) => <option key={`${task.id}-menu-${status}`} value={status}>{status}</option>)}
             </select>
+            <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title">Edit title</button>
             <label htmlFor={effortSelectId}>Effort</label>
             <select id={effortSelectId} value={task.effort ?? ''} onChange={(event) => onUpdateTask(task, { effort: event.target.value || undefined })} disabled={busy}>
               <option value="">No effort</option>
@@ -325,46 +349,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           </div>
         </details>
       </div>
-      {summary && (
-        <section className={styles.subtaskProgress} aria-label={`Subtask progress for ${task.title}`}>
-          <div className={styles.subtaskProgressHeader}>
-            <span className={styles.subtaskProgressCount}>{completedSubtaskCount}/{subtaskTotal} completed</span>
-            <span className={styles.subtaskProgressPercent}>{subtaskProgressPercent}%</span>
-          </div>
-          <div className={styles.subtaskProgressTrack} role="progressbar" aria-valuenow={subtaskProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={summary}>
-            <span className={styles.subtaskProgressFill} style={{ width: `${subtaskProgressPercent}%` }} />
-          </div>
-          {previewSubtasks.length > 0 ? (
-            <ul className={styles.subtaskChecklist} aria-label={`Preview subtasks for ${task.title}`}>
-              {previewSubtasks.map((subtask) => {
-                const complete = isSubtaskComplete(subtask);
-                return (
-                  <li key={subtask.id} className={complete ? styles.subtaskChecklistItemComplete : styles.subtaskChecklistItem}>
-                    <span className={styles.subtaskCheckIcon} aria-hidden="true">{complete ? '✓' : ''}</span>
-                    <span className={styles.subtaskChecklistTitle}>#{subtask.id} {subtask.title}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-          {task.subtasks.length > 0 ? (
-            <details className={styles.subtaskDetails}>
-              <summary className={styles.subtaskDetailsSummary}>{hiddenSubtaskCount > 0 ? `View all subtasks (${subtaskTotal})` : `View subtask details (${subtaskTotal})`}</summary>
-              <div className={styles.subtaskList}>
-                {task.subtasks.map((subtask, subtaskIndex) => (
-                  <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
-                ))}
-              </div>
-            </details>
-          ) : null}
-        </section>
-      )}
-      <div className={styles.keyboardControls} aria-label={`Keyboard move controls for task ${task.id}`}>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card" aria-label={`Move ${task.title} before the previous card in ${columnStatus}`}>Move up</button>
-        <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card" aria-label={`Move ${task.title} after the next card in ${columnStatus}`}>Move down</button>
-        <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'} aria-label={previousStatus ? `Move ${task.title} to the top of ${previousStatus}` : `No previous column available for ${task.title}`}>Move left</button>
-        <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'} aria-label={nextStatus ? `Move ${task.title} to the top of ${nextStatus}` : `No next column available for ${task.title}`}>Move right</button>
-      </div>
-    </article>
+      </article>
+    </div>
   );
 }
