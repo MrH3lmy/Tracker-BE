@@ -134,6 +134,118 @@ const riskClass = (level?: string) => `risk-${(level ?? 'LOW').toLowerCase()}`;
 const taskKey = (task: TaskPreview, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
 
 
+
+const plannerIcons = {
+  sparkle: <path d="m12 3 1.55 4.45L18 9l-4.45 1.55L12 15l-1.55-4.45L6 9l4.45-1.55L12 3Zm6.5 9 1 2.5L22 15.5l-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5ZM5.5 13l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1Z" />,
+  refresh: <path d="M20 7v5h-5M4 17v-5h5m9.2-4.8A8 8 0 0 0 5.8 7M5.8 16.8A8 8 0 0 0 18.2 17" />,
+  calendar: <path d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />,
+  status: <path d="m7 12 3 3 7-7M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />,
+  flag: <path d="M6 21V4m0 0h9l-1 4 1 4H6" />,
+  score: <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-14v8m-4-4h8" />,
+  checklist: <path d="M9 7h9M9 12h9M9 17h9M4 7l1 1 2-2M4 12l1 1 2-2M4 17l1 1 2-2" />,
+  eye: <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />,
+  chevron: <path d="m9 18 6-6-6-6" />,
+};
+
+type PlannerIconName = keyof typeof plannerIcons;
+
+function PlannerIcon({ name }: { name: PlannerIconName }) {
+  return (
+    <svg className="planner-icon" viewBox="0 0 24 24" aria-hidden="true">
+      {plannerIcons[name]}
+    </svg>
+  );
+}
+
+function SuggestionBadge({ children, variant = 'default' }: { children: string | number; variant?: 'default' | 'success' | 'warning' | 'purple' }) {
+  return <span className={`suggestion-badge suggestion-badge-${variant}`}>{children}</span>;
+}
+
+function MetricItem({ icon, label, value, tone = 'default', compact = false }: { icon: PlannerIconName; label: string; value: string | number; tone?: 'default' | 'success' | 'warning' | 'score'; compact?: boolean }) {
+  return (
+    <div className={`metric-item metric-item-${tone}${compact ? ' compact' : ''}`}>
+      <span className="metric-icon"><PlannerIcon name={icon} /></span>
+      <span className="metric-copy">
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </span>
+    </div>
+  );
+}
+
+const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
+
+function TaskSuggestionCard({ recommendation }: { recommendation: RecommendationPreview }) {
+  const task = recommendation.task;
+  const confidence = typeof recommendation.confidence === 'number' ? Math.round(recommendation.confidence * 100) : undefined;
+  const tags = recommendationTags(recommendation);
+
+  return (
+    <article className="recommendation-hero-card">
+      <div className="recommendation-hero-topline">
+        <span className="recommendation-rank">#{recommendation.rank ?? 1}</span>
+        <SuggestionBadge variant="success">{recommendation.recommendedAction ?? 'Continue now'}</SuggestionBadge>
+      </div>
+      <div className="recommendation-copy">
+        <div className="recommendation-title-row">
+          <h4>{task?.title ?? 'Untitled task'}</h4>
+          <span className="recommendation-decoration" aria-hidden="true"><PlannerIcon name="checklist" /></span>
+        </div>
+        {recommendation.explanation && <p className="recommendation-explanation">{recommendation.explanation}</p>}
+      </div>
+      <div className="recommendation-metrics" aria-label="Top recommendation metadata">
+        <MetricItem icon="calendar" label="Due date" value={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
+        {task?.status && <MetricItem icon="status" label="Status" value={task.status} tone="success" />}
+        {task?.priorityCategory && <MetricItem icon="flag" label="Priority" value={task.priorityCategory} tone="warning" />}
+        {typeof task?.priorityScore === 'number' && <MetricItem icon="score" label="Priority score" value={task.priorityScore} tone="score" />}
+      </div>
+      {typeof confidence === 'number' && (
+        <div className="confidence-row">
+          <span className="confidence-copy">Confidence <strong>{confidence}%</strong></span>
+          <SuggestionBadge variant="success">{`${confidence}%`}</SuggestionBadge>
+        </div>
+      )}
+      {tags.length > 0 && (
+        <div className="suggestion-chip-row" aria-label="Recommendation reason codes">
+          {tags.map((reason) => <SuggestionBadge key={reason} variant={reason.includes('PROGRESS') ? 'default' : reason.includes('SOON') ? 'purple' : 'warning'}>{reason.replaceAll('_', ' ')}</SuggestionBadge>)}
+        </div>
+      )}
+      {asStrings(recommendation.blockerWarnings).length > 0 && (
+        <ul className="recommendation-warnings">
+          {asStrings(recommendation.blockerWarnings).map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendation: RecommendationPreview; fallbackRank: number }) {
+  const task = recommendation.task;
+
+  return (
+    <article className="secondary-suggestion-card">
+      <div className="secondary-suggestion-heading">
+        <span className="secondary-rank">#{recommendation.rank ?? fallbackRank}</span>
+        <div>
+          <h4>{task?.title ?? 'Untitled task'}</h4>
+          <SuggestionBadge variant="success">{recommendation.recommendedAction ?? 'Review next'}</SuggestionBadge>
+        </div>
+      </div>
+      {recommendation.explanation && <p className="secondary-explanation">{recommendation.explanation}</p>}
+      <div className="secondary-metrics" aria-label="Secondary recommendation metadata">
+        <MetricItem icon="calendar" label="Due date" value={formatPlannerDate(task?.dueDate, 'Due date unavailable')} compact />
+        {task?.status && <MetricItem icon="status" label="Status" value={task.status} tone="success" compact />}
+        {task?.priorityCategory && <MetricItem icon="flag" label="Priority" value={task.priorityCategory} tone="warning" compact />}
+      </div>
+      <button type="button" className="view-details-button">
+        <PlannerIcon name="eye" />
+        View details
+        <PlannerIcon name="chevron" />
+      </button>
+    </article>
+  );
+}
+
 const weekdayLabel = (weekday: string) => weekday.charAt(0).toUpperCase() + weekday.slice(1).toLowerCase();
 
 function CalendarExclusionSummary({ data }: { data: unknown }) {
@@ -189,13 +301,14 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
 
   return (
     <section className="page-card recommendation-panel" aria-labelledby="recommended-task-title">
-      <div className="section-header">
+      <div className="section-header recommendation-header">
         <div>
-          <p className="eyebrow">Smart suggestions</p>
+          <p className="eyebrow ai-eyebrow"><PlannerIcon name="sparkle" /> Smart suggestions</p>
           <h3 id="recommended-task-title">Recommended next task</h3>
-          <p className="muted">Ranked with priority score, due date, effort, current status, follow-up timing, and blocker context.</p>
+          <p className="muted">Ranked by priority, due date, effort, status, follow-up timing, and blocker context.</p>
         </div>
-        <button type="button" className="button-secondary" onClick={onRefresh} disabled={isFetching}>
+        <button type="button" className="button-secondary refresh-suggestions-button" onClick={onRefresh} disabled={isFetching}>
+          <PlannerIcon name="refresh" />
           {isFetching ? 'Refreshing...' : 'Refresh suggestions'}
         </button>
       </div>
@@ -204,54 +317,17 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
         <p className="muted">No recommendations yet. Add active tasks or refresh after updating task details.</p>
       ) : (
         <div className="recommendation-content">
-          <article className="recommendation-hero-card">
-            <div className="recommendation-rank">#{topRecommendation.rank ?? 1}</div>
-            <div className="recommendation-copy">
-              <p className="eyebrow">{topRecommendation.recommendedAction ?? 'Do next'}</p>
-              <h4>{topRecommendation.task?.title ?? 'Untitled task'}</h4>
-              {topRecommendation.explanation && <p>{topRecommendation.explanation}</p>}
-              <div className="task-preview-meta">
-                {topRecommendation.task?.dueDate && <span className="pill">Due {formatPlannerDate(topRecommendation.task.dueDate, 'Due date unavailable')}</span>}
-                {topRecommendation.task?.status && <span className="pill">{topRecommendation.task.status}</span>}
-                {typeof topRecommendation.task?.priorityScore === 'number' && <span className="pill">Score {topRecommendation.task.priorityScore}</span>}
-                {typeof topRecommendation.confidence === 'number' && <span className="pill">{Math.round(topRecommendation.confidence * 100)}% confidence</span>}
-              </div>
-              {asStrings(topRecommendation.reasonCodes).length > 0 && (
-                <div className="task-preview-meta" aria-label="Recommendation reason codes">
-                  {asStrings(topRecommendation.reasonCodes).map((reason) => <span key={reason} className="pill reason-pill">{reason.replaceAll('_', ' ')}</span>)}
-                </div>
-              )}
-              {asStrings(topRecommendation.blockerWarnings).length > 0 && (
-                <ul className="recommendation-warnings">
-                  {asStrings(topRecommendation.blockerWarnings).map((warning) => <li key={warning}>{warning}</li>)}
-                </ul>
-              )}
-            </div>
-          </article>
+          <TaskSuggestionCard recommendation={topRecommendation} />
 
           {otherRecommendations.length > 0 && (
-            <div className="recommendation-sidebar">
+            <aside className="recommendation-sidebar" aria-label="More smart suggestions">
               <h4>More smart suggestions</h4>
               <div className="mini-card-list">
                 {otherRecommendations.slice(0, 4).map((recommendation, index) => (
-                  <article key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? recommendation.task?.title ?? 'suggestion'}`} className="task-preview-card compact">
-                    <div className="section-card-header compact">
-                      <div>
-                        <h4>{recommendation.task?.title ?? 'Untitled task'}</h4>
-                        <p className="muted">{recommendation.recommendedAction ?? 'Review next'}</p>
-                      </div>
-                      <span className="status-badge status-other">#{recommendation.rank ?? index + 2}</span>
-                    </div>
-                    {recommendation.explanation && <p className="muted">{recommendation.explanation}</p>}
-                    {recommendation.task?.dueDate && (
-                      <div className="task-preview-meta">
-                        <span className="pill">Due {formatPlannerDate(recommendation.task.dueDate, 'Due date unavailable')}</span>
-                      </div>
-                    )}
-                  </article>
+                  <SecondarySuggestionCard key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? recommendation.task?.title ?? 'suggestion'}`} recommendation={recommendation} fallbackRank={index + 2} />
                 ))}
               </div>
-            </div>
+            </aside>
           )}
         </div>
       )}
