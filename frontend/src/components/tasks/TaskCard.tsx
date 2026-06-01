@@ -75,19 +75,21 @@ const formatAssigneeInitial = (assignee: string | number | boolean | null | unde
   return value === '—' ? '?' : value.trim().charAt(0).toUpperCase();
 };
 
+const formatTaskKey = (taskId: number) => `TAS-${String(taskId).padStart(3, '0')}`;
+
 const formatDependencySummary = (task: TaskTreeNode) => {
   const values: string[] = [];
 
-  if (task.parentTaskId) values.push(`Parent #${task.parentTaskId}`);
+  if (task.parentTaskId) values.push(`Parent ${formatTaskKey(task.parentTaskId)}`);
 
   const dependencyIds = task.dependencyIds ?? [];
   if (dependencyIds.length > 0) {
-    values.push(`Blocked by #${dependencyIds[0]}${dependencyIds.length > 1 ? ` +${dependencyIds.length - 1}` : ''}`);
+    values.push(`Blocked by ${formatTaskKey(dependencyIds[0])}${dependencyIds.length > 1 ? ` +${dependencyIds.length - 1}` : ''}`);
   }
 
   const blockingTaskIds = task.blockingTaskIds ?? [];
   if (blockingTaskIds.length > 0) {
-    values.push(`Blocks #${blockingTaskIds[0]}${blockingTaskIds.length > 1 ? ` +${blockingTaskIds.length - 1}` : ''}`);
+    values.push(`Blocks ${formatTaskKey(blockingTaskIds[0])}${blockingTaskIds.length > 1 ? ` +${blockingTaskIds.length - 1}` : ''}`);
   }
 
   return values.join(' · ');
@@ -150,7 +152,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const assignee = metadataTask.assignee;
   const estimate = getEstimateValue(metadataTask);
   const status = task.status ?? columnStatus;
-  const taskKey = `TAS-${String(task.id).padStart(3, '0')}`;
+  const taskKey = formatTaskKey(task.id);
   const effortBadgeClasses = [
     styles.effortBadge,
     task.effort === 'MEDIUM' ? styles.effortBadgeMedium : '',
@@ -242,9 +244,10 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       </dl>
 
       <div className={styles.dependencyRow} aria-label={`Dependencies for ${task.title}: ${dependencySummary}`}>
-        <span className={styles.metaIcon} aria-hidden="true">🔗</span>
-        <span className={styles.dependencyLabel}>Dependencies</span>
-        <span className={styles.dependencyValue}>{dependencySummary}</span>
+        <span className={styles.dependencyContent}>
+          <span className={styles.dependencyLabel}>Dependencies</span>
+          <span className={styles.dependencyValue}>{dependencySummary}</span>
+        </span>
         <span className={styles.dependencyChevron} aria-hidden="true">›</span>
       </div>
 
