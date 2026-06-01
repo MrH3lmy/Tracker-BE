@@ -428,37 +428,46 @@
 
 .dependencyRow {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-primary-soft) 36%, var(--color-surface-raised-soft));
-  padding: 0.55rem 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  padding: 0.7rem 0;
+}
+
+.dependencyContent {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .dependencyLabel {
-  color: var(--color-text);
-  font-size: 0.78rem;
-  font-weight: 950;
-  letter-spacing: 0.05em;
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .dependencyValue {
   overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: 0.86rem;
-  font-weight: 750;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dependencyChevron {
-  color: var(--color-primary-strong);
-  font-size: 1.35rem;
-  font-weight: 950;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  font-weight: 850;
   line-height: 1;
 }
 
