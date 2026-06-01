@@ -2207,16 +2207,16 @@ code {
 .recommendation-header h3 {
   margin-top: var(--space-2);
   color: #eef6ff;
-  font-size: clamp(2rem, 4vw, 3.05rem);
-  line-height: 1;
+  font-size: clamp(1.45rem, 2.4vw, 2.15rem);
+  line-height: 1.08;
 }
 
 .recommendation-header .muted {
   max-width: 52rem;
-  margin-top: var(--space-4);
+  margin-top: var(--space-2);
   color: rgba(203, 213, 225, 0.76);
-  font-size: 1.02rem;
-  line-height: 1.7;
+  font-size: 0.96rem;
+  line-height: 1.45;
 }
 
 .refresh-suggestions-button {
@@ -2236,21 +2236,23 @@ code {
 }
 
 .recommendation-content {
-  grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 0.78fr);
-  gap: clamp(var(--space-5), 2.4vw, var(--space-8));
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  gap: clamp(var(--space-4), 2vw, var(--space-6));
+  min-width: 0;
 }
 
 .recommendation-hero-card {
   position: relative;
   display: grid;
   grid-template-columns: 1fr;
-  gap: clamp(var(--space-5), 2.6vw, var(--space-8));
-  padding: clamp(1.5rem, 3.4vw, 2.4rem);
+  gap: clamp(var(--space-3), 1.5vw, var(--space-5));
+  min-width: 0;
+  padding: clamp(1.1rem, 2vw, 1.55rem);
   border: 1px solid rgba(74, 177, 255, 0.54);
   border-radius: 1.35rem;
   background:
-    radial-gradient(circle at 90% 18%, rgba(34, 211, 238, 0.22), transparent 10rem),
-    radial-gradient(circle at 78% 86%, rgba(124, 58, 237, 0.26), transparent 19rem),
+    radial-gradient(circle at 92% 12%, rgba(34, 211, 238, 0.18), transparent 7rem),
+    radial-gradient(circle at 82% 92%, rgba(124, 58, 237, 0.18), transparent 10rem),
     linear-gradient(145deg, rgba(7, 22, 52, 0.95), rgba(13, 25, 61, 0.9));
   box-shadow: 0 26px 70px rgba(6, 12, 35, 0.42), 0 0 0 1px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
@@ -2272,14 +2274,14 @@ code {
 }
 
 .recommendation-rank {
-  width: 4.7rem;
-  height: 4.7rem;
-  border-radius: 1.1rem;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.85rem;
   background: linear-gradient(145deg, #38bdf8, #4f46e5 72%, #7c3aed);
   color: #fff;
-  font-size: 1.75rem;
+  font-size: 1.15rem;
   text-shadow: 0 2px 18px rgba(255, 255, 255, 0.34);
-  box-shadow: 0 18px 42px rgba(79, 70, 229, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 .suggestion-badge {
@@ -2296,8 +2298,9 @@ code {
   font-weight: 900;
   letter-spacing: 0.04em;
   line-height: 1.1;
-  padding: 0.42rem 0.82rem;
+  padding: 0.34rem 0.68rem;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .suggestion-badge-success {
@@ -2327,8 +2330,9 @@ code {
 
 .recommendation-copy h4 {
   color: #f8fbff;
-  font-size: clamp(1.45rem, 2.5vw, 2.25rem);
-  line-height: 1.24;
+  font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+  line-height: 1.28;
+  max-width: 42rem;
   overflow-wrap: anywhere;
 }
 
@@ -2336,14 +2340,19 @@ code {
 .secondary-explanation {
   margin: 0;
   color: rgba(203, 213, 225, 0.82);
-  line-height: 1.75;
+  line-height: 1.55;
+}
+
+.recommendation-explanation {
+  max-width: 42rem;
+  overflow-wrap: break-word;
 }
 
 .recommendation-decoration {
   display: grid;
   place-items: center;
-  width: 4.3rem;
-  height: 4.3rem;
+  width: 3rem;
+  height: 3rem;
   border: 1px solid rgba(34, 211, 238, 0.3);
   border-radius: 1rem;
   background: linear-gradient(145deg, rgba(14, 165, 233, 0.3), rgba(79, 70, 229, 0.2));
@@ -2352,15 +2361,15 @@ code {
 }
 
 .recommendation-decoration .planner-icon {
-  width: 2rem;
-  height: 2rem;
+  width: 1.35rem;
+  height: 1.35rem;
 }
 
 .recommendation-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
-  padding-block: var(--space-5);
+  padding-block: var(--space-3);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
@@ -2387,8 +2396,8 @@ code {
 .metric-icon {
   display: grid;
   place-items: center;
-  width: 2.3rem;
-  height: 2.3rem;
+  width: 2.05rem;
+  height: 2.05rem;
   border-radius: 0.85rem;
   background: rgba(96, 165, 250, 0.13);
   color: #60a5fa;
@@ -2431,7 +2440,7 @@ code {
 
 .confidence-copy {
   color: rgba(203, 213, 225, 0.86);
-  font-size: 1rem;
+  font-size: 0.92rem;
 }
 
 .confidence-copy strong {
@@ -2458,6 +2467,7 @@ code {
 
 .secondary-suggestion-card {
   display: grid;
+  align-content: start;
   gap: var(--space-4);
   min-width: 0;
   padding: var(--space-4);
@@ -2479,6 +2489,10 @@ code {
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
+}
+
+.secondary-suggestion-heading > div {
+  min-width: 0;
 }
 
 .secondary-rank {
@@ -2504,7 +2518,7 @@ code {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
 }
 
 .secondary-metrics {
@@ -2516,6 +2530,8 @@ code {
 }
 
 .view-details-button {
+  align-self: end;
+  margin-top: auto;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -2587,9 +2603,9 @@ code {
 
 @media (max-width: 520px) {
   .recommendation-rank {
-    width: 4rem;
-    height: 4rem;
-    font-size: 1.45rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1.05rem;
   }
 
   .secondary-suggestion-heading {
