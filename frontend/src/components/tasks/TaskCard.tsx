@@ -88,6 +88,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const effortSelectId = `task-card-effort-${task.id}`;
   const followUpId = `task-card-follow-up-${task.id}`;
   const moveHintId = `task-card-move-hint-${task.id}`;
+  const assignee = (task as TaskTreeNode & { assignee?: string | number | boolean | null }).assignee;
 
   return (
     <article
@@ -154,16 +155,58 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       {summary && <p className={styles.description}>{summary}</p>}
       {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className={styles.description}>Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
       <dl className={styles.meta}>
-        <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
-        <div><dt>Due</dt><dd className={overdue ? styles.dateOverdue : ''}>{renderDueDate(task, overdue)}</dd></div>
-        <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
-        <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
-        <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
-        <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
-        <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
-        <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
-        <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
-        <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
+        <div className={styles.metaRow}>
+          <div className={styles.metaItem}>
+            <dt>Due date</dt>
+            <dd>
+              <span className={styles.metaIcon} aria-hidden="true">📅</span>
+              <span className={styles.metaStack}>
+                <span className={overdue ? styles.dateOverdue : ''}>{renderDueDate(task, overdue)}</span>
+                <span className={styles.metaSubvalue}>Start {formatDate(task.startDate)}</span>
+              </span>
+            </dd>
+          </div>
+          {assignee ? (
+            <div className={styles.metaItem}>
+              <dt>Assignee</dt>
+              <dd><span className={styles.metaIcon} aria-hidden="true">👤</span>{formatValue(assignee)}</dd>
+            </div>
+          ) : null}
+          <div className={styles.metaItem}>
+            <dt>Effort</dt>
+            <dd><span className={styles.metaIcon} aria-hidden="true">⚡</span>{formatValue(task.effort)}</dd>
+          </div>
+        </div>
+        <div className={styles.metaRow}>
+          <div className={styles.metaItem}>
+            <dt>Area</dt>
+            <dd><span className={styles.metaIcon} aria-hidden="true">▣</span>{formatValue(task.area)}</dd>
+          </div>
+          <div className={styles.metaItem}>
+            <dt>Track</dt>
+            <dd><span className={styles.metaIcon} aria-hidden="true">🛤</span>{formatValue(task.track)}</dd>
+          </div>
+          <div className={styles.metaItem}>
+            <dt>Score</dt>
+            <dd><span className={styles.metaIcon} aria-hidden="true">★</span>{formatValue(task.priorityScore)}</dd>
+          </div>
+        </div>
+        {(task.riskLevel || task.phase || task.estimatedMinutes != null || task.actualMinutes != null) ? (
+          <div className={styles.metaRow}>
+            <div className={styles.metaItem}>
+              <dt>Risk</dt>
+              <dd><span className={styles.metaIcon} aria-hidden="true">⚠</span>{formatValue(task.riskLevel)}</dd>
+            </div>
+            <div className={styles.metaItem}>
+              <dt>Phase</dt>
+              <dd><span className={styles.metaIcon} aria-hidden="true">◆</span>{formatValue(task.phase)}</dd>
+            </div>
+            <div className={styles.metaItem}>
+              <dt>Estimate / actual</dt>
+              <dd><span className={styles.metaIcon} aria-hidden="true">⏱</span>{formatValue(task.estimatedMinutes)} / {formatValue(task.actualMinutes)}</dd>
+            </div>
+          </div>
+        ) : null}
       </dl>
       <div className={styles.actions}>
         <button type="button" onClick={() => onStartSubtask(task)} disabled={busy} title="Add subtask (Tab to reach)">Add subtask</button>
