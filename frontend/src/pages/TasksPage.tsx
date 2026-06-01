@@ -13,11 +13,12 @@ import type { BlockerAnalysis, CreateTaskPayload, DuplicateGroup, FilterValue, T
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import { latestResult, useTaskBlockersQuery, useTaskMutations, useTasksQuery, type TaskTab } from '../hooks/useApiQueries';
 import { useBoardState } from '../hooks/useBoardState';
-import { TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
+import type { TaskStatus } from '../validation/taskStatus';
 
 const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
 const SORT_VALUES: TaskSortValue[] = ['position', 'priorityScore', 'dueDate', 'createdDate', 'effort', 'title'];
+const BOARD_STATUS_VALUES: TaskStatus[] = ['BACKLOG', 'NOT_STARTED', 'IN_PROGRESS'];
 const EFFORT_ORDER = new Map([['XS', 0], ['SMALL', 1], ['S', 1], ['LOW', 1], ['QUICK', 1], ['MEDIUM', 2], ['M', 2], ['DEEP_WORK', 3], ['LARGE', 3], ['L', 3], ['HIGH', 3], ['XL', 4]]);
 
 const mutationSuccessMessage = (method: string, url: string) => {
@@ -208,7 +209,7 @@ export function TasksPage() {
     return params.toString();
   }, [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, sort, statusFilter]);
   const taskTree = useMemo(() => buildTaskTree(sortedFilteredTasks, (nodes) => nodes), [sortedFilteredTasks]);
-  const boardColumns = useMemo(() => TASK_STATUS_VALUES.map((columnStatus) => ({
+  const boardColumns = useMemo(() => BOARD_STATUS_VALUES.map((columnStatus) => ({
     status: columnStatus,
     tasks: taskTree.filter((task) => task.status === columnStatus),
   })), [taskTree]);

@@ -1,6 +1,6 @@
 import type { DragEvent, KeyboardEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { TASK_STATUS_VALUES, type TaskStatus } from '../../validation/taskStatus';
+import type { TaskStatus } from '../../validation/taskStatus';
 import type { BoardDropTarget } from '../../hooks/useBoardState';
 import type { BoardColumnData, TaskRecord, TaskTreeNode } from './taskTypes';
 import { BoardColumn } from './BoardColumn';
@@ -68,14 +68,15 @@ function BoardColumnRenderer({ column, statusIndex, statuses, busy, draggingTask
 }
 
 export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onCreateTaskForStatus, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskBoardProps) {
-  const [selectedMobileStatus, setSelectedMobileStatus] = useState<TaskStatus>(TASK_STATUS_VALUES[0]);
+  const [selectedMobileStatus, setSelectedMobileStatus] = useState<TaskStatus>(() => columns[0]?.status ?? 'BACKLOG');
   const [isMobileBoard, setIsMobileBoard] = useState(isMobileBoardViewport);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const columnsByStatus = useMemo(() => new Map(columns.map((column) => [column.status, column])), [columns]);
-  const desktopStatuses = columns.map(({ status }) => status);
-  const mobileStatuses = [...TASK_STATUS_VALUES];
-  const mobileColumn = columnsByStatus.get(selectedMobileStatus) ?? { status: selectedMobileStatus, tasks: [] };
-  const mobileStatusIndex = TASK_STATUS_VALUES.indexOf(selectedMobileStatus);
+  const desktopStatuses = useMemo(() => columns.map(({ status }) => status), [columns]);
+  const mobileStatuses = desktopStatuses;
+  const activeMobileStatus = mobileStatuses.includes(selectedMobileStatus) ? selectedMobileStatus : mobileStatuses[0] ?? selectedMobileStatus;
+  const mobileColumn = columnsByStatus.get(activeMobileStatus) ?? { status: activeMobileStatus, tasks: [] };
+  const mobileStatusIndex = mobileStatuses.indexOf(activeMobileStatus);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_BOARD_QUERY);
@@ -88,21 +89,23 @@ export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragSta
 
   const focusStatusTab = (status: TaskStatus) => {
     setSelectedMobileStatus(status);
-    window.requestAnimationFrame(() => tabRefs.current[TASK_STATUS_VALUES.indexOf(status)]?.focus());
+    window.requestAnimationFrame(() => tabRefs.current[mobileStatuses.indexOf(status)]?.focus());
   };
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, status: TaskStatus) => {
-    const currentIndex = TASK_STATUS_VALUES.indexOf(status);
+    const currentIndex = mobileStatuses.indexOf(status);
+    if (currentIndex === -1 || mobileStatuses.length === 0) return;
+
     let nextIndex: number;
 
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % TASK_STATUS_VALUES.length;
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + TASK_STATUS_VALUES.length) % TASK_STATUS_VALUES.length;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % mobileStatuses.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + mobileStatuses.length) % mobileStatuses.length;
     else if (event.key === 'Home') nextIndex = 0;
-    else if (event.key === 'End') nextIndex = TASK_STATUS_VALUES.length - 1;
+    else if (event.key === 'End') nextIndex = mobileStatuses.length - 1;
     else return;
 
     event.preventDefault();
-    focusStatusTab(TASK_STATUS_VALUES[nextIndex]);
+    focusStatusTab(mobileStatuses[nextIndex]);
   };
 
   const columnProps = {
@@ -128,9 +131,9 @@ export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragSta
   const renderedStatuses = isMobileBoard ? mobileStatuses : desktopStatuses;
   const boardAriaProps = isMobileBoard
     ? {
-      id: `task-board-status-panel-${selectedMobileStatus}`,
+      id: `task-board-status-panel-${activeMobileStatus}`,
       role: 'tabpanel',
-      'aria-labelledby': `task-board-status-tab-${selectedMobileStatus}`,
+      'aria-labelledby': `task-board-status-tab-${activeMobileStatus}`,
       'aria-label': 'Selected task status column',
     }
     : { 'aria-label': 'Task status board' };
@@ -138,8 +141,8 @@ export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragSta
   return (
     <>
       <div className={styles.statusTabs} role="tablist" aria-label="Select task status column">
-        {TASK_STATUS_VALUES.map((status, index) => {
-          const isSelected = selectedMobileStatus === status;
+        {mobileStatuses.map((status, index) => {
+          const isSelected = activeMobileStatus === status;
           const count = columnsByStatus.get(status)?.tasks.length ?? 0;
 
           return (
