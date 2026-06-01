@@ -50,6 +50,46 @@ const statusLabelByStatus: Record<TaskStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
+interface EmptyColumnStateProps {
+  status: TaskStatus;
+  statusLabel: string;
+  busy: boolean;
+  onCreateTaskForStatus: (status: TaskStatus) => void;
+}
+
+const emptyTitleByStatus: Record<TaskStatus, string> = {
+  BACKLOG: 'No backlog tasks',
+  NOT_STARTED: 'No tasks not started',
+  IN_PROGRESS: 'No tasks in progress',
+  WAITING: 'No waiting tasks',
+  BLOCKED: 'No blocked tasks',
+  DONE: 'No done tasks',
+  CANCELLED: 'No cancelled tasks',
+};
+
+export function EmptyColumnState({ status, statusLabel, busy, onCreateTaskForStatus }: EmptyColumnStateProps) {
+  return (
+    <div className={boardStyles.empty} aria-label={`${statusLabel} empty state`}>
+      <div className={boardStyles.emptyIllustration} aria-hidden="true">
+        <span className={boardStyles.emptyIllustrationIcon}>{statusIconByStatus[status]}</span>
+        <span className={boardStyles.emptyIllustrationCard} />
+      </div>
+      <div className={boardStyles.emptyCopy}>
+        <h4>{emptyTitleByStatus[status]}</h4>
+        <p>Drag a task here to get started.</p>
+      </div>
+      <button
+        type="button"
+        className={boardStyles.emptyActionButton}
+        onClick={() => onCreateTaskForStatus(status)}
+        disabled={busy}
+      >
+        Add task
+      </button>
+    </div>
+  );
+}
+
 function InsertionIndicator() {
   return <div className={boardStyles.insertionIndicator} role="presentation" />;
 }
@@ -117,19 +157,12 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
         ))}
         {isDropTarget && dropTarget.position === tasks.length && <InsertionIndicator />}
         {tasks.length === 0 && (
-          <div className={boardStyles.empty} aria-label={`${statusLabel} empty state`}>
-            <div className={boardStyles.emptyIllustration} aria-hidden="true">
-              <span className={boardStyles.emptyIllustrationIcon}>{statusIconByStatus[status]}</span>
-              <span className={boardStyles.emptyIllustrationCard} />
-            </div>
-            <div className={boardStyles.emptyCopy}>
-              <h4>No tasks {formatStatusLabel(status)}</h4>
-              <p>Drag a task here to get started.</p>
-            </div>
-            <button type="button" className={boardStyles.emptyActionButton} onClick={() => onCreateTaskForStatus(status)} disabled={busy}>
-              Add task
-            </button>
-          </div>
+          <EmptyColumnState
+            status={status}
+            statusLabel={statusLabel}
+            busy={busy}
+            onCreateTaskForStatus={onCreateTaskForStatus}
+          />
         )}
       </div>
     </section>

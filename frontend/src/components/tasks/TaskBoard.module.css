@@ -143,14 +143,14 @@
 
 .empty {
   display: grid;
-  min-height: 16rem;
-  place-items: center;
+  min-height: 14rem;
+  align-content: center;
+  justify-items: center;
   gap: var(--space-3);
-  padding: var(--space-6) var(--space-4);
-  border: 1px dashed var(--color-empty-border-muted);
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 22%, var(--color-empty-border-muted));
   border-radius: var(--radius-xl);
-  background: var(--color-surface-navy-deeper);
-  background: var(--gradient-panel-soft);
+  background: color-mix(in srgb, var(--color-surface-navy-deeper) 86%, var(--color-primary) 4%);
   color: var(--color-text-muted);
   text-align: center;
 }
@@ -158,8 +158,8 @@
 .emptyIllustration {
   position: relative;
   display: grid;
-  width: 5.75rem;
-  height: 4.5rem;
+  width: 4.85rem;
+  height: 3.8rem;
   place-items: center;
 }
 
@@ -167,34 +167,34 @@
   position: relative;
   z-index: 1;
   display: inline-grid;
-  width: 3.15rem;
-  height: 3.15rem;
+  width: 2.65rem;
+  height: 2.65rem;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-soft));
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface-navy-deep));
   color: var(--color-primary);
-  font-size: 1.35rem;
+  font-size: 1.05rem;
   font-weight: 900;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 7%, transparent), var(--shadow-sm);
 }
 
 .emptyIllustrationCard {
   position: absolute;
-  right: 0.35rem;
-  bottom: 0.25rem;
-  width: 3.35rem;
-  height: 2.35rem;
-  border: 1px dashed color-mix(in srgb, var(--color-border-strong) 82%, transparent);
+  right: 0.4rem;
+  bottom: 0.35rem;
+  width: 2.9rem;
+  height: 1.95rem;
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 24%, var(--color-border-strong));
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-bg-soft) 86%, transparent);
+  background: color-mix(in srgb, var(--color-surface-navy-deep) 78%, var(--color-primary) 6%);
   transform: rotate(-7deg);
 }
 
 .emptyCopy {
   display: grid;
   gap: var(--space-1);
-  max-width: 13rem;
+  max-width: 14rem;
 }
 
 .emptyCopy h4,
