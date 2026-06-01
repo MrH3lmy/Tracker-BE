@@ -184,7 +184,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
     <article className="recommendation-hero-card">
       <div className="recommendation-hero-topline">
         <span className="recommendation-rank">#{recommendation.rank ?? 1}</span>
-        <SuggestionBadge variant="success">{recommendation.recommendedAction ?? 'Continue now'}</SuggestionBadge>
+        {recommendation.recommendedAction && <SuggestionBadge variant="success">{recommendation.recommendedAction}</SuggestionBadge>}
       </div>
       <div className="recommendation-copy">
         <div className="recommendation-title-row">
@@ -228,7 +228,7 @@ function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendat
         <span className="secondary-rank">#{recommendation.rank ?? fallbackRank}</span>
         <div>
           <h4>{task?.title ?? 'Untitled task'}</h4>
-          <SuggestionBadge variant="success">{recommendation.recommendedAction ?? 'Review next'}</SuggestionBadge>
+          {recommendation.recommendedAction && <SuggestionBadge variant="success">{recommendation.recommendedAction}</SuggestionBadge>}
         </div>
       </div>
       {recommendation.explanation && <p className="secondary-explanation">{recommendation.explanation}</p>}
