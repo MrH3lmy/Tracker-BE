@@ -504,7 +504,7 @@
 
 .subtaskProgressTrack {
   overflow: hidden;
-  height: 0.48rem;
+  height: 0.32rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
 }
@@ -550,7 +550,7 @@
   width: 1rem;
   height: 1rem;
   border: 1.5px solid var(--color-primary);
-  border-radius: 0.25rem;
+  border-radius: 999px;
   background: var(--color-surface-raised-soft);
   color: var(--color-primary-strong);
   font-size: 0.7rem;
@@ -599,8 +599,58 @@
 
 .subtaskList {
   display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
+  gap: 0.45rem;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtaskListItem,
+.subtaskListItemComplete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface-raised-soft) 74%, transparent);
+  padding: 0.48rem 0.58rem;
+}
+
+.subtaskListItemComplete {
+  color: var(--color-text-muted);
+}
+
+.subtaskListItemComplete .subtaskListTitle {
+  text-decoration: line-through;
+}
+
+.subtaskListContent {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.subtaskListTitle {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtaskListItemComplete .subtaskListTitle {
+  color: var(--color-text-muted);
+}
+
+.subtaskListMeta {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .cardToolbar {
