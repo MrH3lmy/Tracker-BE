@@ -76,6 +76,7 @@
 
 .quickActions button:focus-visible,
 .keyboardControls button:focus-visible,
+.subtaskDetailsSummary:focus-visible,
 .secondaryMenu > summary:focus-visible {
   outline: 3px solid var(--color-primary);
   outline-offset: 3px;
@@ -84,6 +85,10 @@
 
 .secondaryMenu > summary:focus-visible {
   border-radius: var(--radius-sm);
+}
+
+.subtaskDetailsSummary:focus-visible {
+  border-radius: 999px;
 }
 
 .secondaryMenu {
@@ -359,6 +364,119 @@
   text-transform: uppercase;
 }
 
+.subtaskProgress {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-surface-raised-soft));
+  padding: var(--space-3);
+}
+
+.subtaskProgressHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.subtaskProgressCount,
+.subtaskProgressPercent {
+  color: var(--color-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.subtaskProgressPercent {
+  border-radius: 999px;
+  background: var(--color-surface-raised-soft);
+  padding: 0.15rem 0.5rem;
+}
+
+.subtaskProgressTrack {
+  overflow: hidden;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-border));
+}
+
+.subtaskProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-strong));
+  transition: width 180ms ease;
+}
+
+.subtaskChecklist {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtaskChecklistItem,
+.subtaskChecklistItemComplete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.84rem;
+}
+
+.subtaskChecklistItemComplete {
+  color: var(--color-text-muted);
+}
+
+.subtaskChecklistItemComplete .subtaskChecklistTitle {
+  text-decoration: line-through;
+}
+
+.subtaskCheckIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 0.25rem;
+  background: var(--color-surface-raised-soft);
+  color: var(--color-primary-strong);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.subtaskChecklistTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtaskDetails {
+  margin-top: var(--space-1);
+}
+
+.subtaskDetailsSummary {
+  width: fit-content;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: 999px;
+  background: var(--color-surface-raised-soft);
+  padding: 0.32rem 0.7rem;
+  color: var(--color-primary-strong);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.subtaskDetails[open] .subtaskDetailsSummary {
+  margin-bottom: var(--space-3);
+}
+
 .actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -442,4 +560,5 @@
 .subtaskList {
   display: grid;
   gap: var(--space-3);
+  margin-top: var(--space-2);
 }
