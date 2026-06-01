@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { TASK_STATUS_VALUES, type TaskStatus } from '../../validation/taskStatus';
 import type { TaskRecord, TaskTreeNode } from './taskTypes';
-import { formatDate, formatValue, isOverdue, renderDueDate, subtaskSummary } from './taskUtils';
+import { formatDate, formatValue, isOverdue, subtaskSummary } from './taskUtils';
 import styles from './TaskCard.module.css';
 import { taskStatusClassName } from './taskStyleUtils';
 
@@ -89,6 +89,12 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const followUpId = `task-card-follow-up-${task.id}`;
   const moveHintId = `task-card-move-hint-${task.id}`;
   const assignee = (task as TaskTreeNode & { assignee?: string | number | boolean | null }).assignee;
+  const status = task.status ?? columnStatus;
+  const effortBadgeClasses = [
+    styles.effortBadge,
+    task.effort === 'MEDIUM' ? styles.effortBadgeMedium : '',
+    task.effort === 'HIGH' || task.effort === 'DEEP_WORK' || task.effort === 'LARGE' ? styles.effortBadgeHigh : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <article
@@ -127,15 +133,19 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           ) : (
             <strong id={titleId}>#{task.id} {task.title}</strong>
           )}
-          {task.important && <span className={styles.importantPill}>Important</span>}
+          <div className={styles.badgeRow} aria-label={`Task badges for ${task.title}`}>
+            <span className={taskStatusClassName(status)}>{status}</span>
+            {task.effort ? <span className={effortBadgeClasses}>Effort {formatValue(task.effort)}</span> : null}
+            {task.priorityScore != null ? <span className={styles.scoreBadge}>Score {formatValue(task.priorityScore)}</span> : null}
+            {task.important && <span className={styles.importantPill}>Important</span>}
+          </div>
         </div>
         <div className={styles.statusRow}>
-          <span className={taskStatusClassName(task.status ?? columnStatus)}>{task.status ?? columnStatus}</span>
           <label htmlFor={statusSelectId} className="sr-only">Change status for task {task.id}</label>
           <select
             id={statusSelectId}
             className={styles.statusSelect}
-            value={task.status ?? columnStatus}
+            value={status}
             onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)}
             disabled={busy}
             title="Change status (Tab, then arrows)"
@@ -161,8 +171,17 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
             <dd>
               <span className={styles.metaIcon} aria-hidden="true">📅</span>
               <span className={styles.metaStack}>
-                <span className={overdue ? styles.dateOverdue : ''}>{renderDueDate(task, overdue)}</span>
-                <span className={styles.metaSubvalue}>Start {formatDate(task.startDate)}</span>
+                {overdue ? (
+                  <>
+                    <span className={styles.dateOverdue}>{formatDate(task.dueDate)}</span>
+                    <span className={styles.overdueHint}>Overdue</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{formatDate(task.dueDate)}</span>
+                    <span className={styles.metaSubvalue}>Start {formatDate(task.startDate)}</span>
+                  </>
+                )}
               </span>
             </dd>
           </div>
