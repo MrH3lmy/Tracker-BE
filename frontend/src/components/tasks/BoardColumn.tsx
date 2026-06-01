@@ -29,6 +29,16 @@ interface BoardColumnProps {
   onDelete: (taskId: number) => void;
 }
 
+const statusIconByStatus: Record<TaskStatus, string> = {
+  BACKLOG: '💼',
+  NOT_STARTED: '▶',
+  IN_PROGRESS: '◌',
+  WAITING: '⏳',
+  BLOCKED: '⛔',
+  DONE: '✓',
+  CANCELLED: '×',
+};
+
 function InsertionIndicator() {
   return <div className={boardStyles.insertionIndicator} role="presentation" />;
 }
@@ -51,8 +61,15 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
       onDrop={(event) => onDrop(event, status, tasks.length)}
     >
       <header className={boardStyles.columnHeader}>
-        <span id={headingId} className={taskStatusClassName(status)}>{status}</span>
-        <strong>{tasks.length}</strong>
+        <div className={boardStyles.columnHeaderContent}>
+          <span className={boardStyles.statusIcon} aria-hidden="true">{statusIconByStatus[status]}</span>
+          <span id={headingId} className={taskStatusClassName(status)}>{status}</span>
+          <span className={boardStyles.columnCount} aria-label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}>{tasks.length}</span>
+        </div>
+        <div className={boardStyles.columnActions} aria-label={`${status} column actions`}>
+          <button type="button" className={boardStyles.columnActionButton} aria-label={`Add task to ${status}`} title="Add task">+</button>
+          <button type="button" className={boardStyles.columnActionButton} aria-label={`${status} more actions`} title="More actions">…</button>
+        </div>
       </header>
       <div className={boardStyles.cardList} aria-label={`${status} tasks`}>
         {tasks.map((task, index) => (
