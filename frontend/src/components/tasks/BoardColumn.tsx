@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react';
 import type { TaskStatus } from '../../validation/taskStatus';
 import type { BoardDropTarget } from '../../hooks/useBoardState';
-import type { TaskTreeNode } from './taskTypes';
+import type { TaskRecord, TaskTreeNode } from './taskTypes';
 import { TaskCard } from './TaskCard';
 
 interface BoardColumnProps {
@@ -19,13 +19,19 @@ interface BoardColumnProps {
   onClearDropTarget: () => void;
   onMoveTaskTo: (taskId: number, targetStatus: TaskStatus, position: number) => void;
   onStartSubtask: (task: TaskTreeNode) => void;
+  onComplete: (taskId: number) => void;
+  onChangeStatus: (taskId: number, status: TaskStatus) => void;
+  onUpdateTask: (task: TaskRecord, updates: Partial<TaskRecord>) => void;
+  onSnoozeFollowUp: (task: TaskTreeNode) => void;
+  onRemoveDependency: (taskId: number, blocksTaskId: number) => void;
+  onDelete: (taskId: number) => void;
 }
 
 function InsertionIndicator() {
   return <div className="task-board-insertion-indicator" role="presentation" />;
 }
 
-export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask }: BoardColumnProps) {
+export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnProps) {
   const isDropTarget = dropTarget?.status === status;
   const columnClasses = ['task-board-column', isDropTarget ? 'drop-target' : ''].filter(Boolean).join(' ');
   const previousStatus = statuses[statusIndex - 1];
@@ -63,6 +69,12 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
               onDrop={onDrop}
               onMoveTaskTo={onMoveTaskTo}
               onStartSubtask={onStartSubtask}
+              onComplete={onComplete}
+              onChangeStatus={onChangeStatus}
+              onUpdateTask={onUpdateTask}
+              onSnoozeFollowUp={onSnoozeFollowUp}
+              onRemoveDependency={onRemoveDependency}
+              onDelete={onDelete}
             />
           </div>
         ))}

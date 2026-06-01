@@ -12,7 +12,7 @@ import type { BlockerAnalysis, CreateTaskPayload, DuplicateGroup, FilterValue, T
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import { useTaskBlockersQuery, useTaskMutations, useTasksQuery, type TaskTab } from '../hooks/useApiQueries';
 import { useBoardState } from '../hooks/useBoardState';
-import { TASK_STATUS_VALUES } from '../validation/taskStatus';
+import { TASK_STATUS_VALUES, type TaskStatus } from '../validation/taskStatus';
 
 const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
@@ -60,6 +60,35 @@ const sortTasks = (tasks: TaskRecord[], sort: TaskSortValue) => [...tasks].sort(
 
 const isOnOrAfterDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) >= filterDate;
 const isOnOrBeforeDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) <= filterDate;
+
+const nullableValue = <T,>(value: T | undefined | null) => value ?? null;
+
+const buildTaskUpdateBody = (task: TaskRecord, updates: Partial<TaskRecord>) => {
+  const next = { ...task, ...updates };
+  return {
+    title: next.title,
+    description: nullableValue(next.description),
+    dueDate: nullableValue(next.dueDate?.slice(0, 10)),
+    startDate: nullableValue(next.startDate?.slice(0, 10)),
+    estimatedMinutes: nullableValue(next.estimatedMinutes),
+    actualMinutes: nullableValue(next.actualMinutes),
+    riskLevel: nullableValue(next.riskLevel),
+    riskReason: nullableValue(next.riskReason),
+    track: nullableValue(next.track),
+    phase: nullableValue(next.phase),
+    parentTaskId: nullableValue(next.parentTaskId),
+    important: Boolean(next.important),
+    status: nullableValue(next.status),
+    area: nullableValue(next.area),
+    effort: nullableValue(next.effort),
+    blockedReason: nullableValue(next.blockedReason),
+    waitingOn: nullableValue(next.waitingOn),
+    followUpDate: nullableValue(next.followUpDate?.slice(0, 10)),
+    boardColumnId: nullableValue(next.boardColumnId),
+    position: nullableValue(next.position),
+    dependencyIds: next.dependencyIds ?? [],
+  };
+};
 
 export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -195,10 +224,18 @@ export function TasksPage() {
     addDependency.mutate({ id, blocksTaskId }, { onSuccess: () => { setDependencyTaskId(''); setDependencyBlocksTaskId(''); } });
   };
 
+  const updateTaskFromCard = (task: TaskRecord, updates: Partial<TaskRecord>) => {
+    updateTask.mutate({ id: task.id, body: buildTaskUpdateBody(task, updates) });
+  };
+
+  const changeTaskStatus = (id: number, status: TaskStatus) => {
+    changeStatus.mutate({ id, status });
+  };
+
   const snoozeFollowUp = (task: TaskRecord) => {
     const next = new Date();
     next.setDate(next.getDate() + 1);
-    updateTask.mutate({ id: task.id, body: { ...task, followUpDate: next.toISOString().slice(0, 10), dependencyIds: task.dependencyIds ?? [] } });
+    updateTaskFromCard(task, { followUpDate: next.toISOString().slice(0, 10) });
   };
 
   return (
@@ -230,7 +267,7 @@ export function TasksPage() {
         onDependencyTaskIdChange={setDependencyTaskId}
         onDependencyBlocksTaskIdChange={setDependencyBlocksTaskId}
         onSubmitDependency={submitDependency}
-        onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
+        onChangeStatus={changeTaskStatus}
         onSnoozeFollowUp={snoozeFollowUp}
       />
 
@@ -323,6 +360,12 @@ export function TasksPage() {
             onClearDropTarget={boardState.clearDropTarget}
             onMoveTaskTo={boardState.moveTaskTo}
             onStartSubtask={(task: TaskTreeNode) => startSubtask(task)}
+            onComplete={(taskId) => completeTask.mutate(taskId)}
+            onChangeStatus={changeTaskStatus}
+            onUpdateTask={updateTaskFromCard}
+            onSnoozeFollowUp={snoozeFollowUp}
+            onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
+            onDelete={(taskId) => deleteTask.mutate(taskId)}
           />
         ) : (
           <TaskListView

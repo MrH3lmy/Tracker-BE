@@ -20,3 +20,93 @@
   font-size: 0.78rem;
   padding: 0.35rem 0.55rem;
 }
+
+.cardHeader {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.titleEditor {
+  display: block;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.titleEditor input {
+  width: 100%;
+  font: inherit;
+  font-weight: 800;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.statusSelect {
+  max-width: 9.5rem;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.quickActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  opacity: 0;
+  transform: translateY(-0.15rem);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.card:hover .quickActions,
+.card:focus-within .quickActions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.quickActions button {
+  width: auto;
+  min-width: 2.25rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.secondaryMenu {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.secondaryMenu > summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-weight: 800;
+}
+
+.secondaryActions {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.secondaryActions label {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.secondaryActions button,
+.secondaryActions input,
+.secondaryActions select {
+  width: 100%;
+}
+
+.secondaryActions button {
+  grid-column: 1 / -1;
+}
