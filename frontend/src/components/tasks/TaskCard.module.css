@@ -202,6 +202,42 @@
   font-size: 0.92rem;
 }
 
+.dependencyRow {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary-soft) 36%, var(--color-surface-raised-soft));
+  padding: 0.55rem 0.7rem;
+}
+
+.dependencyLabel {
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dependencyValue {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dependencyChevron {
+  color: var(--color-primary-strong);
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .statusBadge {
   display: inline-flex;
   align-items: center;
