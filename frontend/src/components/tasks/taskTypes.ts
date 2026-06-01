@@ -3,6 +3,7 @@ import type { TaskStatus } from '../../validation/taskStatus';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type FilterValue = 'all' | string;
 export type ViewMode = 'board' | 'list';
+export type TaskSortValue = 'position' | 'priorityScore' | 'dueDate' | 'createdDate' | 'effort' | 'title';
 
 export interface TaskRecord {
   id: number;
@@ -18,6 +19,8 @@ export interface TaskRecord {
   track?: string;
   phase?: string;
   parentTaskId?: number;
+  createdDate?: string;
+  completedDate?: string;
   important?: boolean;
   area?: string;
   effort?: string;
@@ -28,6 +31,7 @@ export interface TaskRecord {
   position?: number;
   dependencyIds?: number[];
   blockingTaskIds?: number[];
+  overdue?: boolean;
   priorityScore?: number;
   subtaskIds?: number[];
   subtaskCount?: number;

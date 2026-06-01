@@ -719,6 +719,7 @@ th {
 
 .task-workspace > .section-header,
 .task-workspace > .task-toolbar,
+.task-workspace > .task-filter-panel,
 .task-workspace > .error,
 .task-workspace > .success,
 .task-workspace > p {
@@ -771,9 +772,24 @@ th {
   font-size: 0.78rem;
 }
 
+.task-filter-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.task-filter-summary {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.task-filter-summary strong {
+  color: var(--color-primary-strong);
+}
+
 .task-toolbar {
   display: grid;
-  grid-template-columns: minmax(16rem, 1.6fr) repeat(3, minmax(9rem, 1fr));
+  grid-template-columns: minmax(16rem, 1.5fr) repeat(3, minmax(9rem, 1fr));
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--color-border);
@@ -781,15 +797,58 @@ th {
   background: var(--color-bg-soft);
 }
 
-.task-toolbar label {
+.task-toolbar label,
+.task-saved-views label {
   display: grid;
   gap: var(--space-2);
 }
 
 .task-toolbar input,
-.task-toolbar select {
+.task-toolbar select,
+.task-saved-views input,
+.task-saved-views select {
   width: 100%;
   background: var(--color-surface);
+}
+
+.task-checkbox-filter input {
+  width: auto;
+  justify-self: start;
+}
+
+.task-checkbox-filter small {
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.task-filter-actions,
+.task-saved-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.task-filter-actions button {
+  min-height: 2.6rem;
+}
+
+.task-saved-views {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1fr) minmax(16rem, 1.5fr);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-glass-soft);
+}
+
+.task-saved-views label span {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .task-table-shell {
@@ -1211,9 +1270,11 @@ th {
   }
 
   .task-create-grid,
-  .task-toolbar {
+  .task-toolbar,
+  .task-saved-views {
     grid-template-columns: 1fr;
   }
+
 
   .task-table-shell {
     padding: 0 var(--space-4) var(--space-4);

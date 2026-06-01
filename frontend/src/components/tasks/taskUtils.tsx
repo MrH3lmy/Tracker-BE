@@ -19,6 +19,7 @@ export const formatDate = (value?: string) => {
 };
 
 export const isOverdue = (task: TaskRecord) => {
+  if (task.overdue) return true;
   if (!task.dueDate || task.status === 'DONE' || task.status === 'CANCELLED') return false;
   const due = new Date(task.dueDate);
   if (Number.isNaN(due.getTime())) return false;
@@ -42,7 +43,7 @@ export const taskMatchesSearch = (task: TaskRecord, searchTerm: string) => {
   return [task.title, task.description, task.area, task.track, task.phase, task.riskReason].some((value) => value?.toLowerCase().includes(needle));
 };
 
-export const buildTaskTree = (tasks: TaskRecord[]): TaskTreeNode[] => {
+export const buildTaskTree = (tasks: TaskRecord[], sortNodes: (tasks: TaskTreeNode[]) => TaskTreeNode[] = sortTasksForBoard): TaskTreeNode[] => {
   const nodes = new Map<number, TaskTreeNode>();
   tasks.forEach((task) => nodes.set(task.id, { ...task, subtasks: [] }));
   const roots: TaskTreeNode[] = [];
@@ -51,8 +52,8 @@ export const buildTaskTree = (tasks: TaskRecord[]): TaskTreeNode[] => {
     if (parent) parent.subtasks.push(node);
     else roots.push(node);
   });
-  nodes.forEach((node) => { node.subtasks = sortTasksForBoard(node.subtasks); });
-  return sortTasksForBoard(roots);
+  nodes.forEach((node) => { node.subtasks = sortNodes(node.subtasks); });
+  return sortNodes(roots);
 };
 
 export const subtaskSummary = (task: TaskRecord) => {
