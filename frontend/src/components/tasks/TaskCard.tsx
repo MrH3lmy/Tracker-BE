@@ -261,8 +261,69 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           </div>
         ) : null}
       </dl>
-      <div className={styles.actions}>
-        <button type="button" onClick={() => onStartSubtask(task)} disabled={busy} title="Add subtask (Tab to reach)">Add subtask</button>
+      <div className={styles.cardToolbar} role="toolbar" aria-label={`Task actions for ${task.title}`}>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          onClick={() => onStartSubtask(task)}
+          disabled={busy}
+          title="Add subtask (Tab to reach)"
+          aria-label={`Add subtask to ${task.title}`}
+        >
+          <span aria-hidden="true">＋</span>
+        </button>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          disabled
+          title="Comments and task details are not available from this card"
+          aria-label={`Comments and details are not available for ${task.title}`}
+        >
+          <span aria-hidden="true">💬</span>
+        </button>
+        <button
+          type="button"
+          className={styles.toolbarButton}
+          disabled
+          title="Attachments are not available from this card"
+          aria-label={`Attachments are not available for ${task.title}`}
+        >
+          <span aria-hidden="true">📎</span>
+        </button>
+        <a
+          className={styles.toolbarButton}
+          href="#dependency-links-title"
+          title="Open dependency link panel"
+          aria-label={`Open dependency link panel for ${task.title}`}
+        >
+          <span aria-hidden="true">🔗</span>
+        </a>
+        <details className={`${styles.secondaryMenu} ${styles.toolbarOverflow}`}>
+          <summary className={styles.toolbarButton} title="Open more task actions (Enter/Space)" aria-label={`Open more actions for ${task.title}`}>
+            <span aria-hidden="true">…</span>
+          </summary>
+          <div className={styles.secondaryActions}>
+            <label htmlFor={`${statusSelectId}-menu`}>Status</label>
+            <select id={`${statusSelectId}-menu`} value={task.status ?? columnStatus} onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)} disabled={busy}>
+              {TASK_STATUS_VALUES.map((status) => <option key={`${task.id}-menu-${status}`} value={status}>{status}</option>)}
+            </select>
+            <label htmlFor={effortSelectId}>Effort</label>
+            <select id={effortSelectId} value={task.effort ?? ''} onChange={(event) => onUpdateTask(task, { effort: event.target.value || undefined })} disabled={busy}>
+              <option value="">No effort</option>
+              {EFFORT_VALUES.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+            </select>
+            <label htmlFor={areaSelectId}>Area</label>
+            <select id={areaSelectId} value={task.area ?? ''} onChange={(event) => onUpdateTask(task, { area: event.target.value || undefined })} disabled={busy}>
+              <option value="">No area</option>
+              {AREA_VALUES.map((area) => <option key={area} value={area}>{area}</option>)}
+            </select>
+            <label htmlFor={followUpId}>Follow-up</label>
+            <input id={followUpId} type="date" value={task.followUpDate ?? ''} min={task.startDate?.slice(0, 10)} onChange={(event) => onUpdateTask(task, { followUpDate: event.target.value || undefined })} disabled={busy} title="Set follow-up date" />
+            <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy} title="Set follow-up for tomorrow">Follow up tomorrow</button>
+            {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy} title={`Remove dependency on task ${blocksTaskId}`}>Unlink #{blocksTaskId}</button>)}
+            <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task">Delete</button>
+          </div>
+        </details>
       </div>
       {summary && (
         <section className={styles.subtaskProgress} aria-label={`Subtask progress for ${task.title}`}>
@@ -298,30 +359,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           ) : null}
         </section>
       )}
-      <details className={styles.secondaryMenu}>
-        <summary title="Open more task actions (Enter/Space)">More actions</summary>
-        <div className={styles.secondaryActions}>
-          <label htmlFor={`${statusSelectId}-menu`}>Status</label>
-          <select id={`${statusSelectId}-menu`} value={task.status ?? columnStatus} onChange={(event) => onChangeStatus(task.id, event.target.value as TaskStatus)} disabled={busy}>
-            {TASK_STATUS_VALUES.map((status) => <option key={`${task.id}-menu-${status}`} value={status}>{status}</option>)}
-          </select>
-          <label htmlFor={effortSelectId}>Effort</label>
-          <select id={effortSelectId} value={task.effort ?? ''} onChange={(event) => onUpdateTask(task, { effort: event.target.value || undefined })} disabled={busy}>
-            <option value="">No effort</option>
-            {EFFORT_VALUES.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
-          </select>
-          <label htmlFor={areaSelectId}>Area</label>
-          <select id={areaSelectId} value={task.area ?? ''} onChange={(event) => onUpdateTask(task, { area: event.target.value || undefined })} disabled={busy}>
-            <option value="">No area</option>
-            {AREA_VALUES.map((area) => <option key={area} value={area}>{area}</option>)}
-          </select>
-          <label htmlFor={followUpId}>Follow-up</label>
-          <input id={followUpId} type="date" value={task.followUpDate ?? ''} min={task.startDate?.slice(0, 10)} onChange={(event) => onUpdateTask(task, { followUpDate: event.target.value || undefined })} disabled={busy} title="Set follow-up date" />
-          <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy} title="Set follow-up for tomorrow">Follow up tomorrow</button>
-          {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy} title={`Remove dependency on task ${blocksTaskId}`}>Unlink #{blocksTaskId}</button>)}
-          <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task">Delete</button>
-        </div>
-      </details>
       <div className={styles.keyboardControls} aria-label={`Keyboard move controls for task ${task.id}`}>
         <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card" aria-label={`Move ${task.title} before the previous card in ${columnStatus}`}>Move up</button>
         <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card" aria-label={`Move ${task.title} after the next card in ${columnStatus}`}>Move down</button>
