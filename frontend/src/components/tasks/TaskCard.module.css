@@ -179,6 +179,17 @@
   border-inline-start-color: var(--color-task-overdue-accent);
 }
 
+
+.badgeRow {
+  display: inline-flex;
+  flex: 1 1 14rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: min(100%, 14rem);
+}
+
 .description {
   margin: var(--space-2) 0 0;
   max-width: 30rem;
@@ -187,8 +198,16 @@
 }
 
 .statusBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
   gap: 0.35rem;
   border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1.2;
   text-transform: capitalize;
 }
 
@@ -245,6 +264,53 @@
   text-decoration: line-through;
 }
 
+.effortBadge,
+.scoreBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 0.3rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.effortBadge {
+  background: var(--color-chip-neutral-bg);
+  color: var(--color-chip-neutral);
+}
+
+.effortBadge::before {
+  content: "⚡";
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.effortBadgeMedium {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning-text);
+}
+
+.effortBadgeHigh {
+  border-width: 2px;
+  background: var(--color-danger-soft);
+  color: var(--color-danger-strong);
+}
+
+.scoreBadge {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.scoreBadge::before {
+  content: "★";
+  font-size: 0.85em;
+  line-height: 1;
+}
+
 .importantPill {
   display: inline-flex;
   align-items: center;
@@ -276,6 +342,21 @@
 .dateOverdue::before {
   content: "⚠";
   line-height: 1;
+}
+
+.overdueHint {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  background: var(--color-status-danger-bg);
+  color: var(--color-status-danger-text);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
 }
 
 .actions {
