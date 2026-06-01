@@ -39,10 +39,18 @@ function getHoveredPosition(event: DragEvent<HTMLElement>, index: number) {
 }
 
 const commitHint = 'Enter to save, Esc to cancel';
+const subtaskPreviewLimit = 3;
+
+const isSubtaskComplete = (subtask: TaskTreeNode) => subtask.status === 'DONE' || Boolean(subtask.completedDate);
 
 export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index, columnTaskCount, depth = 0, busy, draggingTaskId, onDragStart, onDragOver, onDragEnd, onDrop, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskCardProps) {
   const overdue = isOverdue(task);
-  const summary = subtaskSummary(task);
+  const subtaskTotal = task.subtaskCount ?? task.subtaskIds?.length ?? task.subtasks.length;
+  const completedSubtaskCount = task.completedSubtaskCount ?? task.subtasks.filter(isSubtaskComplete).length;
+  const subtaskProgressPercent = subtaskTotal > 0 ? task.subtaskProgressPercent ?? Math.round((completedSubtaskCount * 100) / subtaskTotal) : 0;
+  const summary = subtaskSummary({ ...task, subtaskCount: subtaskTotal, completedSubtaskCount, subtaskProgressPercent });
+  const previewSubtasks = task.subtasks.slice(0, subtaskPreviewLimit);
+  const hiddenSubtaskCount = Math.max(subtaskTotal - previewSubtasks.length, 0);
   const isDragging = draggingTaskId === task.id;
   const cardClasses = [styles.cardShell, styles.card, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : '', isDragging ? styles.dragging : ''].filter(Boolean).join(' ');
   const canMoveUp = !busy && index > 0;
@@ -162,7 +170,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task (Tab to reach)">🗑<span className="sr-only">Delete {task.title}</span></button>
       </div>
       {task.description && <p className={styles.description}>{task.description}</p>}
-      {summary && <p className={styles.description}>{summary}</p>}
       {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className={styles.description}>Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
       <dl className={styles.meta}>
         <div className={styles.metaRow}>
@@ -230,6 +237,40 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       <div className={styles.actions}>
         <button type="button" onClick={() => onStartSubtask(task)} disabled={busy} title="Add subtask (Tab to reach)">Add subtask</button>
       </div>
+      {summary && (
+        <section className={styles.subtaskProgress} aria-label={`Subtask progress for ${task.title}`}>
+          <div className={styles.subtaskProgressHeader}>
+            <span className={styles.subtaskProgressCount}>{completedSubtaskCount}/{subtaskTotal} completed</span>
+            <span className={styles.subtaskProgressPercent}>{subtaskProgressPercent}%</span>
+          </div>
+          <div className={styles.subtaskProgressTrack} role="progressbar" aria-valuenow={subtaskProgressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={summary}>
+            <span className={styles.subtaskProgressFill} style={{ width: `${subtaskProgressPercent}%` }} />
+          </div>
+          {previewSubtasks.length > 0 ? (
+            <ul className={styles.subtaskChecklist} aria-label={`Preview subtasks for ${task.title}`}>
+              {previewSubtasks.map((subtask) => {
+                const complete = isSubtaskComplete(subtask);
+                return (
+                  <li key={subtask.id} className={complete ? styles.subtaskChecklistItemComplete : styles.subtaskChecklistItem}>
+                    <span className={styles.subtaskCheckIcon} aria-hidden="true">{complete ? '✓' : ''}</span>
+                    <span className={styles.subtaskChecklistTitle}>#{subtask.id} {subtask.title}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {task.subtasks.length > 0 ? (
+            <details className={styles.subtaskDetails}>
+              <summary className={styles.subtaskDetailsSummary}>{hiddenSubtaskCount > 0 ? `View all subtasks (${subtaskTotal})` : `View subtask details (${subtaskTotal})`}</summary>
+              <div className={styles.subtaskList}>
+                {task.subtasks.map((subtask, subtaskIndex) => (
+                  <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </section>
+      )}
       <details className={styles.secondaryMenu}>
         <summary title="Open more task actions (Enter/Space)">More actions</summary>
         <div className={styles.secondaryActions}>
@@ -260,13 +301,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <button type="button" onClick={() => previousStatus && onMoveTaskTo(task.id, previousStatus, 0)} disabled={busy || !previousStatus} title={previousStatus ? `Move to ${previousStatus}` : 'No previous column'} aria-label={previousStatus ? `Move ${task.title} to the top of ${previousStatus}` : `No previous column available for ${task.title}`}>Move left</button>
         <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title={nextStatus ? `Move to ${nextStatus}` : 'No next column'} aria-label={nextStatus ? `Move ${task.title} to the top of ${nextStatus}` : `No next column available for ${task.title}`}>Move right</button>
       </div>
-      {task.subtasks.length > 0 && (
-        <div className={styles.subtaskList}>
-          {task.subtasks.map((subtask, subtaskIndex) => (
-            <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
-          ))}
-        </div>
-      )}
     </article>
   );
 }
