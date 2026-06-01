@@ -8,25 +8,28 @@
 .board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  gap: var(--space-3);
+  gap: var(--space-5);
   margin-top: var(--space-4);
-  padding: 0 var(--space-5) var(--space-5);
+  padding: 0 var(--space-6) var(--space-6);
   overflow: visible;
 }
 
 .column {
   min-height: 24rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-soft);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-blue-glow-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-navy-deep);
+  background: var(--gradient-board-column);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
   transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .dropTarget {
   border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-soft));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  background: var(--color-surface-navy-deeper);
+  background: var(--gradient-board-column-active);
+  box-shadow: 0 0 0 3px var(--color-blue-glow-border), var(--shadow-md);
 }
 
 .columnHeader {
@@ -37,11 +40,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  margin: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-blue-glow-border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-bg-soft-raised) 84%, transparent);
+  background: var(--color-surface-navy-deeper);
+  background: var(--gradient-panel-soft);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(16px);
 }
@@ -123,9 +127,9 @@
 .cardList {
   display: grid;
   align-content: start;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-height: 18rem;
-  padding: var(--space-3);
+  padding: var(--space-4);
 }
 
 .cardSlot {
@@ -146,11 +150,10 @@
   place-items: center;
   gap: var(--space-3);
   padding: var(--space-6) var(--space-4);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 45%),
-    color-mix(in srgb, var(--color-bg-soft-raised) 68%, transparent);
+  border: 1px dashed var(--color-empty-border-muted);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-navy-deeper);
+  background: var(--gradient-panel-soft);
   color: var(--color-text-muted);
   text-align: center;
 }
