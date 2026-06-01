@@ -40,12 +40,22 @@ const statusIconByStatus: Record<TaskStatus, string> = {
   CANCELLED: '×',
 };
 
+const statusLabelByStatus: Record<TaskStatus, string> = {
+  BACKLOG: 'Backlog',
+  NOT_STARTED: 'Not Started',
+  IN_PROGRESS: 'In Progress',
+  WAITING: 'Waiting',
+  BLOCKED: 'Blocked',
+  DONE: 'Done',
+  CANCELLED: 'Cancelled',
+};
+
 function InsertionIndicator() {
   return <div className={boardStyles.insertionIndicator} role="presentation" />;
 }
 
 function formatStatusLabel(status: TaskStatus) {
-  return status.toLowerCase().replaceAll('_', ' ');
+  return statusLabelByStatus[status];
 }
 
 export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onCreateTaskForStatus, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnProps) {
@@ -54,6 +64,7 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
   const previousStatus = statuses[statusIndex - 1];
   const nextStatus = statuses[statusIndex + 1];
   const headingId = `task-board-column-${status}`;
+  const statusLabel = formatStatusLabel(status);
 
   return (
     <section
@@ -68,15 +79,15 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
       <header className={boardStyles.columnHeader}>
         <div className={boardStyles.columnHeaderContent}>
           <span className={boardStyles.statusIcon} aria-hidden="true">{statusIconByStatus[status]}</span>
-          <span id={headingId} className={taskStatusClassName(status)}>{status}</span>
+          <span id={headingId} className={taskStatusClassName(status)}>{statusLabel}</span>
           <span className={boardStyles.columnCount} aria-label={`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}>{tasks.length}</span>
         </div>
-        <div className={boardStyles.columnActions} aria-label={`${status} column actions`}>
-          <button type="button" className={boardStyles.columnActionButton} aria-label={`Add task to ${status}`} title="Add task" onClick={() => onCreateTaskForStatus(status)} disabled={busy}>+</button>
-          <button type="button" className={boardStyles.columnActionButton} aria-label={`${status} more actions`} title="More actions">…</button>
+        <div className={boardStyles.columnActions} aria-label={`${statusLabel} column actions`}>
+          <button type="button" className={boardStyles.columnActionButton} aria-label={`Add task to ${statusLabel}`} title="Add task" onClick={() => onCreateTaskForStatus(status)} disabled={busy}>+</button>
+          <button type="button" className={boardStyles.columnActionButton} aria-label={`${statusLabel} more actions`} title="More actions">…</button>
         </div>
       </header>
-      <div className={boardStyles.cardList} aria-label={`${status} tasks`}>
+      <div className={boardStyles.cardList} aria-label={`${statusLabel} tasks`}>
         {tasks.map((task, index) => (
           <div className={boardStyles.cardSlot} key={task.id}>
             {isDropTarget && dropTarget.position === index && <InsertionIndicator />}
@@ -106,7 +117,7 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
         ))}
         {isDropTarget && dropTarget.position === tasks.length && <InsertionIndicator />}
         {tasks.length === 0 && (
-          <div className={boardStyles.empty} aria-label={`${status} empty state`}>
+          <div className={boardStyles.empty} aria-label={`${statusLabel} empty state`}>
             <div className={boardStyles.emptyIllustration} aria-hidden="true">
               <span className={boardStyles.emptyIllustrationIcon}>{statusIconByStatus[status]}</span>
               <span className={boardStyles.emptyIllustrationCard} />

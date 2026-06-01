@@ -39,15 +39,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-blue-glow-border);
+  gap: var(--space-2);
+  margin: var(--space-2) var(--space-2) 0;
+  padding: var(--space-2);
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background: var(--color-surface-navy-deeper);
-  background: var(--gradient-panel-soft);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--color-surface-navy-deeper) 54%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .columnHeaderContent {
@@ -60,32 +58,31 @@
 
 .statusIcon {
   display: inline-grid;
-  width: 2rem;
-  height: 2rem;
+  width: 1.35rem;
+  height: 1.35rem;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-bg-soft) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-primary);
-  font-size: 0.95rem;
+  font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
 }
 
 .columnCount {
   display: inline-flex;
-  min-width: 1.65rem;
-  height: 1.65rem;
+  width: 1.45rem;
+  height: 1.45rem;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-soft-raised));
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
   color: var(--color-text);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 900;
   line-height: 1;
 }
@@ -99,15 +96,15 @@
 
 .columnActionButton {
   display: inline-grid;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-bg-soft) 82%, transparent);
+  background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
