@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useReducer, useRef } from 'react';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import { AREA_VALUES, EFFORT_VALUES, RISK_LEVEL_VALUES } from './taskUtils';
 import type { CreateTaskPayload, RiskLevel, TaskRecord } from './taskTypes';
+import styles from './TaskCreateForm.module.css';
 
 interface TaskCreateFormState {
   title: string;
@@ -123,12 +124,12 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
   };
 
   return (
-    <section className="panel task-create-panel" aria-labelledby="create-task-title">
+    <section className={`panel ${styles.panel}`} aria-labelledby="create-task-title">
       <div>
         <p className="eyebrow">Quick capture</p>
         <h3 id="create-task-title">Create task</h3>
       </div>
-      <div className="task-create-grid">
+      <div className={styles.grid}>
         <label htmlFor="taskTitle">Title</label>
         <input id="taskTitle" ref={titleRef} placeholder="Draft launch checklist" value={form.title} onChange={(e) => setField('title', e.target.value)} disabled={busy} aria-invalid={!form.title.trim()} />
         <label htmlFor="taskDescription">Description</label>
@@ -181,7 +182,7 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
         <label htmlFor="taskFollowUpDate">Follow-up date</label>
         <input id="taskFollowUpDate" type="date" value={form.followUpDate} min={form.startDate || undefined} onChange={(e) => setField('followUpDate', e.target.value)} disabled={busy} />
       </div>
-      <div className="task-create-actions">
+      <div className={styles.actions}>
         <button className="button-primary" type="button" onClick={submitCreate} disabled={busy}>{isCreating ? 'Creating...' : 'Create task'}</button>
         <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
       </div>

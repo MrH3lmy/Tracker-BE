@@ -1,0 +1,87 @@
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: 0 var(--space-5) var(--space-5);
+  overflow: visible;
+}
+
+.column {
+  min-height: 24rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft);
+  box-shadow: var(--shadow-sm);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.dropTarget {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-soft));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.columnHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-bg-soft-raised);
+}
+
+.cardList {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 18rem;
+  padding: var(--space-3);
+}
+
+.cardSlot {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.insertionIndicator {
+  min-height: 0.45rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.empty {
+  display: grid;
+  min-height: 8rem;
+  place-items: center;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+  font-weight: 800;
+}
+
+@media (max-width: 780px) {
+  .headerActions,
+  .headerActions :global(.task-view-toggle),
+  .headerActions :global(.task-view-toggle) button {
+    width: 100%;
+  }
+
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}

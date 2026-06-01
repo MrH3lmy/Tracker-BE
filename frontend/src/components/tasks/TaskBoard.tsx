@@ -3,6 +3,7 @@ import type { TaskStatus } from '../../validation/taskStatus';
 import type { BoardDropTarget } from '../../hooks/useBoardState';
 import type { BoardColumnData, TaskRecord, TaskTreeNode } from './taskTypes';
 import { BoardColumn } from './BoardColumn';
+import styles from './TaskBoard.module.css';
 
 interface TaskBoardProps {
   columns: BoardColumnData[];
@@ -26,7 +27,7 @@ interface TaskBoardProps {
 
 export function TaskBoard({ columns, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskBoardProps) {
   return (
-    <div className="task-board" aria-label="Task status board">
+    <div className={styles.board} aria-label="Task status board">
       {columns.map((column, columnIndex) => (
         <BoardColumn
           key={column.status}

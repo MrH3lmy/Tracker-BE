@@ -3,6 +3,7 @@ import { TASK_STATUS_VALUES, type TaskStatus } from '../../validation/taskStatus
 import type { TaskRecord, TaskTreeNode } from './taskTypes';
 import { formatDate, formatValue, isOverdue, renderDueDate, subtaskSummary } from './taskUtils';
 import styles from './TaskCard.module.css';
+import { taskStatusClassName } from './taskStyleUtils';
 
 const AREA_VALUES = ['WORK', 'STUDY', 'PERSONAL', 'HEALTH', 'FAMILY'] as const;
 const EFFORT_VALUES = ['QUICK', 'MEDIUM', 'DEEP_WORK', 'LARGE'] as const;
@@ -43,7 +44,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const overdue = isOverdue(task);
   const summary = subtaskSummary(task);
   const isDragging = draggingTaskId === task.id;
-  const cardClasses = ['task-board-card', styles.card, task.important ? 'task-row-important' : '', overdue ? 'task-row-overdue' : '', isDragging ? `dragging ${styles.dragging}` : ''].filter(Boolean).join(' ');
+  const cardClasses = [styles.cardShell, styles.card, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : '', isDragging ? styles.dragging : ''].filter(Boolean).join(' ');
   const canMoveUp = !busy && index > 0;
   const canMoveDown = !busy && index < columnTaskCount - 1;
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +103,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
       aria-labelledby={titleId}
     >
       <div className={styles.cardHeader}>
-        <div className="task-board-card-title">
+        <div className={`${styles.title} ${styles.boardTitle}`}>
           {isEditingTitle ? (
             <label className={styles.titleEditor}>
               <span className="sr-only">Edit title for task {task.id}</span>
@@ -122,10 +123,10 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           ) : (
             <strong id={titleId}>#{task.id} {task.title}</strong>
           )}
-          {task.important && <span className="task-important-pill">Important</span>}
+          {task.important && <span className={styles.importantPill}>Important</span>}
         </div>
         <div className={styles.statusRow}>
-          <span className={`status-badge task-status-badge status-task-${(task.status ?? columnStatus).toLowerCase().replaceAll('_', '-')}`}>{task.status ?? columnStatus}</span>
+          <span className={taskStatusClassName(task.status ?? columnStatus)}>{task.status ?? columnStatus}</span>
           <label htmlFor={statusSelectId} className="sr-only">Change status for task {task.id}</label>
           <select
             id={statusSelectId}
@@ -145,12 +146,12 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title (Enter saves, Esc cancels)">✎<span className="sr-only">Edit title for {task.title}</span></button>
         <button type="button" onClick={() => onDelete(task.id)} disabled={busy} title="Delete task (Tab to reach)">🗑<span className="sr-only">Delete {task.title}</span></button>
       </div>
-      {task.description && <p className="task-description">{task.description}</p>}
-      {summary && <p className="task-description subtask-progress">{summary}</p>}
-      {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className="task-description">Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
-      <dl className="task-board-meta">
+      {task.description && <p className={styles.description}>{task.description}</p>}
+      {summary && <p className={styles.description}>{summary}</p>}
+      {(task.dependencyIds?.length || task.blockingTaskIds?.length || task.parentTaskId) ? <p className={styles.description}>Parent {task.parentTaskId ? `#${task.parentTaskId}` : '—'} · Blocked by {task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'} · Blocks {task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</p> : null}
+      <dl className={styles.meta}>
         <div><dt>Start</dt><dd>{formatDate(task.startDate)}</dd></div>
-        <div><dt>Due</dt><dd className={overdue ? 'task-date-overdue' : ''}>{renderDueDate(task, overdue)}</dd></div>
+        <div><dt>Due</dt><dd className={overdue ? styles.dateOverdue : ''}>{renderDueDate(task, overdue)}</dd></div>
         <div><dt>Estimate</dt><dd>{formatValue(task.estimatedMinutes)}</dd></div>
         <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
         <div><dt>Risk</dt><dd>{formatValue(task.riskLevel)}</dd></div>
@@ -160,7 +161,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
         <div><dt>Score</dt><dd>{formatValue(task.priorityScore)}</dd></div>
       </dl>
-      <div className="task-actions">
+      <div className={styles.actions}>
         <button type="button" onClick={() => onStartSubtask(task)} disabled={busy} title="Add subtask (Tab to reach)">Add subtask</button>
       </div>
       <details className={styles.secondaryMenu}>
@@ -194,7 +195,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         <button type="button" onClick={() => nextStatus && onMoveTaskTo(task.id, nextStatus, 0)} disabled={busy || !nextStatus} title="Move right (Tab to reach)">Move right</button>
       </div>
       {task.subtasks.length > 0 && (
-        <div className="subtask-list">
+        <div className={styles.subtaskList}>
           {task.subtasks.map((subtask, subtaskIndex) => (
             <TaskCard key={subtask.id} task={subtask} columnStatus={columnStatus} previousStatus={previousStatus} nextStatus={nextStatus} index={subtaskIndex} columnTaskCount={task.subtasks.length} depth={depth + 1} busy={busy} draggingTaskId={draggingTaskId} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDrop={onDrop} onMoveTaskTo={onMoveTaskTo} onStartSubtask={onStartSubtask} onComplete={onComplete} onChangeStatus={onChangeStatus} onUpdateTask={onUpdateTask} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />
           ))}

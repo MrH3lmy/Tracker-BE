@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { FilterValue, TaskSortValue } from './taskTypes';
+import styles from './TaskFilters.module.css';
 
 const SAVED_VIEWS_KEY = 'tracker.task.savedViews';
 
@@ -90,10 +91,10 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
   };
 
   return (
-    <div className="task-filter-panel" aria-label="Task filters">
-      <div className="task-filter-summary"><strong>{activeFilterCount}</strong> active filter{activeFilterCount === 1 ? '' : 's'} / sort</div>
-      <div className="task-toolbar">
-        <label className="task-search" htmlFor="taskSearch">
+    <div className={`task-filter-panel ${styles.panel}`} aria-label="Task filters">
+      <div className={styles.summary}><strong>{activeFilterCount}</strong> active filter{activeFilterCount === 1 ? '' : 's'} / sort</div>
+      <div className={styles.toolbar}>
+        <label className={styles.search} htmlFor="taskSearch">
           <span>Search</span>
           <input id="taskSearch" placeholder="Title, description, or area" value={search} onChange={(e) => onSearchChange(e.target.value)} />
         </label>
@@ -137,14 +138,14 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
             <option value="title">Title (A-Z)</option>
           </select>
         </label>
-        <label className="task-checkbox-filter" htmlFor="overdueFilter">
+        <label className={styles.checkboxFilter} htmlFor="overdueFilter">
           <span>Overdue</span>
           <input id="overdueFilter" type="checkbox" checked={overdueOnly} onChange={(e) => onOverdueOnlyChange(e.target.checked)} disabled={disabled} />
           <small>Only overdue tasks</small>
         </label>
-        <div className="task-filter-actions"><button type="button" onClick={onClearAll} disabled={activeFilterCount === 0}>Clear all</button></div>
+        <div className={styles.actions}><button type="button" onClick={onClearAll} disabled={activeFilterCount === 0}>Clear all</button></div>
       </div>
-      <div className="task-saved-views" aria-label="Saved task views">
+      <div className={styles.savedViews} aria-label="Saved task views">
         <label htmlFor="savedTaskView">
           <span>Saved view</span>
           <select id="savedTaskView" value={selectedViewName} onChange={(e) => setSelectedViewName(e.target.value)}>
@@ -152,11 +153,11 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
             {savedViews.map((view) => <option key={view.name} value={view.name}>{view.name}</option>)}
           </select>
         </label>
-        <label htmlFor="savedTaskViewName" className="task-search">
+        <label htmlFor="savedTaskViewName" className={styles.search}>
           <span>View name</span>
           <input id="savedTaskViewName" placeholder="My focused view" value={viewName} onChange={(e) => setViewName(e.target.value)} />
         </label>
-        <div className="task-filter-actions task-saved-view-actions">
+        <div className={`${styles.actions} ${styles.savedViewActions}`}>
           <button type="button" onClick={() => selectedView && onApplySavedView(selectedView.params)} disabled={!selectedView}>Apply</button>
           <button type="button" onClick={saveCurrentView} disabled={!viewName.trim()}>Save current</button>
           <button type="button" onClick={renameSelectedView} disabled={!selectedView || !viewName.trim()}>Rename</button>

@@ -2,7 +2,9 @@ import type { DragEvent } from 'react';
 import type { TaskStatus } from '../../validation/taskStatus';
 import type { BoardDropTarget } from '../../hooks/useBoardState';
 import type { TaskRecord, TaskTreeNode } from './taskTypes';
+import { taskStatusClassName } from './taskStyleUtils';
 import { TaskCard } from './TaskCard';
+import boardStyles from './TaskBoard.module.css';
 
 interface BoardColumnProps {
   status: TaskStatus;
@@ -28,12 +30,12 @@ interface BoardColumnProps {
 }
 
 function InsertionIndicator() {
-  return <div className="task-board-insertion-indicator" role="presentation" />;
+  return <div className={boardStyles.insertionIndicator} role="presentation" />;
 }
 
 export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggingTaskId, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop, onClearDropTarget, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: BoardColumnProps) {
   const isDropTarget = dropTarget?.status === status;
-  const columnClasses = ['task-board-column', isDropTarget ? 'drop-target' : ''].filter(Boolean).join(' ');
+  const columnClasses = [boardStyles.column, isDropTarget ? boardStyles.dropTarget : ''].filter(Boolean).join(' ');
   const previousStatus = statuses[statusIndex - 1];
   const nextStatus = statuses[statusIndex + 1];
 
@@ -46,13 +48,13 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
       }}
       onDrop={(event) => onDrop(event, status, tasks.length)}
     >
-      <header className="task-board-column-header">
-        <span className={`status-badge task-status-badge status-task-${status.toLowerCase().replaceAll('_', '-')}`}>{status}</span>
+      <header className={boardStyles.columnHeader}>
+        <span className={taskStatusClassName(status)}>{status}</span>
         <strong>{tasks.length}</strong>
       </header>
-      <div className="task-board-card-list">
+      <div className={boardStyles.cardList}>
         {tasks.map((task, index) => (
-          <div className="task-board-card-slot" key={task.id}>
+          <div className={boardStyles.cardSlot} key={task.id}>
             {isDropTarget && dropTarget.position === index && <InsertionIndicator />}
             <TaskCard
               task={task}
@@ -79,7 +81,7 @@ export function BoardColumn({ status, statusIndex, statuses, tasks, busy, draggi
           </div>
         ))}
         {isDropTarget && dropTarget.position === tasks.length && <InsertionIndicator />}
-        {tasks.length === 0 && <p className="task-board-empty">Drop tasks here.</p>}
+        {tasks.length === 0 && <p className={boardStyles.empty}>Drop tasks here.</p>}
       </div>
     </section>
   );
