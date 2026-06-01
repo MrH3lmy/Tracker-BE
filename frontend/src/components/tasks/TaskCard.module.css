@@ -292,14 +292,29 @@
 
 .meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
   margin: var(--space-3) 0 0;
 }
 
-.meta div {
+.metaRow {
   display: grid;
-  gap: 0.15rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.metaRow:first-child {
+  padding-top: 0;
+}
+
+.metaRow + .metaRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.metaItem {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  min-width: 0;
 }
 
 .meta dt {
@@ -311,8 +326,36 @@
 }
 
 .meta dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
   margin: 0;
   font-size: 0.88rem;
+}
+
+.metaIcon {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.metaStack {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.metaSubvalue {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 42rem) {
+  .metaRow {
+    grid-template-columns: 1fr;
+  }
 }
 
 .subtaskList {
