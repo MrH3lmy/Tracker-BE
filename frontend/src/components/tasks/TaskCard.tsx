@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { TASK_STATUS_VALUES, type TaskStatus } from '../../validation/taskStatus';
 import type { TaskRecord, TaskTreeNode } from './taskTypes';
 import { formatDate, formatValue, isOverdue, subtaskSummary } from './taskUtils';
@@ -40,6 +40,33 @@ function getHoveredPosition(event: DragEvent<HTMLElement>, index: number) {
 
 const commitHint = 'Enter to save, Esc to cancel';
 const subtaskPreviewLimit = 3;
+
+interface TaskMetaItemProps {
+  label: string;
+  children: ReactNode;
+}
+
+function TaskMetaItem({ label, children }: TaskMetaItemProps) {
+  return (
+    <div className={styles.metaItem}>
+      <dt className={styles.metaLabel}>{label}</dt>
+      <dd className={styles.metaValue}>{children}</dd>
+    </div>
+  );
+}
+
+type TaskMetadataFields = TaskTreeNode & {
+  assignee?: string | number | boolean | null;
+  estimate?: string | number | boolean | null;
+  estimatePoints?: string | number | boolean | null;
+  estimatedPoints?: string | number | boolean | null;
+  points?: string | number | boolean | null;
+  storyPoints?: string | number | boolean | null;
+};
+
+const getEstimateValue = (task: TaskMetadataFields) => task.estimatePoints ?? task.estimate ?? task.estimatedPoints ?? task.points ?? task.storyPoints ?? task.estimatedMinutes;
+
+const formatMetadataValue = (value?: string | number | boolean | null) => value === 0 ? '0' : formatValue(value);
 
 const isSubtaskComplete = (subtask: TaskTreeNode) => subtask.status === 'DONE' || Boolean(subtask.completedDate);
 
@@ -119,7 +146,9 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const effortSelectId = `task-card-effort-${task.id}`;
   const followUpId = `task-card-follow-up-${task.id}`;
   const moveHintId = `task-card-move-hint-${task.id}`;
-  const assignee = (task as TaskTreeNode & { assignee?: string | number | boolean | null }).assignee;
+  const metadataTask = task as TaskMetadataFields;
+  const assignee = metadataTask.assignee;
+  const estimate = getEstimateValue(metadataTask);
   const status = task.status ?? columnStatus;
   const taskKey = `TAS-${String(task.id).padStart(3, '0')}`;
   const effortBadgeClasses = [
@@ -191,47 +220,25 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
         {task.priorityScore != null && task.effort ? <span className={styles.scoreBadge}>Priority {formatValue(task.priorityScore)}</span> : null}
       </div>
 
-      <dl className={styles.importantInfoGrid}>
-        <div className={styles.importantInfoItem}>
-          <dt>Due date</dt>
-          <dd>
-            <span className={styles.metaIcon} aria-hidden="true">📅</span>
-            <span className={styles.metaStack}>
-              <span className={overdue ? styles.dateOverdue : undefined}>{formatDate(task.dueDate)}</span>
-              <span className={overdue ? styles.overdueHint : styles.metaSubvalue}>{overdue ? 'Overdue' : `Start ${formatDate(task.startDate)}`}</span>
-            </span>
-          </dd>
-        </div>
-        <div className={styles.importantInfoItem}>
-          <dt>Assignee</dt>
-          <dd>
-            <span className={styles.assigneeAvatar} aria-hidden="true">{formatAssigneeInitial(assignee)}</span>
-            <span>{formatValue(assignee)}</span>
-          </dd>
-        </div>
+      <dl className={styles.infoGrid}>
+        <TaskMetaItem label="Due date">
+          <span className={styles.metaStack}>
+            <span className={overdue ? styles.dateOverdue : undefined}>{formatDate(task.dueDate)}</span>
+            {overdue ? <span className={styles.overdueHint}>Overdue</span> : null}
+          </span>
+        </TaskMetaItem>
+        <TaskMetaItem label="Assignee">
+          <span className={styles.assigneeAvatar} aria-hidden="true">{formatAssigneeInitial(assignee)}</span>
+          <span>{formatValue(assignee)}</span>
+        </TaskMetaItem>
       </dl>
 
       <dl className={styles.metadataGrid}>
-        <div className={styles.metaItem}>
-          <dt>Estimate</dt>
-          <dd><span className={styles.metaIcon} aria-hidden="true">⏱</span>{formatValue(task.estimatedMinutes)}</dd>
-        </div>
-        <div className={styles.metaItem}>
-          <dt>Effort</dt>
-          <dd><span className={styles.metaIcon} aria-hidden="true">⚡</span>{formatValue(task.effort)}</dd>
-        </div>
-        <div className={styles.metaItem}>
-          <dt>Area</dt>
-          <dd><span className={styles.metaIcon} aria-hidden="true">▣</span>{formatValue(task.area)}</dd>
-        </div>
-        <div className={styles.metaItem}>
-          <dt>Track</dt>
-          <dd><span className={styles.metaIcon} aria-hidden="true">🛤</span>{formatValue(task.track)}</dd>
-        </div>
-        <div className={styles.metaItem}>
-          <dt>Score</dt>
-          <dd><span className={styles.metaIcon} aria-hidden="true">★</span>{formatValue(task.priorityScore)}</dd>
-        </div>
+        <TaskMetaItem label="Estimate">{formatMetadataValue(estimate)}</TaskMetaItem>
+        <TaskMetaItem label="Effort">{formatValue(task.effort)}</TaskMetaItem>
+        <TaskMetaItem label="Area">{formatValue(task.area)}</TaskMetaItem>
+        <TaskMetaItem label="Track">{formatValue(task.track)}</TaskMetaItem>
+        <TaskMetaItem label="Score">{formatMetadataValue(task.priorityScore)}</TaskMetaItem>
       </dl>
 
       <div className={styles.dependencyRow} aria-label={`Dependencies for ${task.title}: ${dependencySummary}`}>
