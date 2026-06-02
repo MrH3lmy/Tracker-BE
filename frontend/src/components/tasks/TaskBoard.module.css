@@ -345,3 +345,93 @@
     min-width: 0;
   }
 }
+
+/* Premium kanban board */
+.board {
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.column {
+  display: flex;
+  min-height: 620px;
+  flex-direction: column;
+  border-color: rgba(96, 165, 250, 0.18);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(15, 30, 52, 0.88), rgba(8, 19, 35, 0.82));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.columnHeader {
+  position: static;
+  margin: 0;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 22px 22px 0 0;
+  background: rgba(2, 8, 23, 0.22);
+}
+
+.columnHeaderContent :global(.status-badge) {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.statusIcon {
+  width: 28px;
+  height: 28px;
+  border-color: rgba(34, 211, 238, 0.18);
+  border-radius: 10px;
+  background: rgba(34, 211, 238, 0.1);
+  color: #67e8f9;
+}
+
+.columnCount {
+  min-width: 26px;
+  width: auto;
+  padding: 0 8px;
+  background: rgba(20, 184, 166, 0.16);
+  color: #5eead4;
+}
+
+.columnActionButton {
+  width: 30px;
+  height: 30px;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.cardList {
+  flex: 1;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+}
+
+.empty {
+  min-height: 260px;
+  border-color: rgba(96, 165, 250, 0.22);
+  border-radius: 20px;
+  background: rgba(2, 8, 23, 0.24);
+}
+
+@media (max-width: 980px) {
+  .board {
+    grid-template-columns: repeat(3, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .statusTabs {
+    padding: 0;
+  }
+
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .column {
+    min-height: auto;
+  }
+}

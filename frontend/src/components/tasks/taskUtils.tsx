@@ -8,7 +8,7 @@ export const EFFORT_VALUES = ['QUICK', 'MEDIUM', 'DEEP_WORK', 'LARGE'] as const;
 export const formatValue = (value?: string | boolean | number | null) => {
   if (value === true) return 'Yes';
   if (value === false) return 'No';
-  return value ? String(value) : '—';
+  return value ? String(value).replaceAll('_', ' ') : '—';
 };
 
 export const formatDate = (value?: string) => {

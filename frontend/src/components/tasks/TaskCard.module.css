@@ -784,3 +784,172 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Premium scannable task cards */
+.card,
+.cardShell {
+  border-color: rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(15, 31, 53, 0.94), rgba(12, 25, 45, 0.92));
+  padding: 16px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.2);
+}
+
+.cardHeader {
+  gap: 8px;
+}
+
+.taskIdentity {
+  gap: 7px;
+}
+
+.taskKey {
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  background: rgba(34, 211, 238, 0.1);
+  color: #67e8f9;
+  white-space: nowrap;
+}
+
+.cardTitle {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.badgeRow {
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.statusBadge,
+.effortBadge,
+.scoreBadge {
+  min-height: 24px;
+  max-width: 100%;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.statusBadge {
+  text-transform: none;
+}
+
+.statusTaskInProgress {
+  background: rgba(20, 184, 166, 0.14);
+  color: #5eead4;
+}
+
+.effortBadge,
+.effortBadgeMedium,
+.effortBadgeHigh {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+.infoGrid,
+.metadataGrid {
+  margin-top: 12px;
+  border-color: rgba(148, 163, 184, 0.13);
+}
+
+.infoGrid {
+  border-radius: 14px;
+  background: rgba(2, 8, 23, 0.24);
+  overflow: hidden;
+}
+
+.metadataGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border: 0;
+}
+
+.metadataGrid .metaItem {
+  grid-template-columns: 1fr;
+  gap: 2px;
+  border: 1px solid rgba(148, 163, 184, 0.12) !important;
+  border-radius: 12px;
+  background: rgba(2, 8, 23, 0.18);
+  padding: 8px 10px;
+}
+
+.metaItem {
+  min-width: 0;
+}
+
+.metaLabel {
+  font-size: 0.65rem;
+}
+
+.metaValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+
+.assigneeAvatar {
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+.dependencyRow {
+  margin-top: 12px;
+  border-color: rgba(148, 163, 184, 0.13);
+  padding: 10px 0;
+}
+
+.dependencyContent {
+  display: grid;
+  gap: 2px;
+}
+
+.dependencyValue {
+  text-align: left;
+}
+
+.subtaskProgress {
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 14px;
+  background: rgba(20, 184, 166, 0.08);
+  padding: 10px;
+}
+
+.subtaskChecklistTitle,
+.subtaskListTitle {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.cardToolbar {
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 0 0;
+}
+
+.iconButton {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+@media (max-width: 42rem) {
+  .metadataGrid {
+    grid-template-columns: 1fr;
+  }
+}

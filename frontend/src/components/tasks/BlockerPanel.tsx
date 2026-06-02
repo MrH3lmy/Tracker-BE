@@ -55,8 +55,8 @@ export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, dep
 
       <section className="panel dependency-panel" aria-labelledby="dependency-links-title">
         <div>
-          <p className="eyebrow">Dependency links</p>
-          <h3 id="dependency-links-title">Add a blocker relationship</h3>
+          <p className="eyebrow">Dependency linker</p>
+          <h3 id="dependency-links-title"><span aria-hidden="true">🔗</span> Link task blockers</h3>
           <p>Choose the task that is waiting, then the task that blocks it.</p>
         </div>
         <div className={filterStyles.toolbar}>

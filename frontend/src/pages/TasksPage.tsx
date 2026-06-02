@@ -448,7 +448,13 @@ export function TasksPage() {
       </section>
 
       <details className="panel task-inspector" open={false}>
-        <summary>API request inspector</summary>
+        <summary>
+          <span>
+            <span className="eyebrow">API request inspector</span>
+            <strong>Inspect API requests and responses in real time.</strong>
+          </span>
+          <span className="inspector-open-button">Open inspector</span>
+        </summary>
         <RequestInspector history={inspectorHistory} result={removeDependency.data ?? addDependency.data ?? moveTask.data ?? changeStatus.data ?? completeTask.data ?? deleteTask.data ?? updateTask.data ?? createTask.data ?? blockersQuery.data ?? query.data ?? null} />
       </details>
     </div>
