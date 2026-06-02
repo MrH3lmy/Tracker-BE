@@ -201,14 +201,28 @@ public class TaskRecommendationService {
     }
 
     private String explanation(Task task, PriorityEngine.PriorityComputation computation, List<String> explanationParts) {
-        String signals = String.join(", ", explanationParts);
-        if (signals.isBlank()) {
-            signals = "its priority score is competitive";
+        if (task.getDueDate() != null
+                && task.getStatus() == Status.IN_PROGRESS
+                && explanationParts.contains("it is due today")
+                && explanationParts.contains("its follow-up is due today")) {
+            return "Due today, already in progress, and needs follow-up today.";
         }
-        String dueText = task.getDueDate() == null ? "no due date" : "due " + task.getDueDate();
-        return "%s is recommended because %s. Priority score %d (%s), status %s, effort %s, %s."
-                .formatted(task.getTitle(), signals, computation.priorityScore(), computation.priorityCategory(),
-                        task.getStatus(), task.getEffort(), dueText);
+        if (task.getStatus() == Status.IN_PROGRESS && explanationParts.stream().anyMatch(part -> part.contains("follow-up"))) {
+            return "Already in progress with an upcoming follow-up.";
+        }
+        if (explanationParts.contains("its due date is approaching")
+                || explanationParts.contains("its follow-up is coming soon")) {
+            return "Due soon and ready to continue.";
+        }
+        if (explanationParts.contains("it is due today")) {
+            return task.getStatus() == Status.IN_PROGRESS
+                    ? "Due today and ready to continue."
+                    : "Due today and ready for action.";
+        }
+        if (computation.overdue()) {
+            return "Overdue and needs attention now.";
+        }
+        return "Recommended next action based on current task signals.";
     }
 
     private void applyPriorityComputation(Task task, PriorityEngine.PriorityComputation computation) {

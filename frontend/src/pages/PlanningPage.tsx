@@ -13,6 +13,7 @@ interface TaskPreview {
   priorityCategory?: string;
   priorityReason?: string | null;
   important?: boolean;
+  effort?: string;
 }
 
 interface PlannerRisk {
@@ -122,6 +123,25 @@ const formatPlannerDate = (value?: string | null, fallback = 'Date unavailable')
   return date ? plannerDateFormatter.format(date) : fallback;
 };
 
+const shortDateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const utcDateKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+
+const formatPlannerShortDate = (value?: string | null, fallback = 'Date unavailable') => {
+  const date = parsePlannerDate(value);
+
+  if (!date) return fallback;
+
+  const shortDate = shortDateFormatter.format(date);
+  return utcDateKey(date) === utcDateKey(new Date()) ? `Today, ${shortDate}` : shortDate;
+};
+
+const normalizeUiText = (value?: string | null, fallback = '') => (value ?? fallback).replaceAll('Mecahnism', 'Mechanism');
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asTasks = (value: unknown): TaskPreview[] => Array.isArray(value) ? value.filter(isRecord) as TaskPreview[] : [];
 const asRecommendations = (value: unknown): RecommendationPreview[] => Array.isArray(value) ? value.filter(isRecord) as RecommendationPreview[] : [];
@@ -131,7 +151,7 @@ const asPlannerTasks = (value: unknown): PlannerTask[] => Array.isArray(value) ?
 const asIds = (value: unknown): Array<string | number> => Array.isArray(value) ? value.filter((item): item is string | number => typeof item === 'string' || typeof item === 'number') : [];
 const formatHours = (value?: number | null) => typeof value === 'number' ? `${value.toFixed(1)}h` : 'No estimate';
 const riskClass = (level?: string) => `risk-${(level ?? 'LOW').toLowerCase()}`;
-const taskKey = (task: TaskPreview, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
+const taskKey = (task: TaskPreview, index: number) => task.id ?? `${normalizeUiText(task.title, 'task')}-${index}`;
 
 
 
@@ -161,9 +181,9 @@ function SuggestionBadge({ children, variant = 'default' }: { children: string |
   return <span className={`suggestion-badge suggestion-badge-${variant}`}>{children}</span>;
 }
 
-function MetricItem({ icon, label, value, tone = 'default', compact = false }: { icon: PlannerIconName; label: string; value: string | number; tone?: 'default' | 'success' | 'warning' | 'score'; compact?: boolean }) {
+function MetricItem({ icon, label, value, tone = 'default', compact = false, title }: { icon: PlannerIconName; label: string; value: string | number; tone?: 'default' | 'success' | 'warning' | 'score'; compact?: boolean; title?: string }) {
   return (
-    <div className={`metric-item metric-item-${tone}${compact ? ' compact' : ''}`}>
+    <div className={`metric-item metric-item-${tone}${compact ? ' compact' : ''}`} title={title}>
       <span className="metric-icon"><PlannerIcon name={icon} /></span>
       <span className="metric-copy">
         <span>{label}</span>
@@ -174,13 +194,53 @@ function MetricItem({ icon, label, value, tone = 'default', compact = false }: {
 }
 
 const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
-const formatBadgeLabel = (value: string | number) => String(value).replaceAll('_', ' ');
-const formatReasonCode = (reason: string) => reason.startsWith('EFFORT_') ? reason.replace('EFFORT_', 'EFFORT: ') : formatBadgeLabel(reason);
+const formatBadgeLabel = (value: string | number) => normalizeUiText(String(value).replaceAll('_', ' '));
+const chipLabelOverrides: Record<string, string> = {
+  ALREADY_IN_PROGRESS: 'IN PROGRESS',
+};
+const formatReasonCode = (reason: string) => {
+  if (chipLabelOverrides[reason]) return chipLabelOverrides[reason];
+  if (reason.endsWith('_EFFORT')) return `EFFORT: ${reason.replace('_EFFORT', '')}`;
+  if (reason.startsWith('EFFORT_')) return reason.replace('EFFORT_', 'EFFORT: ');
+  return formatBadgeLabel(reason);
+};
+
+const suggestionSummary = (recommendation: RecommendationPreview) => {
+  const codes = new Set(recommendationTags(recommendation));
+  const status = recommendation.task?.status;
+
+  if (codes.has('DUE_TODAY') && (codes.has('ALREADY_IN_PROGRESS') || status === 'IN_PROGRESS') && codes.has('FOLLOW_UP_TODAY')) {
+    return 'Due today, already in progress, and needs follow-up today.';
+  }
+
+  if ((codes.has('ALREADY_IN_PROGRESS') || status === 'IN_PROGRESS') && (codes.has('FOLLOW_UP_SOON') || codes.has('FOLLOW_UP_TODAY') || codes.has('FOLLOW_UP_OVERDUE'))) {
+    return 'Already in progress with an upcoming follow-up.';
+  }
+
+  if (codes.has('DUE_SOON') || codes.has('FOLLOW_UP_SOON')) {
+    return 'Due soon and ready to continue.';
+  }
+
+  if (codes.has('DUE_TODAY')) {
+    return status === 'IN_PROGRESS' ? 'Due today and ready to continue.' : 'Due today and ready for action.';
+  }
+
+  return 'Recommended next action based on current task signals.';
+};
+
+const recommendationChips = (recommendation: RecommendationPreview) => {
+  const effort = recommendation.task?.effort;
+  const tags = recommendationTags(recommendation);
+  const hasEffortChip = tags.some((tag) => tag.includes('EFFORT'));
+  return effort && !hasEffortChip ? [...tags, `EFFORT_${effort}`] : tags;
+};
 
 function TaskSuggestionCard({ recommendation }: { recommendation: RecommendationPreview }) {
   const task = recommendation.task;
   const confidence = typeof recommendation.confidence === 'number' ? Math.round(recommendation.confidence * 100) : undefined;
-  const tags = recommendationTags(recommendation);
+  const tags = recommendationChips(recommendation);
+  const summary = suggestionSummary(recommendation);
+  const taskTitle = normalizeUiText(task?.title, 'Untitled task');
 
   return (
     <article className="recommendation-hero-card">
@@ -190,28 +250,30 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
       </div>
       <div className="recommendation-copy">
         <div className="recommendation-title-row">
-          <h4>{task?.title ?? 'Untitled task'}</h4>
+          <h4>{taskTitle}</h4>
           <span className="recommendation-decoration" aria-hidden="true"><PlannerIcon name="checklist" /></span>
         </div>
-        {recommendation.explanation && <p className="recommendation-explanation">{recommendation.explanation}</p>}
+        <p className="recommendation-explanation">{summary}</p>
       </div>
       <div className="recommendation-metrics" aria-label="Top recommendation metadata">
-        <MetricItem icon="calendar" label="Due date" value={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
+        <MetricItem icon="calendar" label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
         {task?.status && <MetricItem icon="status" label="Status" value={task.status} tone="success" />}
         {task?.priorityCategory && <MetricItem icon="flag" label="Priority" value={task.priorityCategory} tone="warning" />}
-        {typeof task?.priorityScore === 'number' && <MetricItem icon="score" label="Priority score" value={task.priorityScore} tone="score" />}
+        {typeof task?.priorityScore === 'number' && <MetricItem icon="score" label="Score" value={task.priorityScore} tone="score" />}
       </div>
-      {typeof confidence === 'number' && (
-        <div className="confidence-row">
-          <span className="confidence-copy">Confidence <strong>{confidence}%</strong></span>
-          <SuggestionBadge variant="success">{`${confidence}%`}</SuggestionBadge>
-        </div>
-      )}
-      {tags.length > 0 && (
-        <div className="suggestion-chip-row" aria-label="Recommendation reason codes">
-          {tags.map((reason) => <SuggestionBadge key={reason} variant={reason.includes('PROGRESS') ? 'default' : reason.includes('SOON') ? 'purple' : 'warning'}>{formatReasonCode(reason)}</SuggestionBadge>)}
-        </div>
-      )}
+      <div className="recommendation-action-row">
+        {typeof confidence === 'number' && (
+          <div className="confidence-row">
+            <span className="confidence-label">Confidence</span>
+            <SuggestionBadge variant="success">{`${confidence}%`}</SuggestionBadge>
+          </div>
+        )}
+        {tags.length > 0 && (
+          <div className="suggestion-chip-row" aria-label="Recommendation reason codes">
+            {tags.map((reason) => <SuggestionBadge key={reason} variant={reason.includes('PROGRESS') ? 'default' : reason.includes('SOON') ? 'purple' : 'warning'}>{formatReasonCode(reason)}</SuggestionBadge>)}
+          </div>
+        )}
+      </div>
       {asStrings(recommendation.blockerWarnings).length > 0 && (
         <ul className="recommendation-warnings">
           {asStrings(recommendation.blockerWarnings).map((warning) => <li key={warning}>{warning}</li>)}
@@ -223,19 +285,21 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
 
 function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendation: RecommendationPreview; fallbackRank: number }) {
   const task = recommendation.task;
+  const summary = suggestionSummary(recommendation);
+  const taskTitle = normalizeUiText(task?.title, 'Untitled task');
 
   return (
     <article className="secondary-suggestion-card">
       <div className="secondary-suggestion-heading">
         <span className="secondary-rank">#{recommendation.rank ?? fallbackRank}</span>
         <div>
-          <h4>{task?.title ?? 'Untitled task'}</h4>
+          <h4>{taskTitle}</h4>
           {recommendation.recommendedAction && <SuggestionBadge variant="success">{formatBadgeLabel(recommendation.recommendedAction)}</SuggestionBadge>}
         </div>
       </div>
-      {recommendation.explanation && <p className="secondary-explanation">{recommendation.explanation}</p>}
+      <p className="secondary-explanation">{summary}</p>
       <div className="secondary-metrics" aria-label="Secondary recommendation metadata">
-        <MetricItem icon="calendar" label="Due date" value={formatPlannerDate(task?.dueDate, 'Due date unavailable')} compact />
+        <MetricItem icon="calendar" label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} compact />
         {task?.status && <MetricItem icon="status" label="Status" value={task.status} tone="success" compact />}
         {task?.priorityCategory && <MetricItem icon="flag" label="Priority" value={task.priorityCategory} tone="warning" compact />}
       </div>
@@ -280,8 +344,8 @@ function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage:
       {tasks.map((task, index) => (
         <article key={taskKey(task, index)} className="task-preview-card">
           <div>
-            <h4>{task.title ?? 'Untitled task'}</h4>
-            {task.description && <p>{task.description}</p>}
+            <h4>{normalizeUiText(task.title, 'Untitled task')}</h4>
+            {task.description && <p>{normalizeUiText(task.description)}</p>}
           </div>
           <div className="task-preview-meta">
             {task.dueDate && <span className="pill">Due {formatPlannerDate(task.dueDate, 'Due date unavailable')}</span>}
@@ -326,7 +390,7 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
               <h4>More smart suggestions</h4>
               <div className="mini-card-list">
                 {otherRecommendations.slice(0, 1).map((recommendation, index) => (
-                  <SecondarySuggestionCard key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? recommendation.task?.title ?? 'suggestion'}`} recommendation={recommendation} fallbackRank={index + 2} />
+                  <SecondarySuggestionCard key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? normalizeUiText(recommendation.task?.title, 'suggestion')}`} recommendation={recommendation} fallbackRank={index + 2} />
                 ))}
               </div>
             </aside>
@@ -438,9 +502,9 @@ function ProjectBoardView({ data }: { data: unknown }) {
                     const dependencies = asIds(task.dependencyIds);
                     const blocking = asIds(task.blockingTaskIds);
                     return (
-                      <article key={task.id ?? `${task.title}-${taskIndex}`} className={`planner-task-card ${riskClass(task.risk?.level)}`}>
+                      <article key={task.id ?? `${normalizeUiText(task.title, 'task')}-${taskIndex}`} className={`planner-task-card ${riskClass(task.risk?.level)}`}>
                         <div className="section-card-header compact">
-                          <h4>{task.title ?? 'Untitled task'}</h4>
+                          <h4>{normalizeUiText(task.title, 'Untitled task')}</h4>
                           <span className={`risk-pill ${riskClass(task.risk?.level)}`}>{task.risk?.level ?? 'LOW'}</span>
                         </div>
                         <div className="task-preview-meta">
