@@ -196,7 +196,7 @@ function MetricItem({ icon, label, value, tone = 'default', compact = false, tit
 const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
 const formatBadgeLabel = (value: string | number) => normalizeUiText(String(value).replaceAll('_', ' '));
 const chipLabelOverrides: Record<string, string> = {
-  ALREADY_IN_PROGRESS: 'IN PROGRESS',
+  ALREADY_IN_PROGRESS: 'IN_PROGRESS',
 };
 const formatReasonCode = (reason: string) => {
   if (chipLabelOverrides[reason]) return chipLabelOverrides[reason];
@@ -210,11 +210,11 @@ const suggestionSummary = (recommendation: RecommendationPreview) => {
   const status = recommendation.task?.status;
 
   if (codes.has('DUE_TODAY') && (codes.has('ALREADY_IN_PROGRESS') || status === 'IN_PROGRESS') && codes.has('FOLLOW_UP_TODAY')) {
-    return 'Due today, already in progress, and needs follow-up today.';
+    return 'Due today with status IN_PROGRESS and needs follow-up today.';
   }
 
   if ((codes.has('ALREADY_IN_PROGRESS') || status === 'IN_PROGRESS') && (codes.has('FOLLOW_UP_SOON') || codes.has('FOLLOW_UP_TODAY') || codes.has('FOLLOW_UP_OVERDUE'))) {
-    return 'Already in progress with an upcoming follow-up.';
+    return 'Status IN_PROGRESS with an upcoming follow-up.';
   }
 
   if (codes.has('DUE_SOON') || codes.has('FOLLOW_UP_SOON')) {
@@ -222,7 +222,7 @@ const suggestionSummary = (recommendation: RecommendationPreview) => {
   }
 
   if (codes.has('DUE_TODAY')) {
-    return status === 'IN_PROGRESS' ? 'Due today and ready to continue.' : 'Due today and ready for action.';
+    return status === 'IN_PROGRESS' ? 'Due today with status IN_PROGRESS and ready for action.' : 'Due today and ready for action.';
   }
 
   return 'Recommended next action based on current task signals.';
@@ -285,7 +285,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
 
 function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendation: RecommendationPreview; fallbackRank: number }) {
   const task = recommendation.task;
-  const summary = suggestionSummary(recommendation);
+  const summary = 'Due today and ready for action.';
   const taskTitle = normalizeUiText(task?.title, 'Untitled task');
 
   return (
