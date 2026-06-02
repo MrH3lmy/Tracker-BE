@@ -174,6 +174,8 @@ function MetricItem({ icon, label, value, tone = 'default', compact = false }: {
 }
 
 const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
+const formatBadgeLabel = (value: string | number) => String(value).replaceAll('_', ' ');
+const formatReasonCode = (reason: string) => reason.startsWith('EFFORT_') ? reason.replace('EFFORT_', 'EFFORT: ') : formatBadgeLabel(reason);
 
 function TaskSuggestionCard({ recommendation }: { recommendation: RecommendationPreview }) {
   const task = recommendation.task;
@@ -184,7 +186,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
     <article className="recommendation-hero-card">
       <div className="recommendation-hero-topline">
         <span className="recommendation-rank">#{recommendation.rank ?? 1}</span>
-        {recommendation.recommendedAction && <SuggestionBadge variant="success">{recommendation.recommendedAction}</SuggestionBadge>}
+        {recommendation.recommendedAction && <SuggestionBadge variant="success">{formatBadgeLabel(recommendation.recommendedAction)}</SuggestionBadge>}
       </div>
       <div className="recommendation-copy">
         <div className="recommendation-title-row">
@@ -207,7 +209,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
       )}
       {tags.length > 0 && (
         <div className="suggestion-chip-row" aria-label="Recommendation reason codes">
-          {tags.map((reason) => <SuggestionBadge key={reason} variant={reason.includes('PROGRESS') ? 'default' : reason.includes('SOON') ? 'purple' : 'warning'}>{reason.replaceAll('_', ' ')}</SuggestionBadge>)}
+          {tags.map((reason) => <SuggestionBadge key={reason} variant={reason.includes('PROGRESS') ? 'default' : reason.includes('SOON') ? 'purple' : 'warning'}>{formatReasonCode(reason)}</SuggestionBadge>)}
         </div>
       )}
       {asStrings(recommendation.blockerWarnings).length > 0 && (
@@ -228,7 +230,7 @@ function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendat
         <span className="secondary-rank">#{recommendation.rank ?? fallbackRank}</span>
         <div>
           <h4>{task?.title ?? 'Untitled task'}</h4>
-          {recommendation.recommendedAction && <SuggestionBadge variant="success">{recommendation.recommendedAction}</SuggestionBadge>}
+          {recommendation.recommendedAction && <SuggestionBadge variant="success">{formatBadgeLabel(recommendation.recommendedAction)}</SuggestionBadge>}
         </div>
       </div>
       {recommendation.explanation && <p className="secondary-explanation">{recommendation.explanation}</p>}
@@ -323,7 +325,7 @@ function RecommendationsPanel({ data, isFetching, onRefresh }: { data: unknown; 
             <aside className="recommendation-sidebar" aria-label="More smart suggestions">
               <h4>More smart suggestions</h4>
               <div className="mini-card-list">
-                {otherRecommendations.slice(0, 4).map((recommendation, index) => (
+                {otherRecommendations.slice(0, 1).map((recommendation, index) => (
                   <SecondarySuggestionCard key={`${recommendation.rank ?? index}-${recommendation.task?.id ?? recommendation.task?.title ?? 'suggestion'}`} recommendation={recommendation} fallbackRank={index + 2} />
                 ))}
               </div>
