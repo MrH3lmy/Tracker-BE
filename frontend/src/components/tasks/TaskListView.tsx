@@ -123,6 +123,15 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
     }
   };
 
+  const activityItems = [
+    task.followUpDate ? { label: 'Follow-up', value: formatDate(task.followUpDate) } : null,
+    task.status ? { label: 'Status', value: task.status } : null,
+    task.area ? { label: 'Area', value: formatValue(task.area) } : null,
+    task.phase ? { label: 'Phase', value: formatValue(task.phase) } : null,
+    task.track ? { label: 'Track', value: formatValue(task.track) } : null,
+    task.completedDate ? { label: 'Completed', value: formatDate(task.completedDate) } : null,
+  ].filter((item): item is { label: string; value: string } => item !== null);
+
   return (
     <div className={rowClassName} role="row">
       <div
@@ -193,30 +202,40 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
       {expanded ? (
         <div id={detailsId} className={styles.details}>
           <div className={styles.expandedContent}>
-            {task.description ? <p className={styles.description}>{task.description}</p> : null}
-            <dl className={styles.detailGrid}>
-              <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
-              <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
-              <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
-              <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
-              <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
-              <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
-              <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
-              <div><dt>Risk reason</dt><dd>{formatValue(task.riskReason)}</dd></div>
-              <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
-              <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-              <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-              <div><dt>Dependencies</dt><dd><button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button></dd></div>
-              <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
-            </dl>
-            {task.dependencyIds?.length ? (
-              <div className={styles.actions} aria-label={`Dependency actions for ${task.title}`}>
-                {task.dependencyIds.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
-              </div>
-            ) : null}
-            <section className={styles.subtaskDetails} aria-label={`Subtasks for ${task.title}`}>
-              <h4>Subtask details</h4>
+            <section className={styles.detailSection} aria-labelledby={`task-${task.id}-description-heading`}>
+              <h4 id={`task-${task.id}-description-heading`}>Description</h4>
+              {task.description ? <p className={styles.description}>{task.description}</p> : <p className={styles.emptyNested}>No description.</p>}
+            </section>
+
+            <section className={styles.detailSection} aria-labelledby={`task-${task.id}-subtasks-heading`}>
+              <h4 id={`task-${task.id}-subtasks-heading`}>Subtasks</h4>
               <NestedSubtaskList subtasks={task.subtasks} />
+            </section>
+
+            <section className={styles.detailSection} aria-labelledby={`task-${task.id}-dependencies-heading`}>
+              <div className={styles.sectionHeader}>
+                <h4 id={`task-${task.id}-dependencies-heading`}>Dependencies</h4>
+                <button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button>
+              </div>
+              <dl className={styles.compactMetaList}>
+                <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+                <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+                <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
+              </dl>
+              {task.dependencyIds?.length ? (
+                <div className={styles.actions} aria-label={`Dependency actions for ${task.title}`}>
+                  {task.dependencyIds.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
+                </div>
+              ) : null}
+            </section>
+
+            <section className={styles.detailSection} aria-labelledby={`task-${task.id}-activity-heading`}>
+              <h4 id={`task-${task.id}-activity-heading`}>Activity</h4>
+              {activityItems.length ? (
+                <dl className={styles.compactMetaList}>
+                  {activityItems.map((item) => <div key={`${task.id}-${item.label}`}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+                </dl>
+              ) : <p className={styles.emptyNested}>No recent activity.</p>}
             </section>
           </div>
         </div>
