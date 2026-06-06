@@ -751,6 +751,12 @@ th {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
 }
 
+[data-theme="light"] .task-workspace {
+  border-color: var(--color-border-overlay);
+  background: var(--gradient-panel-soft);
+  box-shadow: var(--shadow-md);
+}
+
 .task-workspace > .section-header,
 .task-workspace > .task-filter-panel,
 .task-workspace > .error,
