@@ -4,6 +4,7 @@ import type { ApiCallResult } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
 import { QueryState } from '../components/QueryState';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
+import { ManageDependenciesDrawer } from '../components/tasks/ManageDependenciesDrawer';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
@@ -108,6 +109,9 @@ export function TasksPage() {
   const [tab, setTab] = useState<'active' | 'done' | 'archive'>('active');
   const [createOpen, setCreateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dependenciesOpen, setDependenciesOpen] = useState(false);
+  const [dependencyTaskId, setDependencyTaskId] = useState('');
+  const [dependencyBlocksTaskId, setDependencyBlocksTaskId] = useState('');
   const { announce } = useAnnouncement();
   const search = searchParams.get('q') || '';
   const statusFilter = filterValueFromParams(searchParams, 'status');
@@ -152,8 +156,8 @@ export function TasksPage() {
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
   const query = tab === 'archive' ? archiveQuery : activeQuery;
-  const { createTask, updateTask, deleteTask, completeTask, changeStatus, removeDependency } = useTaskMutations();
-  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || removeDependency.isPending;
+  const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency } = useTaskMutations();
+  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending;
 
   const activeData = activeQuery.data?.data;
   const archiveData = archiveQuery.data?.data;
@@ -189,7 +193,7 @@ export function TasksPage() {
     return params.toString();
   }, [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, sort, statusFilter]);
   const taskTree = useMemo(() => buildTaskTree(sortedFilteredTasks, (nodes) => nodes), [sortedFilteredTasks]);
-  const latestMutationResult = latestResult(removeDependency.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
+  const latestMutationResult = latestResult(removeDependency.data, addDependency.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
   useEffect(() => {
     if (!latestMutationResult) return;
     announce(mutationAnnouncement(latestMutationResult));
@@ -227,6 +231,19 @@ export function TasksPage() {
     updateTaskFromCard(task, { followUpDate: next.toISOString().slice(0, 10) });
   };
 
+  const openDependencyManager = (task: TaskRecord) => {
+    setDependencyTaskId(String(task.id));
+    setDependencyBlocksTaskId('');
+    setDependenciesOpen(true);
+  };
+
+  const submitDependency = () => {
+    const id = Number(dependencyTaskId);
+    const blocksTaskId = Number(dependencyBlocksTaskId);
+    if (!Number.isFinite(id) || !Number.isFinite(blocksTaskId) || id === blocksTaskId) return;
+    addDependency.mutate({ id, blocksTaskId }, { onSuccess: () => setDependenciesOpen(false) });
+  };
+
   return (
     <div className="tasks-page" aria-busy={busy}>
       <header className="tasks-planner-shell" aria-label="Task controls">
@@ -251,6 +268,19 @@ export function TasksPage() {
           </div>
         </div>
       </header>
+
+      {dependenciesOpen && (
+        <ManageDependenciesDrawer
+          activeTasks={activeTasks}
+          busy={busy}
+          dependencyTaskId={dependencyTaskId}
+          dependencyBlocksTaskId={dependencyBlocksTaskId}
+          setDependencyTaskId={setDependencyTaskId}
+          setDependencyBlocksTaskId={setDependencyBlocksTaskId}
+          submitDependency={submitDependency}
+          onClose={() => setDependenciesOpen(false)}
+        />
+      )}
 
       {createOpen && (
         <TaskCreateForm
@@ -328,6 +358,7 @@ export function TasksPage() {
             onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
             onSnoozeFollowUp={snoozeFollowUp}
             onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
+            onManageDependencies={openDependencyManager}
             onDelete={(taskId) => deleteTask.mutate(taskId)}
           />
         )}

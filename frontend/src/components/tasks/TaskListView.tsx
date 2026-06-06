@@ -13,10 +13,11 @@ interface TaskListViewProps {
   onChangeStatus: (taskId: number, status: string) => void;
   onSnoozeFollowUp: (task: TaskTreeNode) => void;
   onRemoveDependency: (taskId: number, blocksTaskId: number) => void;
+  onManageDependencies: (task: TaskTreeNode) => void;
   onDelete: (taskId: number) => void;
 }
 
-function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskListViewProps & { task: TaskTreeNode; depth?: number }) {
+function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete }: TaskListViewProps & { task: TaskTreeNode; depth?: number }) {
   const overdue = isOverdue(task);
   const summary = subtaskSummary(task);
 
@@ -62,10 +63,11 @@ function TaskListItem({ task, depth = 0, busy, onComplete, onStartSubtask, onCha
           <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
           <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
           <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+          <div><dt>Dependencies</dt><dd><button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button></dd></div>
           <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
         </dl>
       </details>
-      {task.subtasks.length > 0 && <div className={styles.subtaskList}>{task.subtasks.map((subtask) => <TaskListItem key={subtask.id} task={subtask} depth={depth + 1} tasks={[]} busy={busy} onComplete={onComplete} onStartSubtask={onStartSubtask} onChangeStatus={onChangeStatus} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onDelete={onDelete} />)}</div>}
+      {task.subtasks.length > 0 && <div className={styles.subtaskList}>{task.subtasks.map((subtask) => <TaskListItem key={subtask.id} task={subtask} depth={depth + 1} tasks={[]} busy={busy} onComplete={onComplete} onStartSubtask={onStartSubtask} onChangeStatus={onChangeStatus} onSnoozeFollowUp={onSnoozeFollowUp} onRemoveDependency={onRemoveDependency} onManageDependencies={onManageDependencies} onDelete={onDelete} />)}</div>}
     </article>
   );
 }
