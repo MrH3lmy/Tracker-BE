@@ -16,6 +16,15 @@ import './App.css';
 
 
 const isDevMode = import.meta.env.DEV;
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'tracker.sidebar.collapsed';
+
+const readStoredSidebarCollapsed = () => {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 const pathMatchesRoute = (pathname: string, routePath: string) => pathname === routePath || pathname.startsWith(`${routePath}/`);
 
@@ -70,6 +79,7 @@ function DeveloperNavSection({ isActive, tabs }: { isActive: boolean; tabs: type
 export default function App() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
   const settingsQuery = useSettingsQuery(true);
@@ -84,6 +94,14 @@ export default function App() {
   useEffect(() => {
     applyDocumentTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed));
+    } catch {
+      // Ignore storage failures so the desktop sidebar toggle still works in-memory.
+    }
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     if (hasSyncedSavedTheme.current || !settingsQuery.data?.ok) return undefined;
@@ -106,82 +124,93 @@ export default function App() {
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
         <a className="skip-link" href="#task-tracker-main">Skip to content</a>
-        <div className="app-shell" data-theme={theme}>
-        <aside className="sidebar" aria-label="Primary navigation">
-          <div className="brand-lockup">
-            <span className="brand-mark" aria-hidden="true">T</span>
-            <div>
-              <p className="eyebrow">Tracker BE</p>
-              <h1>Task Tracker</h1>
-            </div>
-          </div>
-          <p className="sidebar-tagline">Plan work, organize priorities, and keep execution moving.</p>
-          <nav className="tabs sidebar-tabs" aria-label="Primary app navigation">
-            {appTabs.map(({ label, path }) => (
-              <SidebarItem key={path} label={label} path={path} />
-            ))}
-          </nav>
-          <div className="sidebar-bottom">
-            <DeveloperNavSection isActive={isDeveloperRouteActive} tabs={visibleDeveloperTabs} />
-            <div className="sidebar-profile" aria-label="Signed in user">
-              <span className="profile-avatar" aria-hidden="true">JD</span>
-              <div className="profile-copy">
-                <strong>John Doe</strong>
-                <span>john.doe@trackerbe.com</span>
+        <div className={`app-shell${isSidebarCollapsed ? ' app-shell--sidebar-collapsed' : ''}`} data-theme={theme}>
+          <aside className="sidebar" aria-label="Primary navigation">
+            <div className="brand-lockup">
+              <span className="brand-mark" aria-hidden="true">T</span>
+              <div className="brand-copy">
+                <p className="eyebrow">Tracker BE</p>
+                <h1>Task Tracker</h1>
               </div>
-              <span className="profile-chevron" aria-hidden="true">⌄</span>
-            </div>
-          </div>
-        </aside>
-
-        <div className="app-main">
-          <header className={`topbar${routeOwnsPageLayout ? ' topbar--route-owned' : ''}`}>
-            {!routeOwnsPageLayout && (
-              <div className="topbar-copy">
-                <p className="eyebrow">Productivity workspace</p>
-                <h2>Task Tracker</h2>
-                <p>Coordinate tasks, planning, calendar exports, imports, and settings from one responsive shell.</p>
-              </div>
-            )}
-            <div className="topbar-actions">
-              {!routeOwnsPageLayout && <NavLink to="/tasks" className="button-primary">Quick add</NavLink>}
               <button
                 type="button"
-                className="menu-toggle"
-                aria-controls="mobile-navigation"
-                aria-expanded={isMobileMenuOpen}
-                onClick={() => setIsMobileMenuOpen((open) => !open)}
+                className="sidebar-collapse-toggle"
+                aria-expanded={!isSidebarCollapsed}
+                aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
               >
-                <span aria-hidden="true">☰</span>
-                Menu
+                <span aria-hidden="true">{isSidebarCollapsed ? '›' : '‹'}</span>
+                <span className="sr-only">{isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
               </button>
             </div>
-          </header>
-
-          <nav
-            id="mobile-navigation"
-            className={`tabs mobile-tabs${isMobileMenuOpen ? ' open' : ''}`}
-            aria-label="Mobile navigation"
-          >
-            {appTabs.map(({ label, path }) => (
-              <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
-            ))}
-          </nav>
-
-          <main id="task-tracker-main" className={`content-area${routeOwnsPageLayout ? ' content-area--route-owned' : ''}`} tabIndex={-1}>
-            <div className={`content-card route-card${routeOwnsPageLayout ? ' route-card--flat' : ''}`}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
-                {!isDevMode && developerTabs.map(({ path }) => (
-                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
-                ))}
-              </Routes>
+            <p className="sidebar-tagline">Plan work, organize priorities, and keep execution moving.</p>
+            <nav className="tabs sidebar-tabs" aria-label="Primary app navigation">
+              {appTabs.map(({ label, path }) => (
+                <SidebarItem key={path} label={label} path={path} />
+              ))}
+            </nav>
+            <div className="sidebar-bottom">
+              <DeveloperNavSection isActive={isDeveloperRouteActive} tabs={visibleDeveloperTabs} />
+              <div className="sidebar-profile" aria-label="Signed in user">
+                <span className="profile-avatar" aria-hidden="true">JD</span>
+                <div className="profile-copy">
+                  <strong>John Doe</strong>
+                  <span>john.doe@trackerbe.com</span>
+                </div>
+                <span className="profile-chevron" aria-hidden="true">⌄</span>
+              </div>
             </div>
-          </main>
-          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
+          </aside>
+
+          <div className="app-main">
+            <header className={`topbar${routeOwnsPageLayout ? ' topbar--route-owned' : ''}`}>
+              {!routeOwnsPageLayout && (
+                <div className="topbar-copy">
+                  <p className="eyebrow">Productivity workspace</p>
+                  <h2>Task Tracker</h2>
+                  <p>Coordinate tasks, planning, calendar exports, imports, and settings from one responsive shell.</p>
+                </div>
+              )}
+              <div className="topbar-actions">
+                {!routeOwnsPageLayout && <NavLink to="/tasks" className="button-primary">Quick add</NavLink>}
+                <button
+                  type="button"
+                  className="menu-toggle"
+                  aria-controls="mobile-navigation"
+                  aria-expanded={isMobileMenuOpen}
+                  onClick={() => setIsMobileMenuOpen((open) => !open)}
+                >
+                  <span aria-hidden="true">☰</span>
+                  Menu
+                </button>
+              </div>
+            </header>
+
+            <nav
+              id="mobile-navigation"
+              className={`tabs mobile-tabs${isMobileMenuOpen ? ' open' : ''}`}
+              aria-label="Mobile navigation"
+            >
+              {appTabs.map(({ label, path }) => (
+                <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
+              ))}
+            </nav>
+
+            <main id="task-tracker-main" className={`content-area${routeOwnsPageLayout ? ' content-area--route-owned' : ''}`} tabIndex={-1}>
+              <div className={`content-card route-card${routeOwnsPageLayout ? ' route-card--flat' : ''}`}>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                  {!isDevMode && developerTabs.map(({ path }) => (
+                    <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
+                  ))}
+                </Routes>
+              </div>
+            </main>
+            <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
+          </div>
         </div>
-      </div>
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>
   );
