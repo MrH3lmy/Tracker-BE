@@ -616,3 +616,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.notesLink,
+.detailLink,
+.overflowMenu a {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--task-accent-blue) 18%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--task-accent-blue) 8%, transparent);
+  padding: 0.28rem 0.55rem;
+  color: var(--task-accent-blue);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.notesLink:hover,
+.notesLink:focus-visible,
+.detailLink:hover,
+.detailLink:focus-visible,
+.overflowMenu a:hover,
+.overflowMenu a:focus-visible {
+  border-color: color-mix(in srgb, var(--task-accent-blue) 42%, transparent);
+  background: color-mix(in srgb, var(--task-accent-blue) 14%, transparent);
+}
+
+.overflowMenu a {
+  width: 100%;
+}

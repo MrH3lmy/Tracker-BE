@@ -37,6 +37,8 @@ export interface TaskRecord {
   subtaskCount?: number;
   completedSubtaskCount?: number;
   subtaskProgressPercent?: number;
+  noteCount?: number;
+  notesCount?: number;
 }
 
 export interface TaskTreeNode extends TaskRecord {

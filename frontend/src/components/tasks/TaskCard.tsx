@@ -114,6 +114,10 @@ const formatAssigneeInitial = (assignee: string | number | boolean | null | unde
 
 const formatTaskKey = (taskId: number) => `TAS-${String(taskId).padStart(3, '0')}`;
 
+const getTaskNoteCount = (task: TaskTreeNode) => task.noteCount ?? task.notesCount;
+
+const taskNotesHref = (taskId: number) => `/notes?taskId=${encodeURIComponent(String(taskId))}`;
+
 const formatDependencySummary = (task: TaskTreeNode) => {
   const values: string[] = [];
 
@@ -197,6 +201,9 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
   const hasDependencyRow = Boolean(task.parentTaskId || task.dependencyIds?.length || task.blockingTaskIds?.length);
   const dependencySummary = hasDependencyRow ? formatDependencySummary(task) : 'No dependencies';
   const primaryEffortBadge = task.effort ? `Effort ${formatValue(task.effort)}` : task.priorityScore != null ? `Priority ${formatValue(task.priorityScore)}` : 'No effort set';
+  const noteCount = getTaskNoteCount(task);
+  const notesLabel = noteCount == null ? 'Notes' : `Notes (${noteCount})`;
+  const notesTitle = noteCount == null ? `View notes linked to ${task.title}` : `View ${noteCount} ${noteCount === 1 ? 'note' : 'notes'} linked to ${task.title}`;
 
   return (
     <div className={frameClasses} style={{ marginLeft: depth ? `${depth * 1.25}rem` : undefined }}>
@@ -331,12 +338,15 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           onClick={() => onStartSubtask(task)}
           disabled={busy}
         />
-        <IconButton
-          icon="💬"
-          label={`Comments are not available for ${task.title}`}
-          title="Comments are not available from this card"
-          disabled
-        />
+        <a
+          className={styles.notesButton}
+          href={taskNotesHref(task.id)}
+          title={notesTitle}
+          aria-label={notesTitle}
+        >
+          <span aria-hidden="true">📝</span>
+          <span>{notesLabel}</span>
+        </a>
         <IconButton
           icon="📎"
           label={`Attachments are not available for ${task.title}`}
@@ -368,6 +378,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
             <label htmlFor={followUpId}>Follow-up</label>
             <input id={followUpId} type="date" value={task.followUpDate ?? ''} min={task.startDate?.slice(0, 10)} onChange={(event) => onUpdateTask(task, { followUpDate: event.target.value || undefined })} disabled={busy} title="Set follow-up date" />
             <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy} title="Set follow-up for tomorrow">Follow up tomorrow</button>
+            <a href={taskNotesHref(task.id)} title={notesTitle}>Open notes</a>
             <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title">Edit title</button>
             {onManageDependencies ? <button type="button" onClick={() => onManageDependencies(task)} disabled={busy} title="Open dependency manager">Manage dependencies</button> : null}
             <button type="button" onClick={() => onComplete(task.id)} disabled={busy} title="Complete task">Complete</button>

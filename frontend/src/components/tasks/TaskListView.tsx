@@ -26,6 +26,10 @@ function getSubtaskProgress(task: TaskTreeNode) {
   return { completed, percent, total };
 }
 
+const getTaskNoteCount = (task: TaskTreeNode) => task.noteCount ?? task.notesCount;
+
+const taskNotesHref = (taskId: number) => `/notes?taskId=${encodeURIComponent(String(taskId))}`;
+
 function RiskBadge({ riskLevel }: { riskLevel?: string }) {
   const riskLabel = formatValue(riskLevel);
   const riskClassName = [
@@ -95,6 +99,9 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
   const descriptionPreviewId = task.description ? `task-${task.id}-description-preview` : undefined;
   const isDone = task.status === 'DONE' || Boolean(task.completedDate);
   const statusOptions = TASK_STATUS_VALUES.filter((status) => status !== task.status);
+  const noteCount = getTaskNoteCount(task);
+  const notesLabel = noteCount == null ? 'Notes' : `Notes (${noteCount})`;
+  const notesTitle = noteCount == null ? `View notes linked to ${task.title}` : `View ${noteCount} ${noteCount === 1 ? 'note' : 'notes'} linked to ${task.title}`;
 
   const updateMenuPosition = useCallback(() => {
     const button = overflowButtonRef.current;
@@ -195,6 +202,7 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
         <option value="">Select status...</option>
         {statusOptions.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
       </select>
+      <a href={taskNotesHref(task.id)} onClick={() => setMenuOpen(false)}>{notesLabel}</a>
       <button type="button" onClick={() => runMenuAction(() => onSnoozeFollowUp(task))} disabled={busy}>Follow up tomorrow</button>
       <button type="button" className={styles.dangerAction} onClick={() => runMenuAction(() => onDelete(task.id))} disabled={busy}>Delete</button>
     </div>,
@@ -226,6 +234,16 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           <span className={styles.id}>#{task.id}</span>
           <strong className={styles.title}>{task.title}</strong>
           {task.important ? <span className={styles.importantPill}>Important</span> : null}
+          <a
+            className={styles.notesLink}
+            href={taskNotesHref(task.id)}
+            title={notesTitle}
+            aria-label={notesTitle}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span aria-hidden="true">📝</span>
+            <span>{notesLabel}</span>
+          </a>
           {task.description ? (
             <span id={descriptionPreviewId} className={styles.descriptionPreview} role="tooltip">
               {task.description}
@@ -283,6 +301,14 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
             <section className={styles.detailSection} aria-labelledby={`task-${task.id}-subtasks-heading`}>
               <h4 id={`task-${task.id}-subtasks-heading`}>Subtasks</h4>
               <NestedSubtaskList subtasks={task.subtasks} />
+            </section>
+
+            <section className={styles.detailSection} aria-labelledby={`task-${task.id}-notes-heading`}>
+              <div className={styles.sectionHeader}>
+                <h4 id={`task-${task.id}-notes-heading`}>Notes</h4>
+                <a className={styles.detailLink} href={taskNotesHref(task.id)}>{notesLabel}</a>
+              </div>
+              <p className={styles.emptyNested}>Open linked notes without mixing note content into the task description.</p>
             </section>
 
             <section className={styles.detailSection} aria-labelledby={`task-${task.id}-dependencies-heading`}>
