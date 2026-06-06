@@ -92,6 +92,7 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
   const overflowButtonRef = useRef<HTMLButtonElement>(null);
   const menuId = `task-${task.id}-actions-menu`;
   const detailsId = `task-${task.id}-details`;
+  const descriptionPreviewId = task.description ? `task-${task.id}-description-preview` : undefined;
   const isDone = task.status === 'DONE' || Boolean(task.completedDate);
   const statusOptions = TASK_STATUS_VALUES.filter((status) => status !== task.status);
 
@@ -217,6 +218,7 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
         tabIndex={0}
         aria-expanded={expanded}
         aria-controls={detailsId}
+        aria-describedby={descriptionPreviewId}
         onClick={onToggleExpanded}
         onKeyDown={handleCompactRowKeyDown}
       >
@@ -224,6 +226,11 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           <span className={styles.id}>#{task.id}</span>
           <strong className={styles.title}>{task.title}</strong>
           {task.important ? <span className={styles.importantPill}>Important</span> : null}
+          {task.description ? (
+            <span id={descriptionPreviewId} className={styles.descriptionPreview} role="tooltip">
+              {task.description}
+            </span>
+          ) : null}
         </div>
         <div className={styles.metric} role="cell" data-label="Status"><span className={taskStatusClassName(task.status)}>{task.status ?? 'No status'}</span></div>
         <div className={`${styles.metric} ${styles.dueCell}`} role="cell" data-label="Due date">
