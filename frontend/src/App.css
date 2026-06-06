@@ -185,11 +185,20 @@ textarea {
   justify-content: flex-end;
 }
 
+.topbar--route-owned {
+  display: none;
+}
+
 .content-area {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   padding: var(--space-6) clamp(var(--space-4), 4vw, var(--space-10)) var(--space-10);
+}
+
+.content-area--route-owned {
+  max-width: none;
+  padding-top: clamp(var(--space-4), 4vw, var(--space-8));
 }
 
 .content-card,
@@ -203,6 +212,15 @@ textarea {
 .content-card {
   padding: clamp(var(--space-4), 3vw, var(--space-8));
   overflow: hidden;
+}
+
+.route-card--flat {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .route-card > *:first-child,
@@ -636,6 +654,15 @@ th {
   gap: var(--space-2);
 }
 
+.task-view-tabs-row {
+  width: fit-content;
+}
+
+.task-filter-summary {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
 .tasks-hero {
   display: flex;
   align-items: flex-start;
@@ -824,6 +851,11 @@ th {
     display: none;
   }
 
+  .topbar--route-owned {
+    display: flex;
+    justify-content: flex-end;
+  }
+
   .topbar {
     position: sticky;
     top: 0;
@@ -921,6 +953,7 @@ th {
   .planner-new-task,
   .planner-search,
   .planner-icon-button,
+  .task-view-tabs-row,
   .task-view-toggle,
   .task-view-toggle button {
     width: 100%;

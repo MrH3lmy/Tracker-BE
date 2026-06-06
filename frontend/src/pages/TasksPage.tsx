@@ -274,6 +274,71 @@ export function TasksPage() {
         </div>
       </header>
 
+      <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
+        <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
+        <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
+        <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
+      </div>
+
+      {filtersOpen && (
+        <div id="task-filter-panel" className="task-filter-panel">
+          <TaskFilters
+            search={search}
+            statusFilter={statusFilter}
+            areaFilter={areaFilter}
+            effortFilter={effortFilter}
+            dueFrom={dueFrom}
+            dueTo={dueTo}
+            overdueOnly={overdueOnly}
+            sort={sort}
+            activeFilterCount={activeFilterCount}
+            areaOptions={areaOptions}
+            effortOptions={effortOptions}
+            disabled={false}
+            serializedFilters={serializedFilters}
+            showSearch={false}
+            onSearchChange={(value) => setFilterParam('q', value, '')}
+            onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
+            onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
+            onEffortFilterChange={(value) => setFilterParam('effort', value, 'all')}
+            onDueFromChange={(value) => setFilterParam('dueFrom', value, '')}
+            onDueToChange={(value) => setFilterParam('dueTo', value, '')}
+            onOverdueOnlyChange={(value) => setFilterParam('overdue', value, false)}
+            onSortChange={(value) => setFilterParam('sort', value, DEFAULT_SORT)}
+            onClearAll={clearFilters}
+            onApplySavedView={applySavedView}
+          />
+        </div>
+      )}
+
+      <section className="panel task-workspace" aria-label={`${tab === 'archive' ? 'Archived' : tab === 'done' ? 'Done' : 'Active'} task list`}>
+        <p className="task-filter-summary">{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
+
+        <QueryState
+          isLoading={taskQueryLoading}
+          isError={taskQueryError}
+          isEmpty={!taskQueryLoading && sortedFilteredTasks.length === 0 && !showActiveEmptyState}
+          emptyMessage={taskFilterCount > 0 ? 'No tasks match your filters.' : 'No tasks available.'}
+          successMessage={createTask.data?.ok ? 'Task created successfully.' : undefined}
+        />
+
+        {showActiveEmptyState && <TaskEmptyState onAddTask={showCreatePanel} disabled={busy} />}
+
+        {sortedFilteredTasks.length > 0 && (
+          <TaskListView
+            tasks={taskTree}
+            busy={busy}
+            onComplete={(taskId) => completeTask.mutate(taskId)}
+            onStartSubtask={(task) => startSubtask(task)}
+            onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
+            onSnoozeFollowUp={snoozeFollowUp}
+            onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
+            onManageDependencies={openDependencyManager}
+            onDelete={(taskId) => deleteTask.mutate(taskId)}
+          />
+        )}
+      </section>
+
       {dependenciesOpen && (
         <ManageDependenciesDrawer
           activeTasks={activeTasks}
@@ -303,77 +368,6 @@ export function TasksPage() {
         </div>
       )}
 
-      <section className="panel task-workspace" aria-labelledby="task-list-title">
-        <div className="section-header task-section-header">
-          <div>
-            <p className="eyebrow">Work queue</p>
-            <h3 id="task-list-title">{tab === 'archive' ? 'Archived tasks' : tab === 'done' ? 'Done tasks' : 'Active tasks'}</h3>
-            <p>{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
-          </div>
-          <div className="task-section-actions">
-            <div className="task-view-toggle" role="group" aria-label="Task status views">
-              <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
-              <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
-              <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
-            </div>
-          </div>
-        </div>
-
-        {filtersOpen && (
-          <div id="task-filter-panel" className="task-filter-panel">
-            <TaskFilters
-              search={search}
-              statusFilter={statusFilter}
-              areaFilter={areaFilter}
-              effortFilter={effortFilter}
-              dueFrom={dueFrom}
-              dueTo={dueTo}
-              overdueOnly={overdueOnly}
-              sort={sort}
-              activeFilterCount={activeFilterCount}
-              areaOptions={areaOptions}
-              effortOptions={effortOptions}
-              disabled={false}
-              serializedFilters={serializedFilters}
-              showSearch={false}
-              onSearchChange={(value) => setFilterParam('q', value, '')}
-              onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
-              onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
-              onEffortFilterChange={(value) => setFilterParam('effort', value, 'all')}
-              onDueFromChange={(value) => setFilterParam('dueFrom', value, '')}
-              onDueToChange={(value) => setFilterParam('dueTo', value, '')}
-              onOverdueOnlyChange={(value) => setFilterParam('overdue', value, false)}
-              onSortChange={(value) => setFilterParam('sort', value, DEFAULT_SORT)}
-              onClearAll={clearFilters}
-              onApplySavedView={applySavedView}
-            />
-          </div>
-        )}
-
-        <QueryState
-          isLoading={taskQueryLoading}
-          isError={taskQueryError}
-          isEmpty={!taskQueryLoading && sortedFilteredTasks.length === 0 && !showActiveEmptyState}
-          emptyMessage={taskFilterCount > 0 ? 'No tasks match your filters.' : 'No tasks available.'}
-          successMessage={createTask.data?.ok ? 'Task created successfully.' : undefined}
-        />
-
-        {showActiveEmptyState && <TaskEmptyState onAddTask={showCreatePanel} disabled={busy} />}
-
-        {sortedFilteredTasks.length > 0 && (
-          <TaskListView
-            tasks={taskTree}
-            busy={busy}
-            onComplete={(taskId) => completeTask.mutate(taskId)}
-            onStartSubtask={(task) => startSubtask(task)}
-            onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
-            onSnoozeFollowUp={snoozeFollowUp}
-            onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
-            onManageDependencies={openDependencyManager}
-            onDelete={(taskId) => deleteTask.mutate(taskId)}
-          />
-        )}
-      </section>
     </div>
   );
 }
