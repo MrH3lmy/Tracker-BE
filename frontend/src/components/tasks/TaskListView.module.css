@@ -3,10 +3,11 @@
   margin-top: 0;
   padding: 0;
   overflow-x: auto;
+  overflow-y: visible;
 }
 
 .table {
-  --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(5.25rem, 6rem) minmax(5.5rem, 6.25rem) minmax(7.25rem, 8rem) 6.75rem;
+  --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(5.25rem, 6rem) minmax(5.5rem, 6.25rem) minmax(7.25rem, 8rem) minmax(8.5rem, 9.5rem);
   --task-surface-soft: var(--color-surface-muted);
   --task-text-muted: var(--color-text-muted);
   --task-accent-blue: var(--color-primary);
@@ -14,8 +15,8 @@
   --task-warning: var(--color-warning);
   --task-danger: var(--color-danger);
   --task-success: var(--color-success);
-  min-width: 58rem;
-  overflow: hidden;
+  min-width: 61rem;
+  overflow: visible;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-overlay);
@@ -167,9 +168,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: 0.35rem;
-  width: 6.75rem;
-  min-width: 6.75rem;
-  max-width: 6.75rem;
 }
 
 .rowActions > button,
@@ -230,6 +228,11 @@
   background: var(--color-surface-overlay);
   box-shadow: var(--shadow-lg);
   padding: var(--space-2);
+}
+
+.row:last-child .overflowMenu {
+  top: auto;
+  bottom: calc(100% + 0.35rem);
 }
 
 .overflowMenu label {
@@ -466,8 +469,8 @@
 
 @media (max-width: 980px) {
   .table {
-    --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(5.5rem, 6.25rem) minmax(7.25rem, 8rem) 6.75rem;
-    min-width: 51rem;
+    --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(5.5rem, 6.25rem) minmax(7.25rem, 8rem) minmax(8.5rem, 9.5rem);
+    min-width: 54rem;
   }
 
   .estimateColumn {
@@ -481,8 +484,8 @@
 
 @media (max-width: 880px) {
   .table {
-    --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(7.25rem, 8rem) 6.75rem;
-    min-width: 44rem;
+    --list-row-columns: minmax(220px, 1fr) minmax(6.25rem, 7.5rem) minmax(8.5rem, 9.5rem) minmax(7.25rem, 8rem) minmax(8.5rem, 9.5rem);
+    min-width: 47rem;
   }
 
   .riskColumn {
