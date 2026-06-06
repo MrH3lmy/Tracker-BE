@@ -81,7 +81,13 @@
 
 .compactRow {
   min-height: 72px;
+  cursor: pointer;
   padding: var(--space-3) var(--space-4);
+}
+
+.compactRow:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .primary {

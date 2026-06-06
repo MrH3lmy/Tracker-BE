@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
 import { taskStatusClassName } from './taskStyleUtils';
@@ -81,12 +81,13 @@ function NestedSubtaskList({ subtasks }: { subtasks: TaskTreeNode[] }) {
   );
 }
 
-function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete }: TaskListViewProps & { task: TaskTreeNode }) {
+function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete, expanded, onToggleExpanded }: TaskListViewProps & { task: TaskTreeNode; expanded: boolean; onToggleExpanded: () => void }) {
   const overdue = isOverdue(task);
   const rowClassName = [styles.row, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : ''].filter(Boolean).join(' ');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = `task-${task.id}-actions-menu`;
+  const detailsId = `task-${task.id}-details`;
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -113,9 +114,26 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
     setMenuOpen(false);
   };
 
+  const handleCompactRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onToggleExpanded();
+    }
+  };
+
   return (
     <div className={rowClassName} role="row">
-      <div className={styles.compactRow}>
+      <div
+        className={styles.compactRow}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+        onClick={onToggleExpanded}
+        onKeyDown={handleCompactRowKeyDown}
+      >
         <div className={styles.primary} role="cell" data-label="Task">
           <span className={styles.id}>#{task.id}</span>
           <strong className={styles.title}>{task.title}</strong>
@@ -129,7 +147,12 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
         <div className={`${styles.metric} ${styles.estimateColumn}`} role="cell" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
         <div className={`${styles.metric} ${styles.riskColumn}`} role="cell" data-label="Risk"><RiskBadge riskLevel={task.riskLevel} /></div>
         <div className={styles.metric} role="cell" data-label="Subtasks"><SubtaskProgress task={task} /></div>
-        <div className={styles.rowActions} role="cell" data-label="Actions">
+        <div
+          className={styles.rowActions}
+          role="cell"
+          data-label="Actions"
+          onClick={(event) => event.stopPropagation()}
+        >
           <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
           <div className={styles.overflow} ref={menuRef}>
             <button
@@ -167,41 +190,44 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           </div>
         </div>
       </div>
-      <details className={styles.details}>
-        <summary>More details</summary>
-        <div className={styles.expandedContent}>
-          {task.description ? <p className={styles.description}>{task.description}</p> : null}
-          <dl className={styles.detailGrid}>
-            <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
-            <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
-            <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
-            <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
-            <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
-            <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
-            <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
-            <div><dt>Risk reason</dt><dd>{formatValue(task.riskReason)}</dd></div>
-            <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
-            <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-            <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
-            <div><dt>Dependencies</dt><dd><button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button></dd></div>
-            <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
-          </dl>
-          {task.dependencyIds?.length ? (
-            <div className={styles.actions} aria-label={`Dependency actions for ${task.title}`}>
-              {task.dependencyIds.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
-            </div>
-          ) : null}
-          <section className={styles.subtaskDetails} aria-label={`Subtasks for ${task.title}`}>
-            <h4>Subtask details</h4>
-            <NestedSubtaskList subtasks={task.subtasks} />
-          </section>
+      {expanded ? (
+        <div id={detailsId} className={styles.details}>
+          <div className={styles.expandedContent}>
+            {task.description ? <p className={styles.description}>{task.description}</p> : null}
+            <dl className={styles.detailGrid}>
+              <div><dt>Start date</dt><dd>{formatDate(task.startDate)}</dd></div>
+              <div><dt>Actual</dt><dd>{formatValue(task.actualMinutes)}</dd></div>
+              <div><dt>Track</dt><dd>{formatValue(task.track)}</dd></div>
+              <div><dt>Phase</dt><dd>{formatValue(task.phase)}</dd></div>
+              <div><dt>Parent</dt><dd>{task.parentTaskId ? `#${task.parentTaskId}` : '—'}</dd></div>
+              <div><dt>Area</dt><dd>{formatValue(task.area)}</dd></div>
+              <div><dt>Effort</dt><dd>{formatValue(task.effort)}</dd></div>
+              <div><dt>Risk reason</dt><dd>{formatValue(task.riskReason)}</dd></div>
+              <div><dt>Waiting on</dt><dd>{formatValue(task.waitingOn ?? task.blockedReason)}</dd></div>
+              <div><dt>Blocked by</dt><dd>{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+              <div><dt>Blocks</dt><dd>{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
+              <div><dt>Dependencies</dt><dd><button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button></dd></div>
+              <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
+            </dl>
+            {task.dependencyIds?.length ? (
+              <div className={styles.actions} aria-label={`Dependency actions for ${task.title}`}>
+                {task.dependencyIds.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
+              </div>
+            ) : null}
+            <section className={styles.subtaskDetails} aria-label={`Subtasks for ${task.title}`}>
+              <h4>Subtask details</h4>
+              <NestedSubtaskList subtasks={task.subtasks} />
+            </section>
+          </div>
         </div>
-      </details>
+      ) : null}
     </div>
   );
 }
 
 export function TaskListView(props: TaskListViewProps) {
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+
   return (
     <div className={styles.tableShell}>
       <div className={styles.table} role="table" aria-label="Task list">
@@ -215,7 +241,15 @@ export function TaskListView(props: TaskListViewProps) {
           <span role="columnheader">Actions</span>
         </div>
         <div className={styles.body} role="rowgroup">
-          {props.tasks.map((task) => <TaskListItem key={task.id} {...props} task={task} />)}
+          {props.tasks.map((task) => (
+            <TaskListItem
+              key={task.id}
+              {...props}
+              task={task}
+              expanded={expandedTaskId === task.id}
+              onToggleExpanded={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+            />
+          ))}
         </div>
       </div>
     </div>
