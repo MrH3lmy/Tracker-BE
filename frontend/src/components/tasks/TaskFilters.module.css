@@ -24,13 +24,13 @@
 }
 
 .toolbar label,
-.savedViews label {
+.savedViewsContent label {
   display: grid;
   gap: var(--space-2);
 }
 
 .toolbar label span,
-.savedViews label span {
+.savedViewsContent label span {
   color: var(--color-text-muted);
   font-size: 0.8rem;
   font-weight: 800;
@@ -40,8 +40,8 @@
 
 .toolbar input,
 .toolbar select,
-.savedViews input,
-.savedViews select {
+.savedViewsContent input,
+.savedViewsContent select {
   width: 100%;
   background: var(--color-surface);
 }
@@ -74,18 +74,29 @@
 }
 
 .savedViews {
-  display: grid;
-  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1fr) minmax(16rem, 1.5fr);
-  gap: var(--space-3);
   padding: var(--space-4);
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-glass-soft);
 }
 
+.savedViews summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.savedViewsContent {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1fr) minmax(16rem, 1.5fr);
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
 @media (max-width: 780px) {
   .toolbar,
-  .savedViews {
+  .savedViewsContent {
     grid-template-columns: 1fr;
   }
 }

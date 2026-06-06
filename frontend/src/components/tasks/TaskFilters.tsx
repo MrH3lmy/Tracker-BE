@@ -34,6 +34,7 @@ interface TaskFiltersProps {
   onSortChange: (value: TaskSortValue) => void;
   onClearAll: () => void;
   onApplySavedView: (params: string) => void;
+  showSearch?: boolean;
 }
 
 const readSavedViews = (): SavedTaskView[] => {
@@ -52,7 +53,7 @@ const writeSavedViews = (views: SavedTaskView[]) => {
   window.localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(views));
 };
 
-export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, dueFrom, dueTo, overdueOnly, sort, activeFilterCount, areaOptions, effortOptions, disabled, serializedFilters, onSearchChange, onStatusFilterChange, onAreaFilterChange, onEffortFilterChange, onDueFromChange, onDueToChange, onOverdueOnlyChange, onSortChange, onClearAll, onApplySavedView }: TaskFiltersProps) {
+export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, dueFrom, dueTo, overdueOnly, sort, activeFilterCount, areaOptions, effortOptions, disabled, serializedFilters, onSearchChange, onStatusFilterChange, onAreaFilterChange, onEffortFilterChange, onDueFromChange, onDueToChange, onOverdueOnlyChange, onSortChange, onClearAll, onApplySavedView, showSearch = true }: TaskFiltersProps) {
   const [savedViews, setSavedViews] = useState<SavedTaskView[]>(readSavedViews);
   const [viewName, setViewName] = useState('');
   const [selectedViewName, setSelectedViewName] = useState('');
@@ -94,10 +95,12 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
     <div className={`task-filter-panel ${styles.panel}`} aria-label="Task filters">
       <div className={styles.summary}><strong>{activeFilterCount}</strong> active filter{activeFilterCount === 1 ? '' : 's'} / sort</div>
       <div className={styles.toolbar}>
-        <label className={styles.search} htmlFor="taskSearch">
-          <span>Search</span>
-          <input id="taskSearch" placeholder="Title, description, or area" value={search} onChange={(e) => onSearchChange(e.target.value)} />
-        </label>
+        {showSearch && (
+          <label className={styles.search} htmlFor="taskSearch">
+            <span>Search</span>
+            <input id="taskSearch" placeholder="Title, description, or area" value={search} onChange={(e) => onSearchChange(e.target.value)} disabled={disabled} />
+          </label>
+        )}
         <label htmlFor="statusFilter">
           <span>Status</span>
           <select id="statusFilter" value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} disabled={disabled}>
@@ -145,25 +148,28 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
         </label>
         <div className={styles.actions}><button type="button" onClick={onClearAll} disabled={activeFilterCount === 0}>Clear all</button></div>
       </div>
-      <div className={styles.savedViews} aria-label="Saved task views">
-        <label htmlFor="savedTaskView">
-          <span>Saved view</span>
-          <select id="savedTaskView" value={selectedViewName} onChange={(e) => setSelectedViewName(e.target.value)}>
-            <option value="">Select a saved view</option>
-            {savedViews.map((view) => <option key={view.name} value={view.name}>{view.name}</option>)}
-          </select>
-        </label>
-        <label htmlFor="savedTaskViewName" className={styles.search}>
-          <span>View name</span>
-          <input id="savedTaskViewName" placeholder="My focused view" value={viewName} onChange={(e) => setViewName(e.target.value)} />
-        </label>
-        <div className={`${styles.actions} ${styles.savedViewActions}`}>
-          <button type="button" onClick={() => selectedView && onApplySavedView(selectedView.params)} disabled={!selectedView}>Apply</button>
-          <button type="button" onClick={saveCurrentView} disabled={!viewName.trim()}>Save current</button>
-          <button type="button" onClick={renameSelectedView} disabled={!selectedView || !viewName.trim()}>Rename</button>
-          <button type="button" onClick={deleteSelectedView} disabled={!selectedView}>Delete</button>
+      <details className={styles.savedViews}>
+        <summary>Saved views</summary>
+        <div className={styles.savedViewsContent} aria-label="Saved task views">
+          <label htmlFor="savedTaskView">
+            <span>Saved view</span>
+            <select id="savedTaskView" value={selectedViewName} onChange={(e) => setSelectedViewName(e.target.value)} disabled={disabled}>
+              <option value="">Select a saved view</option>
+              {savedViews.map((view) => <option key={view.name} value={view.name}>{view.name}</option>)}
+            </select>
+          </label>
+          <label htmlFor="savedTaskViewName" className={styles.search}>
+            <span>View name</span>
+            <input id="savedTaskViewName" placeholder="My focused view" value={viewName} onChange={(e) => setViewName(e.target.value)} disabled={disabled} />
+          </label>
+          <div className={`${styles.actions} ${styles.savedViewActions}`}>
+            <button type="button" onClick={() => selectedView && onApplySavedView(selectedView.params)} disabled={disabled || !selectedView}>Apply</button>
+            <button type="button" onClick={saveCurrentView} disabled={disabled || !viewName.trim()}>Save current</button>
+            <button type="button" onClick={renameSelectedView} disabled={disabled || !selectedView || !viewName.trim()}>Rename</button>
+            <button type="button" onClick={deleteSelectedView} disabled={disabled || !selectedView}>Delete</button>
+          </div>
         </div>
-      </div>
+      </details>
     </div>
   );
 }
