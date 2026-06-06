@@ -88,6 +88,8 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = `task-${task.id}-actions-menu`;
   const detailsId = `task-${task.id}-details`;
+  const isDone = task.status === 'DONE' || Boolean(task.completedDate);
+  const statusOptions = TASK_STATUS_VALUES.filter((status) => status !== task.status);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -162,7 +164,11 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           data-label="Actions"
           onClick={(event) => event.stopPropagation()}
         >
-          <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
+          {isDone ? (
+            <span className={styles.completedAction} aria-label={`Task #${task.id} is completed`}>Completed</span>
+          ) : (
+            <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
+          )}
           <div className={styles.overflow} ref={menuRef}>
             <button
               type="button"
@@ -190,7 +196,7 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
                   }}
                 >
                   <option value="">Select status...</option>
-                  {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
+                  {statusOptions.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
                 </select>
                 <button type="button" onClick={() => runMenuAction(() => onSnoozeFollowUp(task))} disabled={busy}>Follow up tomorrow</button>
                 <button type="button" className={styles.dangerAction} onClick={() => runMenuAction(() => onDelete(task.id))} disabled={busy}>Delete</button>
