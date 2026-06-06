@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { QueryState } from '../components/QueryState';
 import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import { latestResult, useNoteMutations, useNotesQuery } from '../hooks/useApiQueries';
@@ -32,6 +33,10 @@ function noteToForm(note: NoteRecord): NoteFormState {
   };
 }
 
+function emptyFormForTask(taskId: string): NoteFormState {
+  return { ...EMPTY_FORM, taskId };
+}
+
 function buildPayload(form: NoteFormState) {
   const trimmedTaskId = form.taskId.trim();
   return {
@@ -43,21 +48,24 @@ function buildPayload(form: NoteFormState) {
 }
 
 export function NotesPage() {
+  const [searchParams] = useSearchParams();
+  const linkedTaskId = searchParams.get('taskId')?.trim() ?? '';
   const [search, setSearch] = useState('');
   const [contentTypeFilter, setContentTypeFilter] = useState<NoteContentType | 'all'>('all');
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
 
-  const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter });
+  const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId });
   const { createNote, updateNote, deleteNote } = useNoteMutations();
   const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data);
   const notes = useMemo(() => notesQuery.data?.data ?? [], [notesQuery.data]);
   const isBusy = createNote.isPending || updateNote.isPending || deleteNote.isPending;
-  const canSubmit = form.title.trim().length > 0 && form.body.trim().length > 0 && !isBusy;
+  const activeForm = editingNoteId === null && linkedTaskId && form.taskId.trim() === '' ? { ...form, taskId: linkedTaskId } : form;
+  const canSubmit = activeForm.title.trim().length > 0 && activeForm.body.trim().length > 0 && !isBusy;
 
   const resetForm = () => {
-    setForm(EMPTY_FORM);
+    setForm(emptyFormForTask(linkedTaskId));
     setEditingNoteId(null);
   };
 
@@ -65,7 +73,7 @@ export function NotesPage() {
     event.preventDefault();
     if (!canSubmit) return;
 
-    const payload = buildPayload(form);
+    const payload = buildPayload(activeForm);
     if (editingNoteId === null) {
       createNote.mutate(payload, { onSuccess: (result) => { if (result.ok) resetForm(); } });
       return;
@@ -89,18 +97,21 @@ export function NotesPage() {
         <div>
           <p className="eyebrow">Knowledge base</p>
           <h2>Notes</h2>
-          <p>Capture searchable task notes, commands, JSON snippets, and reference material.</p>
+          <p>Capture searchable notes, commands, JSON snippets, and reference material without overloading task descriptions.</p>
         </div>
-        <button type="button" className="button-primary" onClick={resetForm} disabled={isBusy || editingNoteId === null}>
-          New note
-        </button>
+        <div className="row compact-row">
+          {linkedTaskId ? <Link className="secondary-action" to="/notes">View all notes</Link> : null}
+          <button type="button" className="button-primary" onClick={resetForm} disabled={isBusy || editingNoteId === null}>
+            New note
+          </button>
+        </div>
       </header>
 
       <section className="page-card main-content-card" aria-labelledby="notes-filters-title">
         <div className="section-header">
           <div>
-            <h3 id="notes-filters-title">Browse notes</h3>
-            <p className="muted">Search note titles and bodies, then narrow by content type.</p>
+            <h3 id="notes-filters-title">{linkedTaskId ? `Notes for task #${linkedTaskId}` : 'Browse notes'}</h3>
+            <p className="muted">{linkedTaskId ? 'Showing only notes linked to this task. Search and content-type filters still apply.' : 'Search note titles and bodies, then narrow by content type.'}</p>
           </div>
           <button type="button" className="secondary-action" onClick={() => notesQuery.refetch()} disabled={notesQuery.isFetching}>
             {notesQuery.isFetching ? 'Loading...' : 'Reload notes'}
@@ -159,7 +170,7 @@ export function NotesPage() {
         <div className="section-header">
           <div>
             <h3 id="note-form-title">{editingNoteId === null ? 'Create note' : 'Edit note'}</h3>
-            <p className="muted">Notes require a title, content type, and body. Task IDs are optional.</p>
+            <p className="muted">Notes require a title, content type, and body. Task IDs link notes to tasks while keeping task descriptions separate.</p>
           </div>
           {editingNoteId !== null && <button type="button" onClick={resetForm} disabled={isBusy}>Cancel edit</button>}
         </div>
@@ -168,17 +179,17 @@ export function NotesPage() {
           <div className="row" style={{ alignItems: 'end', flexWrap: 'wrap' }}>
             <label className="field-stack" htmlFor="noteTitle" style={{ flex: '1 1 18rem' }}>
               <span>Title</span>
-              <input id="noteTitle" value={form.title} maxLength={255} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
+              <input id="noteTitle" value={activeForm.title} maxLength={255} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
             </label>
             <label className="field-stack" htmlFor="noteContentType" style={{ flex: '0 1 16rem' }}>
               <span>Content type</span>
-              <select id="noteContentType" value={form.contentType} onChange={(event) => setForm((current) => ({ ...current, contentType: event.target.value as NoteContentType }))}>
+              <select id="noteContentType" value={activeForm.contentType} onChange={(event) => setForm((current) => ({ ...current, contentType: event.target.value as NoteContentType }))}>
                 {NOTE_CONTENT_TYPES.map((type) => <option key={type} value={type}>{humanizeContentType(type)}</option>)}
               </select>
             </label>
             <label className="field-stack" htmlFor="noteTaskId" style={{ flex: '0 1 12rem' }}>
               <span>Task ID (optional)</span>
-              <input id="noteTaskId" type="number" min="1" value={form.taskId} onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))} />
+              <input id="noteTaskId" type="number" min="1" value={activeForm.taskId} onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))} />
             </label>
           </div>
 
@@ -188,7 +199,7 @@ export function NotesPage() {
               id="noteBody"
               className="text-block"
               rows={12}
-              value={form.body}
+              value={activeForm.body}
               onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
               required
             />
