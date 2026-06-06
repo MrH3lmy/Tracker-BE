@@ -6,7 +6,7 @@
 }
 
 .table {
-  --list-row-columns: minmax(16rem, 2fr) minmax(7.5rem, 0.8fr) minmax(7rem, 0.7fr) minmax(6.5rem, 0.65fr) minmax(5.75rem, 0.55fr) minmax(6.5rem, 0.65fr) minmax(8rem, 0.8fr);
+  --list-row-columns: minmax(16rem, 2fr) minmax(7.5rem, 0.8fr) minmax(7rem, 0.7fr) minmax(6.5rem, 0.65fr) minmax(5.75rem, 0.55fr) minmax(6.5rem, 0.65fr) minmax(8rem, 0.8fr) minmax(9rem, 0.85fr);
   --task-surface-soft: var(--color-surface-muted);
   --task-text-muted: var(--color-text-muted);
   --task-accent-blue: var(--color-primary);
@@ -14,7 +14,7 @@
   --task-warning: var(--color-warning);
   --task-danger: var(--color-danger);
   --task-success: var(--color-success);
-  min-width: 64rem;
+  min-width: 73rem;
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -134,6 +134,59 @@
   color: var(--color-text);
   font-size: 0.86rem;
   font-weight: 750;
+}
+
+.rowActions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.overflow {
+  position: relative;
+  display: inline-flex;
+}
+
+.overflowButton {
+  min-width: 2.35rem;
+  padding-inline: 0.62rem;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.overflowMenu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 5;
+  display: grid;
+  width: min(15rem, 72vw);
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+}
+
+.overflowMenu label {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.overflowMenu button,
+.overflowMenu select {
+  width: 100%;
+}
+
+.dangerAction {
+  color: var(--task-danger);
 }
 
 .overdueDate {
@@ -358,20 +411,47 @@
     gap: var(--space-2);
   }
 
-  .metric {
+  .metric,
+  .rowActions {
     display: grid;
     grid-template-columns: 6.75rem minmax(0, 1fr);
     align-items: center;
     gap: var(--space-3);
   }
 
-  .metric::before {
+  .metric::before,
+  .rowActions::before {
     content: attr(data-label);
     color: var(--color-text-muted);
     font-size: 0.72rem;
     font-weight: 850;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+  }
+
+  .rowActions {
+    justify-content: stretch;
+  }
+
+  .rowActions::before {
+    content: attr(data-label);
+  }
+
+  .rowActions > button,
+  .overflow {
+    width: 100%;
+  }
+
+  .rowActions > button {
+    grid-column: 2;
+  }
+
+  .overflow {
+    grid-column: 2;
+  }
+
+  .overflowButton {
+    width: 100%;
   }
 
   .primary {

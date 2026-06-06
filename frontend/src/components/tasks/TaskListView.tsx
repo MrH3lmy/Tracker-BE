@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
 import { taskStatusClassName } from './taskStyleUtils';
@@ -83,6 +84,34 @@ function NestedSubtaskList({ subtasks }: { subtasks: TaskTreeNode[] }) {
 function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete }: TaskListViewProps & { task: TaskTreeNode }) {
   const overdue = isOverdue(task);
   const rowClassName = [styles.row, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : ''].filter(Boolean).join(' ');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = `task-${task.id}-actions-menu`;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    function handleDocumentClick(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false);
+    }
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [menuOpen]);
+
+  const runMenuAction = (action: () => void) => {
+    action();
+    setMenuOpen(false);
+  };
 
   return (
     <div className={rowClassName} role="row">
@@ -98,6 +127,43 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
         <div className={styles.metric} role="cell" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
         <div className={styles.metric} role="cell" data-label="Risk"><RiskBadge riskLevel={task.riskLevel} /></div>
         <div className={styles.metric} role="cell" data-label="Subtasks"><SubtaskProgress task={task} /></div>
+        <div className={styles.rowActions} role="cell" data-label="Actions">
+          <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
+          <div className={styles.overflow} ref={menuRef}>
+            <button
+              type="button"
+              className={styles.overflowButton}
+              aria-label={`More actions for #${task.id}`}
+              aria-controls={menuId}
+              aria-expanded={menuOpen}
+              aria-haspopup="true"
+              onClick={() => setMenuOpen((open) => !open)}
+              disabled={busy}
+            >
+              ⋯
+            </button>
+            {menuOpen ? (
+              <div id={menuId} className={styles.overflowMenu} role="group" aria-label={`More actions for #${task.id}`}>
+                <button type="button" onClick={() => runMenuAction(() => onStartSubtask(task))} disabled={busy}>Add subtask</button>
+                <label htmlFor={`changeStatus-${task.id}`}>Change status</label>
+                <select
+                  id={`changeStatus-${task.id}`}
+                  defaultValue=""
+                  disabled={busy}
+                  onChange={(e) => {
+                    if (e.target.value && isTaskStatus(e.target.value)) runMenuAction(() => onChangeStatus(task.id, e.target.value));
+                    e.target.value = '';
+                  }}
+                >
+                  <option value="">Select status...</option>
+                  {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
+                </select>
+                <button type="button" onClick={() => runMenuAction(() => onSnoozeFollowUp(task))} disabled={busy}>Follow up tomorrow</button>
+                <button type="button" className={styles.dangerAction} onClick={() => runMenuAction(() => onDelete(task.id))} disabled={busy}>Delete</button>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       <details className={styles.details}>
         <summary>More details</summary>
@@ -118,18 +184,11 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
             <div><dt>Dependencies</dt><dd><button type="button" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</button></dd></div>
             <div><dt>Follow-up</dt><dd>{formatDate(task.followUpDate)}</dd></div>
           </dl>
-          <div className={styles.actions} aria-label={`Actions for ${task.title}`}>
-            <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
-            <button type="button" onClick={() => onStartSubtask(task)} disabled={busy}>Add subtask</button>
-            <label htmlFor={`changeStatus-${task.id}`} className="sr-only">Set status</label>
-            <select id={`changeStatus-${task.id}`} disabled={busy} defaultValue="" onChange={(e) => { if (e.target.value && isTaskStatus(e.target.value)) onChangeStatus(task.id, e.target.value); }}>
-              <option value="">Set status...</option>
-              {TASK_STATUS_VALUES.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
-            </select>
-            <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy}>Follow up tomorrow</button>
-            {task.dependencyIds?.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
-            <button type="button" onClick={() => onDelete(task.id)} disabled={busy}>Delete</button>
-          </div>
+          {task.dependencyIds?.length ? (
+            <div className={styles.actions} aria-label={`Dependency actions for ${task.title}`}>
+              {task.dependencyIds.map((blocksTaskId) => <button key={`${task.id}-${blocksTaskId}`} type="button" onClick={() => onRemoveDependency(task.id, blocksTaskId)} disabled={busy}>Unlink #{blocksTaskId}</button>)}
+            </div>
+          ) : null}
           <section className={styles.subtaskDetails} aria-label={`Subtasks for ${task.title}`}>
             <h4>Subtask details</h4>
             <NestedSubtaskList subtasks={task.subtasks} />
@@ -152,6 +211,7 @@ export function TaskListView(props: TaskListViewProps) {
           <span role="columnheader">Estimate</span>
           <span role="columnheader">Risk</span>
           <span role="columnheader">Subtasks</span>
+          <span role="columnheader">Actions</span>
         </div>
         <div className={styles.body} role="rowgroup">
           {props.tasks.map((task) => <TaskListItem key={task.id} {...props} task={task} />)}
