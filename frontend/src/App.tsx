@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { appRoutes, appTabs } from './router/routes';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { appRoutes, appTabs, developerTabs } from './router/routes';
 import { useSettingsQuery } from './hooks/useApiQueries';
 import { AnnouncementContext } from './announcementContext';
 import { ThemeContext } from './themeContext';
@@ -46,7 +46,21 @@ function SidebarItem({ label, path, onClick }: { label: string; path: string; on
   );
 }
 
+function DeveloperNavSection({ isActive }: { isActive: boolean }) {
+  return (
+    <details className="developer-nav" open={isActive}>
+      <summary>Developer/Admin</summary>
+      <nav className="tabs sidebar-tabs developer-tabs" aria-label="Developer and admin navigation">
+        {developerTabs.map(({ label, path }) => (
+          <SidebarItem key={path} label={label} path={path} />
+        ))}
+      </nav>
+    </details>
+  );
+}
+
 export default function App() {
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
@@ -75,6 +89,7 @@ export default function App() {
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
   const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
+  const isDeveloperRouteActive = developerTabs.some(({ path }) => location.pathname.startsWith(path));
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
@@ -90,18 +105,21 @@ export default function App() {
             </div>
           </div>
           <p className="sidebar-tagline">Plan work, inspect API calls, and keep execution moving.</p>
-          <nav className="tabs sidebar-tabs">
+          <nav className="tabs sidebar-tabs" aria-label="Primary app navigation">
             {appTabs.map(({ label, path }) => (
               <SidebarItem key={path} label={label} path={path} />
             ))}
           </nav>
-          <div className="sidebar-profile" aria-label="Signed in user">
-            <span className="profile-avatar" aria-hidden="true">JD</span>
-            <div className="profile-copy">
-              <strong>John Doe</strong>
-              <span>john.doe@trackerbe.com</span>
+          <div className="sidebar-bottom">
+            <DeveloperNavSection isActive={isDeveloperRouteActive} />
+            <div className="sidebar-profile" aria-label="Signed in user">
+              <span className="profile-avatar" aria-hidden="true">JD</span>
+              <div className="profile-copy">
+                <strong>John Doe</strong>
+                <span>john.doe@trackerbe.com</span>
+              </div>
+              <span className="profile-chevron" aria-hidden="true">⌄</span>
             </div>
-            <span className="profile-chevron" aria-hidden="true">⌄</span>
           </div>
         </aside>
 

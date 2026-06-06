@@ -2090,12 +2090,65 @@ code {
   box-shadow: 0 0 18px rgba(34, 211, 238, 0.72);
 }
 
+.sidebar-bottom {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: auto;
+}
+
+.developer-nav {
+  border: 1px solid rgba(120, 170, 255, 0.18);
+  border-radius: 1.05rem;
+  background: rgba(15, 23, 42, 0.42);
+  color: rgba(226, 232, 240, 0.74);
+  overflow: hidden;
+}
+
+.developer-nav summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.85rem 0.95rem;
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 0.85rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.developer-nav summary::-webkit-details-marker {
+  display: none;
+}
+
+.developer-nav summary::after {
+  content: "⌄";
+  float: right;
+  transition: transform 160ms ease;
+}
+
+.developer-nav[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.developer-nav summary:hover,
+.developer-nav[open] summary {
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.14);
+}
+
+.developer-tabs {
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.developer-tabs .tab {
+  min-height: 2.85rem;
+  font-size: 0.92rem;
+}
+
 .sidebar-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
-  margin-top: auto;
   padding: var(--space-3);
   border: 1px solid rgba(120, 170, 255, 0.22);
   border-radius: 1.05rem;

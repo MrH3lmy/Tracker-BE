@@ -15,7 +15,7 @@ export interface AppRoute {
   element: ReactElement;
 }
 
-export const appRoutes: AppRoute[] = [
+export const primaryRoutes: AppRoute[] = [
   { label: 'Dashboard', path: '/dashboard', element: <DashboardPage /> },
   { label: 'Tasks', path: '/tasks', element: <TasksPage /> },
   { label: 'Planning', path: '/planning', element: <PlanningPage /> },
@@ -23,8 +23,14 @@ export const appRoutes: AppRoute[] = [
   { label: 'Calendar', path: '/calendar', element: <CalendarPage /> },
   { label: 'Settings', path: '/settings', element: <SettingsPage /> },
   { label: 'Import', path: '/import', element: <ImportPage /> },
+];
+
+export const developerRoutes: AppRoute[] = [
   { label: 'Error Playground', path: '/errors', element: <PlaceholderPage title="Error Playground" /> },
   { label: 'Developer Tools', path: '/developer-tools', element: <DeveloperToolsPage /> },
 ];
 
-export const appTabs = appRoutes.map(({ label, path }) => ({ label, path }));
+export const appRoutes = [...primaryRoutes, ...developerRoutes];
+
+export const appTabs = primaryRoutes.map(({ label, path }) => ({ label, path }));
+export const developerTabs = developerRoutes.map(({ label, path }) => ({ label, path }));
