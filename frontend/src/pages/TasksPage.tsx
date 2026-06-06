@@ -241,8 +241,9 @@ export function TasksPage() {
               <span className="sr-only">Search tasks</span>
               <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
             </label>
-            <button className="planner-icon-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            <button className="planner-icon-button planner-filter-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
+              <span>Filters</span>
+              {activeFilterCount > 0 && <span className="planner-filter-badge" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span>}
             </button>
             <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
               Add task
@@ -295,6 +296,7 @@ export function TasksPage() {
               effortOptions={effortOptions}
               disabled={false}
               serializedFilters={serializedFilters}
+              showSearch={false}
               onSearchChange={(value) => setFilterParam('q', value, '')}
               onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
               onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
