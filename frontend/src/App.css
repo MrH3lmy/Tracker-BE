@@ -91,8 +91,9 @@ textarea {
 }
 
 .app-shell {
+  --sidebar-width: 16.5rem;
   display: grid;
-  grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   min-height: 100vh;
   width: 100%;
 }
@@ -103,6 +104,9 @@ textarea {
   align-self: start;
   display: flex;
   flex-direction: column;
+  width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  overflow-x: hidden;
   gap: var(--space-6);
   min-height: 100vh;
   padding: var(--space-6);
@@ -818,7 +822,8 @@ th {
 
 @media (max-width: 1024px) {
   .app-shell {
-    grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr);
+    --sidebar-width: 13rem;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
 
   .sidebar {
@@ -845,6 +850,7 @@ th {
 @media (max-width: 780px) {
   .app-shell {
     display: block;
+    grid-template-columns: none;
   }
 
   .sidebar {
@@ -2791,12 +2797,14 @@ code {
   z-index: 40;
   display: flex;
   justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.28);
-  backdrop-filter: blur(2px);
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
 }
 
 .dependency-drawer,
 .task-create-drawer {
+  pointer-events: auto;
   width: min(100%, 34rem);
   min-height: 100%;
   padding: clamp(var(--space-4), 3vw, var(--space-6));
