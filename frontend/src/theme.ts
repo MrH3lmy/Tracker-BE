@@ -6,6 +6,10 @@ export const THEME_OPTIONS = [
   { value: 'dark', label: 'Dark', description: 'Lower-light palette for reduced glare.' },
   { value: 'high-contrast', label: 'High contrast', description: 'Maximum contrast colors and stronger outlines.' },
   { value: 'compact', label: 'Compact', description: 'Light palette with tighter spacing and smaller radii.' },
+  { value: 'ocean', label: 'Ocean', description: 'Cool coastal blues and teals for a calm planning workspace.' },
+  { value: 'sunset', label: 'Sunset', description: 'Warm peach, coral, and violet tones for a focused end-of-day feel.' },
+  { value: 'forest', label: 'Forest', description: 'Grounded greens and moss accents for a natural low-glare workspace.' },
+  { value: 'midnight', label: 'Midnight', description: 'Deep navy surfaces with electric blue highlights for late-night work.' },
 ] as const;
 
 export type AppTheme = (typeof THEME_OPTIONS)[number]['value'];
