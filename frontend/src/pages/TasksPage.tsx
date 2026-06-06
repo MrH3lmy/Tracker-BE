@@ -259,25 +259,27 @@ export function TasksPage() {
             <p>Manage, prioritize, and complete your work.</p>
           </div>
 
-          <div className="planner-toolbar" aria-label="Task actions">
-            <label className="planner-search" htmlFor="plannerTaskSearch">
-              <span className="sr-only">Search tasks</span>
-              <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
-            </label>
-            <button className="planner-icon-button planner-filter-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
-              <span>Filters</span>
-              {activeFilterCount > 0 && <span className="planner-filter-badge" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span>}
-            </button>
-            <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
-              Add task
-            </button>
-          </div>
-        </div>
+          <div className="tasks-planner-actions">
+            <div className="planner-toolbar" aria-label="Task actions">
+              <label className="planner-search" htmlFor="plannerTaskSearch">
+                <span className="sr-only">Search tasks</span>
+                <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
+              </label>
+              <button className="planner-icon-button planner-filter-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
+                <span>Filters</span>
+                {activeFilterCount > 0 && <span className="planner-filter-badge" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span>}
+              </button>
+              <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
+                Add task
+              </button>
+            </div>
 
-        <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
-          <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
-          <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
-          <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
+            <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
+              <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
+              <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
+              <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
+            </div>
+          </div>
         </div>
       </header>
 
