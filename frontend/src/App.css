@@ -2184,11 +2184,12 @@ code {
 .sidebar {
   gap: var(--space-5);
   padding: clamp(var(--space-5), 2vw, var(--space-8)) var(--space-5);
+  color: var(--color-text);
   background:
-    radial-gradient(circle at 18% 7%, rgba(56, 189, 248, 0.18), transparent 15rem),
-    linear-gradient(180deg, rgba(2, 6, 23, 0.94), rgba(8, 20, 48, 0.92));
-  border-right-color: rgba(120, 170, 255, 0.22);
-  box-shadow: 18px 0 60px rgba(1, 8, 24, 0.22);
+    linear-gradient(180deg, var(--color-surface-glass), var(--color-surface-glass-soft)),
+    var(--gradient-panel);
+  border-right-color: var(--color-border-translucent);
+  box-shadow: var(--shadow-lg);
 }
 
 .brand-lockup {
@@ -2207,12 +2208,12 @@ code {
 }
 
 .sidebar .eyebrow {
-  color: #22d3ee;
+  color: var(--color-accent);
 }
 
 .sidebar-tagline {
   max-width: 14rem;
-  color: rgba(226, 232, 240, 0.76);
+  color: var(--color-text-muted);
   line-height: 1.65;
 }
 
@@ -2229,7 +2230,7 @@ code {
 
 .sidebar .tab {
   min-height: 3.25rem;
-  color: rgba(226, 232, 240, 0.74);
+  color: var(--color-text-muted);
   padding: 0.8rem 0.95rem;
 }
 
@@ -2246,17 +2247,17 @@ code {
 }
 
 .sidebar .tab:hover {
-  border-color: rgba(96, 165, 250, 0.28);
-  background: rgba(37, 99, 235, 0.14);
-  color: #bfdbfe;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .sidebar .tab.active {
-  border-color: rgba(96, 165, 250, 0.46);
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.28), rgba(59, 130, 246, 0.2));
-  color: #7dd3fc;
-  box-shadow: 0 14px 38px rgba(37, 99, 235, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: var(--color-primary-border);
+  background: var(--gradient-primary-soft);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .sidebar .tab.active::before {
@@ -2267,8 +2268,8 @@ code {
   bottom: 0.8rem;
   width: 0.22rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, #22d3ee, #60a5fa);
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.72);
+  background: var(--gradient-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .sidebar-bottom {
@@ -2278,10 +2279,10 @@ code {
 }
 
 .developer-nav {
-  border: 1px solid rgba(120, 170, 255, 0.18);
+  border: 1px solid var(--color-border-translucent);
   border-radius: 1.05rem;
-  background: rgba(15, 23, 42, 0.42);
-  color: rgba(226, 232, 240, 0.74);
+  background: var(--color-surface-glass-soft);
+  color: var(--color-text-muted);
   overflow: hidden;
 }
 
@@ -2289,7 +2290,7 @@ code {
   cursor: pointer;
   list-style: none;
   padding: 0.85rem 0.95rem;
-  color: rgba(226, 232, 240, 0.78);
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   font-weight: 850;
   letter-spacing: 0.05em;
@@ -2312,8 +2313,8 @@ code {
 
 .developer-nav summary:hover,
 .developer-nav[open] summary {
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.14);
+  color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
 }
 
 .developer-tabs {
@@ -2331,10 +2332,10 @@ code {
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3);
-  border: 1px solid rgba(120, 170, 255, 0.22);
+  border: 1px solid var(--color-border-translucent);
   border-radius: 1.05rem;
-  background: linear-gradient(135deg, rgba(30, 58, 138, 0.32), rgba(15, 23, 42, 0.64));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 42px rgba(2, 6, 23, 0.22);
+  background: var(--gradient-panel);
+  box-shadow: var(--shadow-md);
 }
 
 .profile-avatar {
@@ -2363,12 +2364,12 @@ code {
 }
 
 .profile-copy strong {
-  color: #f8fafc;
+  color: var(--color-text);
 }
 
 .profile-copy span,
 .profile-chevron {
-  color: rgba(203, 213, 225, 0.74);
+  color: var(--color-text-muted);
   font-size: 0.84rem;
 }
 
