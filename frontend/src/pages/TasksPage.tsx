@@ -321,9 +321,11 @@ export function TasksPage() {
         </aside>
       )}
 
-      <section className="panel task-workspace" aria-labelledby="task-list-heading">
+      <section className="task-workspace" aria-labelledby="task-list-heading">
         <h3 id="task-list-heading" className="sr-only">{taskListLabel}</h3>
-        <p className="task-filter-summary">{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
+        {activeFilterCount > 0 && (
+          <p className="task-filter-summary">{`${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.`}</p>
+        )}
 
         <QueryState
           isLoading={taskQueryLoading}
