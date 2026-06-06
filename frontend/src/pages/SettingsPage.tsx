@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
@@ -172,11 +171,6 @@ export function SettingsPage() {
         <QueryState isLoading={settingsQuery.isLoading} isError={Boolean((settingsQuery.data && !settingsQuery.data.ok) || (saveMutation.data && !saveMutation.data.ok))} isEmpty={false} successMessage={saveMutation.data?.ok ? 'Settings saved successfully.' : undefined} />
       </section>
 
-      <section className="page-card diagnostics-card" aria-labelledby="settings-diagnostics-title">
-        <h3 id="settings-diagnostics-title">Request diagnostics</h3>
-        <p className="muted">Latest settings load or save request, including payload and parsed response.</p>
-        <RequestInspector result={saveMutation.data ?? settingsQuery.data ?? null} />
-      </section>
     </div>
   );
 }

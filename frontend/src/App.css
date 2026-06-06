@@ -738,28 +738,6 @@ th {
   padding: var(--space-4);
 }
 
-.task-inspector {
-  background: var(--color-surface-overlay);
-}
-
-.task-inspector > summary {
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-weight: 800;
-}
-
-.task-inspector > summary:focus-visible {
-  border-radius: var(--radius-sm);
-  outline: 3px solid var(--color-primary);
-  outline-offset: 3px;
-}
-
-.task-inspector > .panel {
-  margin-top: var(--space-4);
-  border-style: dashed;
-  box-shadow: none;
-}
-
 @media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr);

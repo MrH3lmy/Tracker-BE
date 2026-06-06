@@ -30,6 +30,30 @@ interface ApiRequestOptions {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_HISTORY_LIMIT = 50;
+const apiHistory: ApiCallResult<unknown>[] = [];
+const apiHistoryListeners = new Set<() => void>();
+
+function recordApiCall<T>(result: ApiCallResult<T>): ApiCallResult<T> {
+  apiHistory.unshift(result as ApiCallResult<unknown>);
+  if (apiHistory.length > API_HISTORY_LIMIT) apiHistory.length = API_HISTORY_LIMIT;
+  apiHistoryListeners.forEach((listener) => listener());
+  return result;
+}
+
+export function getApiHistory(): ApiCallResult<unknown>[] {
+  return [...apiHistory];
+}
+
+export function subscribeToApiHistory(listener: () => void): () => void {
+  apiHistoryListeners.add(listener);
+  return () => apiHistoryListeners.delete(listener);
+}
+
+export function clearApiHistory(): void {
+  apiHistory.length = 0;
+  apiHistoryListeners.forEach((listener) => listener());
+}
 
 function isJsonResponse(contentType: string | null): boolean {
   if (!contentType) return false;
@@ -117,32 +141,32 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
     };
 
     if (!response.ok) {
-      return {
+      return recordApiCall({
         ...baseResult,
         error: {
           code: 'HTTP_ERROR',
           message: `Request failed with status ${response.status}.`,
           details: rawBody ? rawBody.slice(0, 500) : undefined,
         },
-      };
+      });
     }
 
     if (parseError) {
-      return {
+      return recordApiCall({
         ...baseResult,
         outcome: 'parse_error',
         ok: false,
         error: parseError,
-      };
+      });
     }
 
-    return baseResult;
+    return recordApiCall(baseResult);
   } catch (error) {
     const latencyMs = Math.round(performance.now() - startedAt);
     const isAbort = error instanceof DOMException && error.name === 'AbortError';
     const isTimeoutAbort = Boolean(timeoutController?.signal.aborted);
 
-    return {
+    const networkErrorResult: ApiCallResult<T> = {
       status: 0,
       latencyMs,
       data: null,
@@ -157,6 +181,8 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
         details: String(error),
       },
     };
+
+    return recordApiCall(networkErrorResult);
   } finally {
     if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     linkedSignals.forEach((signal) => signal.removeEventListener('abort', onAbort));

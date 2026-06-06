@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { useMatrixQuery } from '../hooks/useApiQueries';
 
@@ -115,11 +114,6 @@ export function MatrixPage() {
         {hasData && (canRenderQuadrants ? <MatrixQuadrants data={query.data?.data} /> : <pre>{JSON.stringify(query.data?.data, null, 2)}</pre>)}
       </section>
 
-      <section className="page-card diagnostics-card" aria-labelledby="matrix-diagnostics-title">
-        <h3 id="matrix-diagnostics-title">Request diagnostics</h3>
-        <p className="muted">Raw matrix request metadata, status, latency, and parsed response.</p>
-        <RequestInspector result={query.data ?? null} />
-      </section>
     </div>
   );
 }

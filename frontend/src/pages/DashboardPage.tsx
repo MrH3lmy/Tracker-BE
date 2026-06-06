@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiJson, type ApiCallResult } from '../apiClient';
 import { ProgressBar } from '../components/ProgressBar';
-import { RequestInspector } from '../components/RequestInspector';
 import { StackedProgressBar, type StackedProgressSegment } from '../components/StackedProgressBar';
 import { appRoutes } from '../router/routes';
 
@@ -390,10 +389,6 @@ export function DashboardPage() {
           ) : (
             <p className="status-placeholder">Run a check to verify /api/v1/dashboard.</p>
           )}
-          <details className="dashboard-diagnostics compact">
-            <summary>Request inspector</summary>
-            <RequestInspector result={result} />
-          </details>
         </aside>
       </section>
     </div>
