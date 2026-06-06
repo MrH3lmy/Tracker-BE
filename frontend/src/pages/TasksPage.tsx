@@ -5,6 +5,7 @@ import { useAnnouncement } from '../announcementContext';
 import { QueryState } from '../components/QueryState';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { ManageDependenciesDrawer } from '../components/tasks/ManageDependenciesDrawer';
+import { TaskEmptyState } from '../components/tasks/TaskEmptyState';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
@@ -179,7 +180,8 @@ export function TasksPage() {
     return true;
   }), [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, statusFilter, tasks]);
   const sortedFilteredTasks = useMemo(() => sortTasks(filteredTasks, sort), [filteredTasks, sort]);
-  const activeFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all', dueFrom, dueTo, overdueOnly, sort !== DEFAULT_SORT].filter(Boolean).length;
+  const taskFilterCount = [search.trim(), statusFilter !== 'all', areaFilter !== 'all', effortFilter !== 'all', dueFrom, dueTo, overdueOnly].filter(Boolean).length;
+  const activeFilterCount = taskFilterCount + (sort !== DEFAULT_SORT ? 1 : 0);
   const serializedFilters = useMemo(() => {
     const params = new URLSearchParams();
     updateParam(params, 'q', search.trim(), '');
@@ -193,6 +195,9 @@ export function TasksPage() {
     return params.toString();
   }, [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, sort, statusFilter]);
   const taskTree = useMemo(() => buildTaskTree(sortedFilteredTasks, (nodes) => nodes), [sortedFilteredTasks]);
+  const taskQueryLoading = query.isLoading || query.isFetching;
+  const taskQueryError = Boolean(query.data && !query.data.ok);
+  const showActiveEmptyState = tab === 'active' && !taskQueryLoading && !taskQueryError && sortedFilteredTasks.length === 0 && taskFilterCount === 0;
   const latestMutationResult = latestResult(removeDependency.data, addDependency.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
   useEffect(() => {
     if (!latestMutationResult) return;
@@ -342,12 +347,14 @@ export function TasksPage() {
         )}
 
         <QueryState
-          isLoading={query.isLoading || query.isFetching}
-          isError={Boolean(query.data && !query.data.ok)}
-          isEmpty={!query.isLoading && sortedFilteredTasks.length === 0}
-          emptyMessage={activeFilterCount > 0 ? 'No tasks match the current filters.' : 'No tasks available.'}
+          isLoading={taskQueryLoading}
+          isError={taskQueryError}
+          isEmpty={!taskQueryLoading && sortedFilteredTasks.length === 0 && !showActiveEmptyState}
+          emptyMessage={taskFilterCount > 0 ? 'No tasks match your filters.' : 'No tasks available.'}
           successMessage={createTask.data?.ok ? 'Task created successfully.' : undefined}
         />
+
+        {showActiveEmptyState && <TaskEmptyState onAddTask={showCreatePanel} disabled={busy} />}
 
         {sortedFilteredTasks.length > 0 && (
           <TaskListView
