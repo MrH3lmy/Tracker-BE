@@ -250,7 +250,7 @@ export function TasksPage() {
   };
 
   return (
-    <div className="tasks-page" aria-busy={busy}>
+    <div className="tasks-page tasks-page-simple" aria-busy={busy}>
       <header className="tasks-planner-shell" aria-label="Task controls">
         <div className="tasks-planner-topbar">
           <div className="tasks-planner-title">
@@ -288,15 +288,19 @@ export function TasksPage() {
       )}
 
       {createOpen && (
-        <TaskCreateForm
-          ref={createFormRef}
-          activeTasks={activeTasks}
-          busy={busy}
-          isCreating={createTask.isPending}
-          onCancel={closeCreatePanel}
-          onCreate={submitCreate}
-          onInvalidTitle={() => setCreateOpen(true)}
-        />
+        <div className="task-create-drawer-backdrop" role="presentation">
+          <aside className="task-create-drawer" role="dialog" aria-modal="true" aria-labelledby="create-task-title">
+            <TaskCreateForm
+              ref={createFormRef}
+              activeTasks={activeTasks}
+              busy={busy}
+              isCreating={createTask.isPending}
+              onCancel={closeCreatePanel}
+              onCreate={submitCreate}
+              onInvalidTitle={() => setCreateOpen(true)}
+            />
+          </aside>
+        </div>
       )}
 
       <section className="panel task-workspace" aria-labelledby="task-list-title">
@@ -316,7 +320,7 @@ export function TasksPage() {
         </div>
 
         {filtersOpen && (
-          <div id="task-filter-panel">
+          <div id="task-filter-panel" className="task-filter-panel">
             <TaskFilters
               search={search}
               statusFilter={statusFilter}

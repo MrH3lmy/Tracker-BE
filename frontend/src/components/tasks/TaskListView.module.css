@@ -1,7 +1,7 @@
 .tableShell {
   width: 100%;
-  margin-top: var(--space-4);
-  padding: 0 var(--space-5) var(--space-5);
+  margin-top: 0;
+  padding: 0;
   overflow: visible;
 }
 
@@ -110,10 +110,6 @@
 }
 
 @media (max-width: 780px) {
-  .tableShell {
-    padding: 0 var(--space-4) var(--space-4);
-  }
-
   .header {
     display: none;
   }
