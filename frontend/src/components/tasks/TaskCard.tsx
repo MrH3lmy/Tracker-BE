@@ -29,6 +29,7 @@ interface TaskCardProps {
   onUpdateTask: (task: TaskRecord, updates: Partial<TaskRecord>) => void;
   onSnoozeFollowUp: (task: TaskTreeNode) => void;
   onRemoveDependency: (taskId: number, blocksTaskId: number) => void;
+  onManageDependencies?: (task: TaskTreeNode) => void;
   onDelete: (taskId: number) => void;
 }
 
@@ -131,7 +132,7 @@ const formatDependencySummary = (task: TaskTreeNode) => {
   return values.join(' · ');
 };
 
-export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index, columnTaskCount, depth = 0, busy, draggingTaskId, onDragStart, onDragOver, onDragEnd, onDrop, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onDelete }: TaskCardProps) {
+export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index, columnTaskCount, depth = 0, busy, draggingTaskId, onDragStart, onDragOver, onDragEnd, onDrop, onMoveTaskTo, onStartSubtask, onComplete, onChangeStatus, onUpdateTask, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete }: TaskCardProps) {
   const overdue = isOverdue(task);
   const subtaskTotal = task.subtaskCount ?? task.subtaskIds?.length ?? task.subtasks.length;
   const completedSubtaskCount = task.completedSubtaskCount ?? task.subtasks.filter(isSubtaskComplete).length;
@@ -342,12 +343,6 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
           title="Attachments are not available from this card"
           disabled
         />
-        <IconButton
-          icon="🔗"
-          label={`Open dependency link panel for ${task.title}`}
-          title="Open dependency link panel"
-          href="#dependency-links-title"
-        />
         <details className={`${styles.secondaryMenu} ${styles.toolbarOverflow}`}>
           <IconButton
             as="summary"
@@ -374,6 +369,7 @@ export function TaskCard({ task, columnStatus, previousStatus, nextStatus, index
             <input id={followUpId} type="date" value={task.followUpDate ?? ''} min={task.startDate?.slice(0, 10)} onChange={(event) => onUpdateTask(task, { followUpDate: event.target.value || undefined })} disabled={busy} title="Set follow-up date" />
             <button type="button" onClick={() => onSnoozeFollowUp(task)} disabled={busy} title="Set follow-up for tomorrow">Follow up tomorrow</button>
             <button type="button" onClick={() => { setDraftTitle(task.title); setIsEditingTitle(true); }} disabled={busy} title="Edit title">Edit title</button>
+            {onManageDependencies ? <button type="button" onClick={() => onManageDependencies(task)} disabled={busy} title="Open dependency manager">Manage dependencies</button> : null}
             <button type="button" onClick={() => onComplete(task.id)} disabled={busy} title="Complete task">Complete</button>
             <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index - 1)} disabled={!canMoveUp} title="Move before the previous card">Move up</button>
             <button type="button" onClick={() => onMoveTaskTo(task.id, columnStatus, index + 1)} disabled={!canMoveDown} title="Move after the next card">Move down</button>

@@ -2668,3 +2668,21 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+.dependency-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.dependency-drawer {
+  width: min(100%, 34rem);
+  min-height: 100%;
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+  overflow-y: auto;
+}

@@ -1,23 +1,17 @@
 import type { TaskStatus } from '../../validation/taskStatus';
 import type { BlockerWarning, TaskRecord } from './taskTypes';
 import cardStyles from './TaskCard.module.css';
-import filterStyles from './TaskFilters.module.css';
 
 interface BlockerPanelProps {
   warnings: BlockerWarning[];
   dependencyCount: number;
   activeTasks: TaskRecord[];
   busy: boolean;
-  dependencyTaskId: string;
-  dependencyBlocksTaskId: string;
-  onDependencyTaskIdChange: (value: string) => void;
-  onDependencyBlocksTaskIdChange: (value: string) => void;
-  onSubmitDependency: () => void;
   onChangeStatus: (taskId: number, status: TaskStatus) => void;
   onSnoozeFollowUp: (task: TaskRecord) => void;
 }
 
-export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, dependencyTaskId, dependencyBlocksTaskId, onDependencyTaskIdChange, onDependencyBlocksTaskIdChange, onSubmitDependency, onChangeStatus, onSnoozeFollowUp }: BlockerPanelProps) {
+export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, onChangeStatus, onSnoozeFollowUp }: BlockerPanelProps) {
   return (
     <>
       {warnings.length > 0 && (
@@ -52,19 +46,6 @@ export function BlockerPanel({ warnings, dependencyCount, activeTasks, busy, dep
           </div>
         </section>
       )}
-
-      <section className="panel dependency-panel" aria-labelledby="dependency-links-title">
-        <div>
-          <p className="eyebrow">Dependency links</p>
-          <h3 id="dependency-links-title">Add a blocker relationship</h3>
-          <p>Choose the task that is waiting, then the task that blocks it.</p>
-        </div>
-        <div className={filterStyles.toolbar}>
-          <label htmlFor="dependencyTaskId"><span>Waiting task</span><select id="dependencyTaskId" value={dependencyTaskId} onChange={(e) => onDependencyTaskIdChange(e.target.value)} disabled={busy}><option value="">Select task...</option>{activeTasks.map((task) => <option key={`wait-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
-          <label htmlFor="dependencyBlocksTaskId"><span>Blocked by</span><select id="dependencyBlocksTaskId" value={dependencyBlocksTaskId} onChange={(e) => onDependencyBlocksTaskIdChange(e.target.value)} disabled={busy}><option value="">Select blocker...</option>{activeTasks.map((task) => <option key={`blocks-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}</select></label>
-          <button type="button" className="button-primary" onClick={onSubmitDependency} disabled={busy || !dependencyTaskId || !dependencyBlocksTaskId || dependencyTaskId === dependencyBlocksTaskId}>Link dependency</button>
-        </div>
-      </section>
     </>
   );
 }
