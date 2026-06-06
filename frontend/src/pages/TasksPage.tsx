@@ -199,6 +199,7 @@ export function TasksPage() {
   const taskQueryError = Boolean(query.data && !query.data.ok);
   const showActiveEmptyState = tab === 'active' && !taskQueryLoading && !taskQueryError && sortedFilteredTasks.length === 0 && taskFilterCount === 0;
   const latestMutationResult = latestResult(removeDependency.data, addDependency.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
+  const taskListLabel = `${tab === 'archive' ? 'Archived' : tab === 'done' ? 'Done' : 'Active'} task list`;
   useEffect(() => {
     if (!latestMutationResult) return;
     announce(mutationAnnouncement(latestMutationResult));
@@ -255,7 +256,7 @@ export function TasksPage() {
         <div className="tasks-planner-topbar">
           <div className="tasks-planner-title">
             <h2>Tasks</h2>
-            <p>Search, filter, and add tasks to keep work moving.</p>
+            <p>Manage, prioritize, and complete your work.</p>
           </div>
 
           <div className="planner-toolbar" aria-label="Task actions">
@@ -272,13 +273,13 @@ export function TasksPage() {
             </button>
           </div>
         </div>
-      </header>
 
-      <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
-        <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
-        <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
-        <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
-      </div>
+        <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
+          <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
+          <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
+          <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
+        </div>
+      </header>
 
       {filtersOpen && (
         <div id="task-filter-panel" className="task-filter-panel">
@@ -311,7 +312,8 @@ export function TasksPage() {
         </div>
       )}
 
-      <section className="panel task-workspace" aria-label={`${tab === 'archive' ? 'Archived' : tab === 'done' ? 'Done' : 'Active'} task list`}>
+      <section className="panel task-workspace" aria-labelledby="task-list-heading">
+        <h3 id="task-list-heading" className="sr-only">{taskListLabel}</h3>
         <p className="task-filter-summary">{activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.` : 'Use filters to quickly find the next task to move.'}</p>
 
         <QueryState
