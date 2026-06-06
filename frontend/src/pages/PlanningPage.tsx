@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
-import { latestResult, usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
+import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
 
 interface TaskPreview {
   id?: number | string;
@@ -542,7 +541,6 @@ export function PlanningPage() {
   const recommendations = usePlanningRecommendationsQuery(true);
   const settings = useSettingsQuery(true);
   const active = selected === 'board' ? board : selected === 'today' ? today : weekly;
-  const result = latestResult(board.data, today.data, weekly.data, recommendations.data);
   const hasData = Boolean(active.data?.ok && active.data.data);
 
   return (
@@ -577,11 +575,6 @@ export function PlanningPage() {
         {hasData && (selected === 'board' ? <ProjectBoardView data={active.data?.data} /> : selected === 'today' ? <TodayPlanningView data={active.data?.data} /> : <WeeklyPlanningView data={active.data?.data} />)}
       </section>
 
-      <section className="page-card diagnostics-card" aria-labelledby="planning-diagnostics-title">
-        <h3 id="planning-diagnostics-title">Request diagnostics</h3>
-        <p className="muted">Raw request and response history for the selected planning endpoint.</p>
-        <RequestInspector result={result} />
-      </section>
     </div>
   );
 }

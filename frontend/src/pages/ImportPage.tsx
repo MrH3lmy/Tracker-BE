@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react';
-import { RequestInspector } from '../components/RequestInspector';
 import { QueryState } from '../components/QueryState';
 import { useImportMutations } from '../hooks/useApiQueries';
 import { validateImportTasksPayload } from '../validation/import';
@@ -104,11 +103,6 @@ export function ImportPage() {
         <QueryState isLoading={busy} isError={Boolean((importCsv.data && !importCsv.data.ok) || (importTasks.data && !importTasks.data.ok))} isEmpty={false} successMessage={(importCsv.data?.ok || importTasks.data?.ok) ? 'Import request completed successfully.' : undefined} />
       </section>
 
-      <section className="page-card diagnostics-card" aria-labelledby="import-diagnostics-title">
-        <h3 id="import-diagnostics-title">Request diagnostics</h3>
-        <p className="muted">Latest import request, payload, response, and latency.</p>
-        <RequestInspector result={importTasks.data ?? importCsv.data ?? null} />
-      </section>
     </div>
   );
 }

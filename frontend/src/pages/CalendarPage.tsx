@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { apiDownload, type ApiCallResult } from '../apiClient';
-import { RequestInspector } from '../components/RequestInspector';
+import { apiDownload } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useCalendarMonthQuery } from '../hooks/useApiQueries';
 import { validateCalendarInputs } from '../validation/calendar';
@@ -50,7 +49,6 @@ export function CalendarPage() {
   const now = new Date();
   const [year, setYear] = useState(String(now.getUTCFullYear()));
   const [month, setMonth] = useState(String(now.getUTCMonth() + 1));
-  const [lastResult, setLastResult] = useState<ApiCallResult<unknown> | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const inputErrors = useMemo(() => validateCalendarInputs(year, month), [year, month]);
@@ -62,7 +60,7 @@ export function CalendarPage() {
   const exportIcs = async () => {
     setIsExporting(true);
     try {
-      setLastResult(await apiDownload('GET', '/api/v1/calendar/export.ics', 'calendar.ics'));
+      await apiDownload('GET', '/api/v1/calendar/export.ics', 'calendar.ics');
     } finally {
       setIsExporting(false);
     }
@@ -114,11 +112,6 @@ export function CalendarPage() {
         {hasMonthData && <MonthSummary data={query.data?.data} />}
       </section>
 
-      <section className="page-card diagnostics-card" aria-labelledby="calendar-diagnostics-title">
-        <h3 id="calendar-diagnostics-title">Request diagnostics</h3>
-        <p className="muted">Shows the latest month query or ICS export response.</p>
-        <RequestInspector result={lastResult ?? query.data ?? null} />
-      </section>
     </div>
   );
 }

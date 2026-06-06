@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { CalendarPage } from '../pages/CalendarPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
 import { ImportPage } from '../pages/ImportPage';
 import { MatrixPage } from '../pages/MatrixPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
@@ -23,6 +24,7 @@ export const appRoutes: AppRoute[] = [
   { label: 'Settings', path: '/settings', element: <SettingsPage /> },
   { label: 'Import', path: '/import', element: <ImportPage /> },
   { label: 'Error Playground', path: '/errors', element: <PlaceholderPage title="Error Playground" /> },
+  { label: 'Developer Tools', path: '/developer-tools', element: <DeveloperToolsPage /> },
 ];
 
 export const appTabs = appRoutes.map(({ label, path }) => ({ label, path }));
