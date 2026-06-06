@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { appRoutes, appTabs, developerTabs } from './router/routes';
+import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
 import { useSettingsQuery } from './hooks/useApiQueries';
 import { AnnouncementContext } from './announcementContext';
 import { ThemeContext } from './themeContext';
@@ -14,6 +14,12 @@ import {
 } from './theme';
 import './App.css';
 
+
+const isDevMode = import.meta.env.DEV;
+
+const pathMatchesRoute = (pathname: string, routePath: string) => pathname === routePath || pathname.startsWith(`${routePath}/`);
+
+const routeIsDeveloperRoute = ({ path }: AppRoute) => developerTabs.some((tab) => pathMatchesRoute(path, tab.path));
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab active' : 'tab');
 
@@ -46,12 +52,14 @@ function SidebarItem({ label, path, onClick }: { label: string; path: string; on
   );
 }
 
-function DeveloperNavSection({ isActive }: { isActive: boolean }) {
+function DeveloperNavSection({ isActive, tabs }: { isActive: boolean; tabs: typeof developerTabs }) {
+  if (tabs.length === 0) return null;
+
   return (
     <details className="developer-nav" open={isActive}>
       <summary>Developer/Admin</summary>
       <nav className="tabs sidebar-tabs developer-tabs" aria-label="Developer and admin navigation">
-        {developerTabs.map(({ label, path }) => (
+        {tabs.map(({ label, path }) => (
           <SidebarItem key={path} label={label} path={path} />
         ))}
       </nav>
@@ -89,7 +97,9 @@ export default function App() {
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
   const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
-  const isDeveloperRouteActive = developerTabs.some(({ path }) => location.pathname.startsWith(path));
+  const visibleDeveloperTabs = isDevMode ? developerTabs : [];
+  const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
+  const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
 
   return (
@@ -105,14 +115,14 @@ export default function App() {
               <h1>Task Tracker</h1>
             </div>
           </div>
-          <p className="sidebar-tagline">Plan work, inspect API calls, and keep execution moving.</p>
+          <p className="sidebar-tagline">Plan work, organize priorities, and keep execution moving.</p>
           <nav className="tabs sidebar-tabs" aria-label="Primary app navigation">
             {appTabs.map(({ label, path }) => (
               <SidebarItem key={path} label={label} path={path} />
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <DeveloperNavSection isActive={isDeveloperRouteActive} />
+            <DeveloperNavSection isActive={isDeveloperRouteActive} tabs={visibleDeveloperTabs} />
             <div className="sidebar-profile" aria-label="Signed in user">
               <span className="profile-avatar" aria-hidden="true">JD</span>
               <div className="profile-copy">
@@ -162,7 +172,10 @@ export default function App() {
             <div className={`content-card route-card${routeOwnsPageLayout ? ' route-card--flat' : ''}`}>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                {appRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {!isDevMode && developerTabs.map(({ path }) => (
+                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
+                ))}
               </Routes>
             </div>
           </main>
