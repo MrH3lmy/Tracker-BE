@@ -282,7 +282,14 @@ export function TasksPage() {
       </header>
 
       {filtersOpen && (
-        <div id="task-filter-panel" className="task-filter-panel">
+        <aside id="task-filter-panel" className="task-filter-popover" role="region" aria-labelledby="task-filter-panel-title">
+          <div className="task-filter-popover-header">
+            <div>
+              <p className="eyebrow">Advanced filters</p>
+              <h3 id="task-filter-panel-title">Refine task list</h3>
+            </div>
+            <button className="planner-icon-button" type="button" onClick={() => setFiltersOpen(false)}>Close</button>
+          </div>
           <TaskFilters
             search={search}
             statusFilter={statusFilter}
@@ -309,7 +316,7 @@ export function TasksPage() {
             onClearAll={clearFilters}
             onApplySavedView={applySavedView}
           />
-        </div>
+        </aside>
       )}
 
       <section className="panel task-workspace" aria-labelledby="task-list-heading">
