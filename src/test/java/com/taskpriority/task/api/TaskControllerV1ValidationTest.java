@@ -2,6 +2,7 @@ package com.taskpriority.task.api;
 
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Task;
+import com.taskpriority.notes.NoteService;
 import com.taskpriority.service.TaskService;
 import com.taskpriority.service.BlockerAnalysisService;
 import com.taskpriority.task.application.DuplicateDetectionService;
@@ -35,6 +36,9 @@ class TaskControllerV1ValidationTest {
 
     @MockBean
     private BlockerAnalysisService blockerAnalysisService;
+
+    @MockBean
+    private NoteService noteService;
 
     @Test
     void createReturnsBadRequestWithStandardizedErrorWhenTitleMissing() throws Exception {

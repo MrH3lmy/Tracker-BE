@@ -32,7 +32,25 @@ class ApiV1IntegrationTest {
         String body = """
                 {"title":"Test Task","description":"d"}
                 """;
-        mockMvc.perform(post("/api/v1/tasks").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated());
+        String createdTask = mockMvc.perform(post("/api/v1/tasks").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long taskId = com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(createdTask).get("id").asLong();
+
+        String noteBody = """
+                {"title":"Task note","body":"remember this","taskId":%d}
+                """.formatted(taskId);
+        mockMvc.perform(post("/api/v1/notes").contentType(MediaType.APPLICATION_JSON).content(noteBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contentType").value("PLAIN_TEXT"))
+                .andExpect(jsonPath("$.taskId").value((int) taskId));
+        mockMvc.perform(get("/api/v1/notes").param("taskId", String.valueOf(taskId)).param("q", "remember"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Task note"));
+        mockMvc.perform(get("/api/v1/tasks/{id}/notes", taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].body").value("remember this"));
         mockMvc.perform(get("/api/v1/tasks")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/today")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/weekly")).andExpect(status().isOk());
