@@ -476,9 +476,18 @@ th {
 
 .tasks-planner-topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 32rem);
   gap: var(--space-4);
-  align-items: end;
+  align-items: start;
+}
+
+.tasks-planner-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .tasks-planner-title {
@@ -509,6 +518,8 @@ th {
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
 }
 
 .planner-view-tabs,
@@ -561,6 +572,11 @@ th {
 
 .planner-toolbar {
   justify-content: flex-end;
+  width: 100%;
+}
+
+.planner-toolbar .planner-icon-button {
+  flex: 0 0 auto;
 }
 
 .planner-search {
@@ -619,6 +635,9 @@ th {
 }
 
 .planner-new-task {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: auto;
   min-height: 2.85rem;
   border: 0;
   border-radius: 999px;
@@ -1028,13 +1047,22 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .tasks-planner-heading,
   .tasks-planner-actions {
     align-items: stretch;
+  }
+
+  .tasks-planner-heading {
+    flex-direction: column;
   }
 
   .planner-view-tabs,
   .planner-toolbar {
     justify-content: stretch;
+  }
+
+  .planner-toolbar {
+    align-items: stretch;
   }
 
   .task-filter-popover {
@@ -1047,13 +1075,17 @@ th {
   }
 
   .tasks-hero .button-primary,
-  .planner-new-task,
   .planner-search,
   .planner-icon-button,
   .task-view-tabs-row,
   .task-view-toggle,
   .task-view-toggle button {
     width: 100%;
+  }
+
+  .planner-new-task {
+    align-self: flex-start;
+    width: auto;
   }
 
   .task-stat-strip {
@@ -1065,6 +1097,13 @@ th {
     justify-content: center;
   }
 
+}
+
+@media (max-width: 640px) {
+  .planner-new-task {
+    align-self: stretch;
+    width: 100%;
+  }
 }
 
 @media (max-width: 520px) {

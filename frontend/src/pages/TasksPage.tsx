@@ -254,13 +254,18 @@ export function TasksPage() {
     <div className="tasks-page tasks-page-simple" aria-busy={busy}>
       <header className="tasks-planner-shell" aria-label="Task controls">
         <div className="tasks-planner-topbar">
-          <div className="tasks-planner-title">
-            <h2>Tasks</h2>
-            <p>Manage, prioritize, and complete your work.</p>
+          <div className="tasks-planner-heading">
+            <div className="tasks-planner-title">
+              <h2>Tasks</h2>
+              <p>Manage, prioritize, and complete your work.</p>
+            </div>
+            <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
+              Add task
+            </button>
           </div>
 
           <div className="tasks-planner-actions">
-            <div className="planner-toolbar" aria-label="Task actions">
+            <div className="planner-toolbar" aria-label="Task search and filters">
               <label className="planner-search" htmlFor="plannerTaskSearch">
                 <span className="sr-only">Search tasks</span>
                 <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
@@ -268,9 +273,6 @@ export function TasksPage() {
               <button className="planner-icon-button planner-filter-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
                 <span>Filters</span>
                 {activeFilterCount > 0 && <span className="planner-filter-badge" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span>}
-              </button>
-              <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
-                Add task
               </button>
             </div>
 
