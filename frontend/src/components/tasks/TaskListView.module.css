@@ -172,13 +172,25 @@
   max-width: 6.75rem;
 }
 
-.rowActions > button {
+.rowActions > button,
+.completedAction {
   min-height: 2.125rem;
   height: 2.125rem;
   padding: 0.25rem 0.55rem;
   font-size: 0.78rem;
   font-weight: 650;
   line-height: 1;
+}
+
+.completedAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--task-success) 24%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--task-success) 10%, transparent);
+  color: var(--task-success);
+  cursor: default;
 }
 
 .overflow {
@@ -523,11 +535,13 @@
   }
 
   .rowActions > button,
+  .completedAction,
   .overflow {
     width: 100%;
   }
 
-  .rowActions > button {
+  .rowActions > button,
+  .completedAction {
     grid-column: 2;
   }
 
