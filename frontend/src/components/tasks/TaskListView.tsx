@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
 import { taskStatusClassName } from './taskStyleUtils';
@@ -85,17 +86,58 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
   const overdue = isOverdue(task);
   const rowClassName = [styles.row, task.important ? styles.rowImportant : '', overdue ? styles.rowOverdue : ''].filter(Boolean).join(' ');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<CSSProperties | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const overflowButtonRef = useRef<HTMLButtonElement>(null);
   const menuId = `task-${task.id}-actions-menu`;
   const detailsId = `task-${task.id}-details`;
   const isDone = task.status === 'DONE' || Boolean(task.completedDate);
   const statusOptions = TASK_STATUS_VALUES.filter((status) => status !== task.status);
 
+  const updateMenuPosition = useCallback(() => {
+    const button = overflowButtonRef.current;
+    const menu = menuRef.current;
+
+    if (!button || !menu) return;
+
+    const viewportMargin = 8;
+    const menuGap = 6;
+    const buttonRect = button.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width;
+    const menuHeight = menuRect.height;
+    const maxLeft = Math.max(viewportMargin, window.innerWidth - menuWidth - viewportMargin);
+    const left = Math.min(Math.max(buttonRect.right - menuWidth, viewportMargin), maxLeft);
+    const belowTop = buttonRect.bottom + menuGap;
+    const aboveTop = buttonRect.top - menuHeight - menuGap;
+    const spaceBelow = window.innerHeight - buttonRect.bottom - viewportMargin;
+    const spaceAbove = buttonRect.top - viewportMargin;
+    const shouldOpenBelow = spaceBelow >= menuHeight + menuGap || spaceBelow >= spaceAbove;
+    const top = shouldOpenBelow
+      ? Math.min(belowTop, Math.max(viewportMargin, window.innerHeight - menuHeight - viewportMargin))
+      : Math.max(viewportMargin, aboveTop);
+
+    setMenuPosition({ left, top });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return undefined;
+
+    updateMenuPosition();
+
+    return undefined;
+  }, [menuOpen, updateMenuPosition]);
+
   useEffect(() => {
     if (!menuOpen) return undefined;
 
     function handleDocumentClick(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      const target = event.target as Node;
+
+      if (menuRef.current?.contains(target) || overflowRef.current?.contains(target)) return;
+
+      setMenuOpen(false);
     }
 
     function handleEscape(event: KeyboardEvent) {
@@ -104,12 +146,16 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
 
     document.addEventListener('mousedown', handleDocumentClick);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
 
     return () => {
       document.removeEventListener('mousedown', handleDocumentClick);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
     };
-  }, [menuOpen]);
+  }, [menuOpen, updateMenuPosition]);
 
   const runMenuAction = (action: () => void) => {
     action();
@@ -124,6 +170,35 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
       onToggleExpanded();
     }
   };
+
+  const overflowMenu = menuOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      id={menuId}
+      ref={menuRef}
+      className={styles.overflowMenu}
+      role="group"
+      aria-label={`More actions for #${task.id}`}
+      style={menuPosition ?? { visibility: 'hidden' }}
+    >
+      <button type="button" onClick={() => runMenuAction(() => onStartSubtask(task))} disabled={busy}>Add subtask</button>
+      <label htmlFor={`changeStatus-${task.id}`}>Change status</label>
+      <select
+        id={`changeStatus-${task.id}`}
+        defaultValue=""
+        disabled={busy}
+        onChange={(e) => {
+          if (e.target.value && isTaskStatus(e.target.value)) runMenuAction(() => onChangeStatus(task.id, e.target.value));
+          e.target.value = '';
+        }}
+      >
+        <option value="">Select status...</option>
+        {statusOptions.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
+      </select>
+      <button type="button" onClick={() => runMenuAction(() => onSnoozeFollowUp(task))} disabled={busy}>Follow up tomorrow</button>
+      <button type="button" className={styles.dangerAction} onClick={() => runMenuAction(() => onDelete(task.id))} disabled={busy}>Delete</button>
+    </div>,
+    document.body,
+  ) : null;
 
   const activityItems = [
     task.followUpDate ? { label: 'Follow-up', value: formatDate(task.followUpDate) } : null,
@@ -169,39 +244,24 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           ) : (
             <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
           )}
-          <div className={styles.overflow} ref={menuRef}>
+          <div className={styles.overflow} ref={overflowRef}>
             <button
+              ref={overflowButtonRef}
               type="button"
               className={styles.overflowButton}
               aria-label={`More actions for #${task.id}`}
               aria-controls={menuId}
               aria-expanded={menuOpen}
               aria-haspopup="true"
-              onClick={() => setMenuOpen((open) => !open)}
+              onClick={() => {
+                setMenuPosition(null);
+                setMenuOpen((open) => !open);
+              }}
               disabled={busy}
             >
               ⋯
             </button>
-            {menuOpen ? (
-              <div id={menuId} className={styles.overflowMenu} role="group" aria-label={`More actions for #${task.id}`}>
-                <button type="button" onClick={() => runMenuAction(() => onStartSubtask(task))} disabled={busy}>Add subtask</button>
-                <label htmlFor={`changeStatus-${task.id}`}>Change status</label>
-                <select
-                  id={`changeStatus-${task.id}`}
-                  defaultValue=""
-                  disabled={busy}
-                  onChange={(e) => {
-                    if (e.target.value && isTaskStatus(e.target.value)) runMenuAction(() => onChangeStatus(task.id, e.target.value));
-                    e.target.value = '';
-                  }}
-                >
-                  <option value="">Select status...</option>
-                  {statusOptions.map((s) => <option key={`${task.id}-${s}`} value={s}>{s}</option>)}
-                </select>
-                <button type="button" onClick={() => runMenuAction(() => onSnoozeFollowUp(task))} disabled={busy}>Follow up tomorrow</button>
-                <button type="button" className={styles.dangerAction} onClick={() => runMenuAction(() => onDelete(task.id))} disabled={busy}>Delete</button>
-              </div>
-            ) : null}
+            {overflowMenu}
           </div>
         </div>
       </div>
