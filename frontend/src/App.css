@@ -497,6 +497,13 @@ th {
   color: var(--color-text-muted);
 }
 
+.tasks-planner-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
 .planner-view-tabs,
 .planner-toolbar {
   display: flex;
@@ -661,6 +668,7 @@ th {
 
 .task-view-tabs-row {
   width: fit-content;
+  justify-content: flex-end;
 }
 
 .task-filter-summary {
@@ -695,8 +703,7 @@ th {
   max-width: 48rem;
 }
 
-.tasks-hero-copy > p:not(.eyebrow),
-.task-section-header p {
+.tasks-hero-copy > p:not(.eyebrow) {
   color: var(--color-text-muted);
 }
 
@@ -797,10 +804,6 @@ th {
   background: var(--color-bg-soft);
 }
 
-.task-section-header h3 {
-  font-size: clamp(1.4rem, 3vw, 2rem);
-}
-
 .task-view-toggle {
   display: inline-flex;
   flex-wrap: wrap;
@@ -809,6 +812,7 @@ th {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-soft);
+  box-shadow: none;
 }
 
 .task-view-toggle button {
@@ -818,14 +822,24 @@ th {
   min-height: 2.35rem;
   border-color: transparent;
   background: transparent;
+  color: var(--color-text-muted);
   font-weight: 800;
 }
 
 .task-view-toggle button.active {
-  border-color: var(--color-border-strong);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary-soft);
+}
+
+.task-view-toggle button:hover:not(:disabled) {
+  box-shadow: none;
+}
+
+.task-view-toggle button.active span {
   background: var(--color-surface);
   color: var(--color-primary-strong);
-  box-shadow: var(--shadow-sm);
 }
 
 .task-view-toggle span {
@@ -988,13 +1002,16 @@ th {
   }
 
   .tasks-hero,
-  .task-section-header,
   .planner-context-row {
     flex-direction: column;
   }
 
   .tasks-planner-topbar {
     grid-template-columns: 1fr;
+  }
+
+  .tasks-planner-actions {
+    align-items: stretch;
   }
 
   .planner-view-tabs,
