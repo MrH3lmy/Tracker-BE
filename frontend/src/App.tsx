@@ -90,6 +90,7 @@ export default function App() {
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
   const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
   const isDeveloperRouteActive = developerTabs.some(({ path }) => location.pathname.startsWith(path));
+  const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
@@ -124,14 +125,16 @@ export default function App() {
         </aside>
 
         <div className="app-main">
-          <header className="topbar">
-            <div className="topbar-copy">
-              <p className="eyebrow">Productivity workspace</p>
-              <h2>Task Tracker</h2>
-              <p>Coordinate tasks, planning, calendar exports, imports, and settings from one responsive shell.</p>
-            </div>
+          <header className={`topbar${routeOwnsPageLayout ? ' topbar--route-owned' : ''}`}>
+            {!routeOwnsPageLayout && (
+              <div className="topbar-copy">
+                <p className="eyebrow">Productivity workspace</p>
+                <h2>Task Tracker</h2>
+                <p>Coordinate tasks, planning, calendar exports, imports, and settings from one responsive shell.</p>
+              </div>
+            )}
             <div className="topbar-actions">
-              <NavLink to="/tasks" className="button-primary">Quick add</NavLink>
+              {!routeOwnsPageLayout && <NavLink to="/tasks" className="button-primary">Quick add</NavLink>}
               <button
                 type="button"
                 className="menu-toggle"
@@ -155,8 +158,8 @@ export default function App() {
             ))}
           </nav>
 
-          <main id="task-tracker-main" className="content-area" tabIndex={-1}>
-            <div className="content-card route-card">
+          <main id="task-tracker-main" className={`content-area${routeOwnsPageLayout ? ' content-area--route-owned' : ''}`} tabIndex={-1}>
+            <div className={`content-card route-card${routeOwnsPageLayout ? ' route-card--flat' : ''}`}>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 {appRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
