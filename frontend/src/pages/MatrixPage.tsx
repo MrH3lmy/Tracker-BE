@@ -16,18 +16,46 @@ interface QuadrantConfig {
   key: string;
   title: string;
   subtitle: string;
+  emptyLabel: string;
+  emptyIcon: string;
 }
 
 const quadrants: QuadrantConfig[] = [
-  { key: 'DO_NOW', title: 'Do now', subtitle: 'Important and urgent work.' },
-  { key: 'SCHEDULE', title: 'Schedule', subtitle: 'Important work that needs protected time.' },
-  { key: 'DELEGATE', title: 'Delegate', subtitle: 'Urgent work that can move with help.' },
-  { key: 'DELETE', title: 'Delete', subtitle: 'Low-value work to decline, defer, or remove.' },
+  {
+    key: 'DO_NOW',
+    title: 'Do now',
+    subtitle: 'Important and urgent work.',
+    emptyLabel: 'Clear for focus',
+    emptyIcon: '✓',
+  },
+  {
+    key: 'SCHEDULE',
+    title: 'Schedule',
+    subtitle: 'Important work that needs protected time.',
+    emptyLabel: 'Nothing to reserve',
+    emptyIcon: '◷',
+  },
+  {
+    key: 'DELEGATE',
+    title: 'Delegate',
+    subtitle: 'Urgent work that can move with help.',
+    emptyLabel: 'No handoffs',
+    emptyIcon: '↗',
+  },
+  {
+    key: 'DELETE',
+    title: 'Delete',
+    subtitle: 'Low-value work to decline, defer, or remove.',
+    emptyLabel: 'No clutter found',
+    emptyIcon: '−',
+  },
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asMatrixTask = (value: unknown): MatrixTask | null => isRecord(value) ? value as MatrixTask : null;
 const taskKey = (task: MatrixTask, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
+const quadrantClassName = (key: string) => `matrix-${key.toLowerCase().replace('_', '-')}`;
+const statusClassName = (status: string) => `matrix-task-pill--${status.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'status'}`;
 
 function getQuadrantTasks(data: unknown, key: string): MatrixTask[] | null {
   if (!isRecord(data) || !Array.isArray(data[key])) return null;
@@ -40,47 +68,75 @@ function supportsQuadrants(data: unknown): boolean {
 
 function MatrixTaskCard({ task, index }: { task: MatrixTask; index: number }) {
   return (
-    <article key={taskKey(task, index)} className="task-preview-card compact">
-      <div>
+    <article key={taskKey(task, index)} className="task-preview-card compact matrix-task-card">
+      <div className="matrix-task-copy">
         <h4>{task.title ?? 'Untitled task'}</h4>
         {task.description && <p>{task.description}</p>}
       </div>
-      <div className="task-preview-meta">
-        {task.dueDate && <span className="pill">Due {task.dueDate}</span>}
-        {task.status && <span className="pill">{task.status}</span>}
-        {typeof task.priorityScore === 'number' && <span className="pill">Score {task.priorityScore}</span>}
+      <div className="task-preview-meta matrix-task-meta" aria-label="Task metadata">
+        {task.dueDate && <span className="matrix-task-pill matrix-task-pill--due">Due {task.dueDate}</span>}
+        {task.status && <span className={`matrix-task-pill ${statusClassName(task.status)}`}>{task.status}</span>}
+        {typeof task.priorityScore === 'number' && <span className="matrix-task-score">Score {task.priorityScore}</span>}
       </div>
-      {task.priorityReason && <p className="muted">{task.priorityReason}</p>}
+      {task.priorityReason && (
+        <details className="matrix-task-diagnostics">
+          <summary>Priority details</summary>
+          <p>{task.priorityReason}</p>
+        </details>
+      )}
     </article>
   );
 }
 
 function MatrixQuadrants({ data }: { data: unknown }) {
+  const quadrantSummaries = quadrants.map((quadrant) => ({
+    ...quadrant,
+    tasks: getQuadrantTasks(data, quadrant.key) ?? [],
+  }));
+  const totalTasks = quadrantSummaries.reduce((total, quadrant) => total + quadrant.tasks.length, 0);
+
   return (
-    <div className="matrix-grid">
-      {quadrants.map((quadrant) => {
-        const tasks = getQuadrantTasks(data, quadrant.key) ?? [];
-        return (
-          <section key={quadrant.key} className={`matrix-quadrant matrix-${quadrant.key.toLowerCase().replace('_', '-')}`}>
+    <>
+      <section className="matrix-summary-band" aria-label="Matrix task summary">
+        <div className="matrix-summary-total">
+          <span>Total tasks</span>
+          <strong>{totalTasks}</strong>
+        </div>
+        <div className="matrix-summary-counts">
+          {quadrantSummaries.map((quadrant) => (
+            <span key={quadrant.key} className={`matrix-summary-pill ${quadrantClassName(quadrant.key)}`}>
+              {quadrant.title}
+              <strong>{quadrant.tasks.length}</strong>
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <div className="matrix-grid">
+        {quadrantSummaries.map((quadrant) => (
+          <section key={quadrant.key} className={`matrix-quadrant ${quadrantClassName(quadrant.key)}`}>
             <div className="section-card-header">
               <div>
                 <p className="eyebrow">{quadrant.key.replace('_', ' ')}</p>
                 <h3>{quadrant.title}</h3>
                 <p>{quadrant.subtitle}</p>
               </div>
-              <span className="status-badge status-other">{tasks.length}</span>
+              <span className="status-badge status-other">{quadrant.tasks.length}</span>
             </div>
-            {tasks.length > 0 ? (
+            {quadrant.tasks.length > 0 ? (
               <div className="mini-card-list">
-                {tasks.map((task, index) => <MatrixTaskCard key={taskKey(task, index)} task={task} index={index} />)}
+                {quadrant.tasks.map((task, index) => <MatrixTaskCard key={taskKey(task, index)} task={task} index={index} />)}
               </div>
             ) : (
-              <p className="muted">No tasks in this quadrant.</p>
+              <div className="matrix-empty-state" role="status">
+                <span aria-hidden="true">{quadrant.emptyIcon}</span>
+                <strong>{quadrant.emptyLabel}</strong>
+              </div>
             )}
           </section>
-        );
-      })}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -1792,6 +1792,242 @@ th {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* Matrix page */
+.matrix-page {
+  gap: clamp(var(--space-4), 2.2vw, var(--space-6));
+  color: var(--color-text);
+}
+
+.matrix-page .page-header {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--color-border-overlay);
+  background: var(--gradient-hero-card);
+  color: var(--color-text);
+}
+
+.matrix-page .page-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent 38%, color-mix(in srgb, var(--color-accent) 12%, transparent));
+  opacity: 0.78;
+}
+
+.matrix-page .page-header > * {
+  position: relative;
+}
+
+.matrix-summary-band {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.32fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: stretch;
+  min-width: 0;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-primary-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-soft-panel);
+}
+
+.matrix-summary-total,
+.matrix-summary-pill {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-panel);
+}
+
+.matrix-summary-total {
+  display: grid;
+  gap: var(--space-1);
+  place-items: center;
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.matrix-summary-total span,
+.matrix-summary-pill {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.matrix-summary-total strong {
+  color: var(--color-text);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1;
+}
+
+.matrix-summary-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.matrix-summary-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-color: var(--matrix-accent-border, var(--color-border));
+  box-shadow: inset 3px 0 0 var(--matrix-accent, var(--color-primary));
+}
+
+.matrix-summary-pill strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.matrix-quadrant {
+  --matrix-accent: var(--color-primary);
+  --matrix-accent-border: var(--color-primary-border);
+  display: flex;
+  flex-direction: column;
+  border-color: var(--matrix-accent-border);
+  box-shadow: inset 0 4px 0 var(--matrix-accent), var(--shadow-sm);
+}
+
+.matrix-do-now {
+  --matrix-accent: var(--color-danger);
+  --matrix-accent-border: var(--color-danger-border);
+}
+
+.matrix-schedule {
+  --matrix-accent: var(--color-primary);
+  --matrix-accent-border: var(--color-primary-border);
+}
+
+.matrix-delegate {
+  --matrix-accent: var(--color-warning);
+  --matrix-accent-border: var(--color-warning-border);
+}
+
+.matrix-delete {
+  --matrix-accent: var(--color-text-muted);
+  --matrix-accent-border: var(--color-muted-border);
+}
+
+.matrix-task-card {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.matrix-task-copy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.matrix-task-copy h4,
+.matrix-task-copy p,
+.matrix-task-diagnostics p {
+  overflow-wrap: anywhere;
+}
+
+.matrix-task-meta {
+  align-items: center;
+}
+
+.matrix-task-pill,
+.matrix-task-score {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-soft);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.matrix-task-pill--due {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.matrix-task-pill--blocked {
+  border-color: var(--color-danger-border);
+  background: var(--color-status-danger-bg);
+  color: var(--color-danger);
+}
+
+.matrix-task-pill--done,
+.matrix-task-pill--complete,
+.matrix-task-pill--completed {
+  border-color: var(--color-success-border);
+  background: var(--color-status-success-bg);
+  color: var(--color-success);
+}
+
+.matrix-task-score {
+  border-color: var(--matrix-accent-border, var(--color-border-primary-soft));
+  background: color-mix(in srgb, var(--matrix-accent, var(--color-primary)) 12%, var(--color-surface-panel));
+  color: var(--color-text);
+}
+
+.matrix-task-diagnostics {
+  min-width: 0;
+  border-top: 1px solid var(--color-border-translucent);
+  padding-top: var(--space-2);
+}
+
+.matrix-task-diagnostics summary {
+  cursor: pointer;
+  color: var(--color-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.matrix-task-diagnostics p {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.matrix-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 5.5rem;
+  padding: var(--space-4);
+  border: 1px dashed var(--matrix-accent-border, var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--matrix-accent, var(--color-primary)) 8%, var(--color-surface-panel));
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.matrix-empty-state span {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--matrix-accent, var(--color-primary));
+  font-weight: 900;
+}
+
+.matrix-empty-state strong {
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
 .recommendation-panel {
   display: grid;
   gap: var(--space-4);
@@ -1855,10 +2091,6 @@ th {
   color: var(--color-status-warning-text);
 }
 
-.matrix-do-now { border-color: var(--color-danger-border); }
-.matrix-schedule { border-color: var(--color-primary-border); }
-.matrix-delegate { border-color: var(--color-warning-border); }
-.matrix-delete { border-color: var(--color-muted-border); }
 
 .calendar-toolbar {
   display: grid;
@@ -1982,6 +2214,17 @@ code {
   .matrix-grid,
   .import-mode-grid {
     grid-template-columns: 1fr;
+  }
+
+  .matrix-summary-band,
+  .matrix-summary-counts {
+    grid-template-columns: 1fr;
+  }
+
+  .matrix-task-card,
+  .matrix-task-copy,
+  .matrix-task-diagnostics {
+    min-width: 0;
   }
 
   .calendar-toolbar {
