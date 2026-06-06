@@ -122,10 +122,12 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
           {task.important ? <span className={styles.importantPill}>Important</span> : null}
         </div>
         <div className={styles.metric} role="cell" data-label="Status"><span className={taskStatusClassName(task.status)}>{task.status ?? 'No status'}</span></div>
-        <div className={styles.metric} role="cell" data-label="Due date"><span className={overdue ? styles.overdueDate : undefined}>{formatDate(task.dueDate)}</span></div>
-        <div className={styles.metric} role="cell" data-label="Overdue">{overdue ? <span className={styles.overdueBadge}>Overdue</span> : <span className={styles.muted}>—</span>}</div>
-        <div className={styles.metric} role="cell" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
-        <div className={styles.metric} role="cell" data-label="Risk"><RiskBadge riskLevel={task.riskLevel} /></div>
+        <div className={`${styles.metric} ${styles.dueCell}`} role="cell" data-label="Due date">
+          <span className={overdue ? styles.overdueDate : undefined}>{formatDate(task.dueDate)}</span>
+          {overdue ? <span className={styles.overdueBadge}>Overdue</span> : null}
+        </div>
+        <div className={`${styles.metric} ${styles.estimateColumn}`} role="cell" data-label="Estimate">{formatValue(task.estimatedMinutes)}</div>
+        <div className={`${styles.metric} ${styles.riskColumn}`} role="cell" data-label="Risk"><RiskBadge riskLevel={task.riskLevel} /></div>
         <div className={styles.metric} role="cell" data-label="Subtasks"><SubtaskProgress task={task} /></div>
         <div className={styles.rowActions} role="cell" data-label="Actions">
           <button type="button" onClick={() => onComplete(task.id)} disabled={busy}>Complete</button>
@@ -207,9 +209,8 @@ export function TaskListView(props: TaskListViewProps) {
           <span role="columnheader">Task</span>
           <span role="columnheader">Status</span>
           <span role="columnheader">Due</span>
-          <span role="columnheader">Overdue</span>
-          <span role="columnheader">Estimate</span>
-          <span role="columnheader">Risk</span>
+          <span className={styles.estimateColumn} role="columnheader">Estimate</span>
+          <span className={styles.riskColumn} role="columnheader">Risk</span>
           <span role="columnheader">Subtasks</span>
           <span role="columnheader">Actions</span>
         </div>
