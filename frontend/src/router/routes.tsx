@@ -4,6 +4,7 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
 import { ImportPage } from '../pages/ImportPage';
 import { MatrixPage } from '../pages/MatrixPage';
+import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
 import { SettingsPage } from '../pages/SettingsPage';
@@ -18,6 +19,7 @@ export interface AppRoute {
 export const primaryRoutes: AppRoute[] = [
   { label: 'Dashboard', path: '/dashboard', element: <DashboardPage /> },
   { label: 'Tasks', path: '/tasks', element: <TasksPage /> },
+  { label: 'Notes', path: '/notes', element: <NotesPage /> },
   { label: 'Planning', path: '/planning', element: <PlanningPage /> },
   { label: 'Matrix', path: '/matrix', element: <MatrixPage /> },
   { label: 'Calendar', path: '/calendar', element: <CalendarPage /> },

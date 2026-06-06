@@ -1,9 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiJson, apiText, type ApiCallResult } from '../apiClient';
+import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
+
+export interface NotesQueryFilters {
+  q?: string;
+  contentType?: NoteContentType | 'all';
+  taskId?: number | string;
+}
 
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
 type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
@@ -11,6 +18,7 @@ type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
   taskBlockers: ['tasks', 'blockers'] as const,
+  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
@@ -24,6 +32,18 @@ const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archiv
 
 export const useTasksQuery = (tab: TaskTab) => useQuery({ queryKey: queryKeys.tasks(tab), queryFn: () => apiJson<unknown>('GET', taskPathByTab[tab]) });
 export const useTaskBlockersQuery = () => useQuery({ queryKey: queryKeys.taskBlockers, queryFn: () => apiJson<unknown>('GET', '/api/v1/tasks/blockers') });
+export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
+  queryKey: queryKeys.notes(filters),
+  queryFn: () => {
+    const params = new URLSearchParams();
+    const q = filters.q?.trim();
+    if (q) params.set('q', q);
+    if (filters.contentType && filters.contentType !== 'all') params.set('contentType', filters.contentType);
+    if (filters.taskId !== undefined && String(filters.taskId).trim() !== '') params.set('taskId', String(filters.taskId).trim());
+    const query = params.toString();
+    return apiJson<NoteRecord[]>('GET', `/api/v1/notes${query ? `?${query}` : ''}`);
+  },
+});
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
@@ -102,6 +122,16 @@ export function useTaskMutations() {
     removeDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('DELETE', `/api/v1/tasks/${id}/dependencies/${blocksTaskId}`), onSuccess }),
   };
 }
+export function useNoteMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['notes'] });
+  return {
+    createNote: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/notes', body), onSuccess }),
+    updateNote: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/notes/${id}`, body), onSuccess }),
+    deleteNote: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/notes/${id}`), onSuccess }),
+  };
+}
+
 export function useImportMutations() {
   const qc = useQueryClient();
   const onSuccess = () => qc.invalidateQueries({ queryKey: ['tasks'] });
