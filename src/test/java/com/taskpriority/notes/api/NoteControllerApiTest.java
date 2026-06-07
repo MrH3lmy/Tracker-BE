@@ -34,8 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("local-test")
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:notes-api-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-        "spring.jpa.hibernate.ddl-auto=none",
-        "spring.flyway.enabled=true"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.flyway.enabled=false"
 })
 class NoteControllerApiTest {
 
