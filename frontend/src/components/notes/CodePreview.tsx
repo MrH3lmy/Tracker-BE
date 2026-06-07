@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { NoteContentType } from './noteTypes';
+import './CodePreview.css';
 
 interface CodePreviewProps {
   body: string;
