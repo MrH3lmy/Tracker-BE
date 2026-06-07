@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { NoteContentType } from './noteTypes';
 import './CodePreview.css';
 
 interface CodePreviewProps {
   body: string;
   contentType: NoteContentType;
+  collapsedLineCount?: number;
+  initiallyCollapsed?: boolean;
 }
 
 type TokenType = 'plain' | 'keyword' | 'name' | 'property' | 'string' | 'number' | 'boolean' | 'nil' | 'mark';
@@ -13,6 +15,8 @@ interface Token {
   type: TokenType;
   value: string;
 }
+
+const DEFAULT_COLLAPSED_LINE_COUNT = 12;
 
 const LANGUAGE_LABELS: Record<NoteContentType, string> = {
   PLAIN_TEXT: 'Plain text',
@@ -169,12 +173,21 @@ function renderTokens(tokens: Token[], lineIndex: number): ReactNode {
   ));
 }
 
-export function CodePreview({ body, contentType }: CodePreviewProps) {
+export function CodePreview({
+  body,
+  contentType,
+  collapsedLineCount = DEFAULT_COLLAPSED_LINE_COUNT,
+  initiallyCollapsed = true,
+}: CodePreviewProps) {
   const lines = splitLines(body);
+  const [expanded, setExpanded] = useState(!initiallyCollapsed);
   const isHighlighted = contentType === 'XML' || contentType === 'JSON';
+  const canCollapse = lines.length > collapsedLineCount;
+  const isCollapsed = canCollapse && !expanded;
+  const visibleLines = isCollapsed ? lines.slice(0, collapsedLineCount) : lines;
 
   return (
-    <div className={`code-preview${isHighlighted ? ' code-preview--highlighted' : ' code-preview--plain'}`}>
+    <div className={`code-preview${isHighlighted ? ' code-preview--highlighted' : ' code-preview--plain'}${isCollapsed ? ' code-preview--collapsed' : ''}`}>
       <div className="code-preview__header" aria-hidden="true">
         <span className="code-preview__dot" />
         <span className="code-preview__dot" />
@@ -183,8 +196,8 @@ export function CodePreview({ body, contentType }: CodePreviewProps) {
       </div>
       <pre className="code-preview__body" aria-label={`${LANGUAGE_LABELS[contentType]} note body`}>
         <code>
-          {lines.map((line, index) => (
-            <span className="code-preview__line" key={`${index}-${line}`}>
+          {visibleLines.map((line, index) => (
+            <span className="code-preview__line" key={`line-${index}`}>
               <span className="code-preview__line-number" aria-hidden="true">{index + 1}</span>
               <span className="code-preview__line-content">
                 {renderTokens(tokensForLine(line, contentType), index)}
@@ -193,6 +206,14 @@ export function CodePreview({ body, contentType }: CodePreviewProps) {
           ))}
         </code>
       </pre>
+      {canCollapse ? (
+        <div className="code-preview__footer">
+          <span>{expanded ? `${lines.length} lines shown` : `Showing first ${visibleLines.length} of ${lines.length} lines`}</span>
+          <button type="button" className="code-preview__toggle" onClick={() => setExpanded((current) => !current)}>
+            {expanded ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
