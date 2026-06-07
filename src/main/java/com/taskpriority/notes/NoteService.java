@@ -1,5 +1,7 @@
 package com.taskpriority.notes;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteContentType;
@@ -18,10 +20,12 @@ import java.util.List;
 public class NoteService {
     private final NoteRepository noteRepository;
     private final TaskRepository taskRepository;
+    private final ObjectMapper objectMapper;
 
-    public NoteService(NoteRepository noteRepository, TaskRepository taskRepository) {
+    public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, ObjectMapper objectMapper) {
         this.noteRepository = noteRepository;
         this.taskRepository = taskRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -54,20 +58,24 @@ public class NoteService {
 
     @Transactional
     public NoteResponse create(CreateNoteRequest request) {
+        NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
+
         Note note = new Note();
         note.setTitle(request.title().trim());
-        note.setBody(request.body().trim());
-        note.setContentType(request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType());
+        note.setBody(formatBody(request.body(), contentType));
+        note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         return toResponse(noteRepository.save(note));
     }
 
     @Transactional
     public NoteResponse update(Long id, UpdateNoteRequest request) {
+        NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
+
         Note note = getNote(id);
         note.setTitle(request.title().trim());
-        note.setBody(request.body().trim());
-        note.setContentType(request.contentType());
+        note.setBody(formatBody(request.body(), contentType));
+        note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         return toResponse(noteRepository.save(note));
     }
@@ -96,6 +104,32 @@ public class NoteService {
             return null;
         }
         return query.trim();
+    }
+
+    private String formatBody(String body, NoteContentType contentType) {
+        if (body == null) {
+            return null;
+        }
+
+        String trimmedBody = body.trim();
+        if (trimmedBody.isBlank() || contentType == null) {
+            return trimmedBody;
+        }
+
+        if (contentType == NoteContentType.JSON) {
+            return formatJson(trimmedBody);
+        }
+
+        return trimmedBody;
+    }
+
+    private String formatJson(String body) {
+        try {
+            Object json = objectMapper.readValue(body, Object.class);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+        } catch (JsonProcessingException ex) {
+            return body;
+        }
     }
 
     private NoteResponse toResponse(Note note) {
