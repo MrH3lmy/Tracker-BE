@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { QueryState } from '../components/QueryState';
+import { CodePreview } from '../components/notes/CodePreview';
 import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import { latestResult, useNoteMutations, useNotesQuery } from '../hooks/useApiQueries';
 
@@ -160,7 +161,7 @@ export function NotesPage() {
                   <button type="button" onClick={() => deleteNote.mutate(note.id)} disabled={isBusy}>Delete</button>
                 </div>
               </div>
-              <pre className="text-block" style={{ overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{note.body}</pre>
+              <CodePreview body={note.body} contentType={note.contentType} />
             </article>
           ))}
         </div>
