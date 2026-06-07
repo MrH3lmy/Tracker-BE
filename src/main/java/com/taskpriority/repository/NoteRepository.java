@@ -21,8 +21,8 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
             where (:taskId is null or n.task.id = :taskId)
               and (:contentType is null or n.contentType = :contentType)
               and (:query is null
-                   or lower(n.title) like lower(concat('%', :query, '%'))
-                   or lower(coalesce(n.body, '')) like lower(concat('%', :query, '%')))
+                   or lower(cast(n.title as string)) like lower(concat('%', cast(:query as string), '%'))
+                   or lower(cast(coalesce(n.body, '') as string)) like lower(concat('%', cast(:query as string), '%')))
             order by n.updatedAt desc, n.id desc
             """)
     List<Note> findAllMatching(
