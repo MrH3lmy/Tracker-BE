@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { NoteContentType } from './noteTypes';
 import './CodePreview.css';
 
@@ -23,6 +23,7 @@ const LANGUAGE_LABELS: Record<NoteContentType, string> = {
 };
 
 const XML_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.:-]*/;
+const XML_LINE_NAME_PATTERN = /^<([A-Za-z_][A-Za-z0-9_.:-]*)(\s|>|\/)/;
 
 function splitLines(value: string): string[] {
   const normalized = value.replace(/\r\n/g, '\n');
@@ -38,6 +39,62 @@ function readQuotedValue(line: string, start: number): number {
   let cursor = start + 1;
   while (cursor < line.length && line[cursor] !== quote) cursor++;
   return Math.min(cursor + 1, line.length);
+}
+
+function formatPreviewBody(body: string, contentType: NoteContentType): string {
+  if (contentType === 'JSON') return formatJsonBody(body);
+  if (contentType === 'XML') return formatXmlBody(body);
+  return body;
+}
+
+function formatJsonBody(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+function formatXmlBody(body: string): string {
+  const normalized = body.trim().replace(/\r\n/g, '\n').replace(/>\s*</g, '>\n<');
+  const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+  const formattedLines: string[] = [];
+  let indent = 0;
+
+  for (const line of lines) {
+    if (isXmlClosingLine(line)) {
+      indent = Math.max(0, indent - 1);
+    }
+
+    formattedLines.push(`${'  '.repeat(indent)}${line}`);
+
+    if (shouldIncreaseXmlIndent(line)) {
+      indent++;
+    }
+  }
+
+  return formattedLines.join('\n');
+}
+
+function isXmlClosingLine(line: string): boolean {
+  return line.startsWith('</');
+}
+
+function isXmlMetadataLine(line: string): boolean {
+  return line.startsWith('<?') || line.startsWith('<!');
+}
+
+function shouldIncreaseXmlIndent(line: string): boolean {
+  if (!line.startsWith('<') || isXmlClosingLine(line) || isXmlMetadataLine(line) || line.endsWith('/>')) {
+    return false;
+  }
+
+  const openingName = line.match(XML_LINE_NAME_PATTERN)?.[1];
+  if (!openingName) {
+    return false;
+  }
+
+  return !line.includes(`</${openingName}>`);
 }
 
 function tokenizeMarkupLine(line: string): Token[] {
@@ -170,7 +227,9 @@ function renderTokens(tokens: Token[], lineIndex: number): ReactNode {
 }
 
 export function CodePreview({ body, contentType }: CodePreviewProps) {
-  const lines = splitLines(body);
+  const formattedBody = useMemo(() => formatPreviewBody(body, contentType), [body, contentType]);
+  const lines = useMemo(() => splitLines(formattedBody), [formattedBody]);
+  const tokenizedLines = useMemo(() => lines.map((line) => tokensForLine(line, contentType)), [lines, contentType]);
   const isHighlighted = contentType === 'XML' || contentType === 'JSON';
 
   return (
@@ -187,7 +246,7 @@ export function CodePreview({ body, contentType }: CodePreviewProps) {
             <span className="code-preview__line" key={`${index}-${line}`}>
               <span className="code-preview__line-number" aria-hidden="true">{index + 1}</span>
               <span className="code-preview__line-content">
-                {renderTokens(tokensForLine(line, contentType), index)}
+                {renderTokens(tokenizedLines[index], index)}
               </span>
             </span>
           ))}
