@@ -25,7 +25,9 @@ import java.util.List;
         @Index(name = "idx_tasks_risk_level", columnList = "risk_level"),
         @Index(name = "idx_tasks_track", columnList = "track"),
         @Index(name = "idx_tasks_phase", columnList = "phase"),
-        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id")
+        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id"),
+        @Index(name = "idx_tasks_reminder_at", columnList = "reminder_at"),
+        @Index(name = "idx_tasks_due_reminders", columnList = "reminder_enabled, reminder_sent, reminder_at, status")
 })
 public class Task {
 
@@ -110,6 +112,18 @@ public class Task {
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "recurrence_rule_id")
     private RecurrenceRule recurrenceRule;
+
+    @Column(name = "reminder_at")
+    private LocalDateTime reminderAt;
+
+    @Column(name = "reminder_enabled", nullable = false)
+    private boolean reminderEnabled;
+
+    @Column(name = "reminder_sent", nullable = false)
+    private boolean reminderSent;
+
+    @Column(name = "reminder_sent_at")
+    private LocalDateTime reminderSentAt;
 
     @Transient
     private int priorityScore;
@@ -198,6 +212,14 @@ public class Task {
     public void setBoardColumnId(Long boardColumnId) { this.boardColumnId = boardColumnId; }
     public int getPosition() { return position; }
     public void setPosition(int position) { this.position = position; }
+    public LocalDateTime getReminderAt() { return reminderAt; }
+    public void setReminderAt(LocalDateTime reminderAt) { this.reminderAt = reminderAt; }
+    public boolean isReminderEnabled() { return reminderEnabled; }
+    public void setReminderEnabled(boolean reminderEnabled) { this.reminderEnabled = reminderEnabled; }
+    public boolean isReminderSent() { return reminderSent; }
+    public void setReminderSent(boolean reminderSent) { this.reminderSent = reminderSent; }
+    public LocalDateTime getReminderSentAt() { return reminderSentAt; }
+    public void setReminderSentAt(LocalDateTime reminderSentAt) { this.reminderSentAt = reminderSentAt; }
     public RecurrenceRule getRecurrenceRule() { return recurrenceRule; }
     public void setRecurrenceRule(RecurrenceRule recurrenceRule) { this.recurrenceRule = recurrenceRule; }
     public int getPriorityScore() { return priorityScore; }
