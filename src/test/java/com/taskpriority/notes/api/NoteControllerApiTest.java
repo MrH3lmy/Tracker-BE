@@ -76,6 +76,23 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.updatedAt").exists());
     }
 
+
+    @Test
+    void createGeneralNoteStoresNormalizedTags() throws Exception {
+        String payload = """
+                {"title":"Tagged note","body":"Remember this later","tags":["Backend"," backend ","API"]}
+                """;
+
+        mockMvc.perform(post("/api/v1/notes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Tagged note"))
+                .andExpect(jsonPath("$.tags", hasSize(2)))
+                .andExpect(jsonPath("$.tags", hasItem("api")))
+                .andExpect(jsonPath("$.tags", hasItem("backend")));
+    }
+
     @Test
     void createTaskLinkedNoteWhenTaskExists() throws Exception {
         Task task = saveTask("Task with notes");
@@ -186,6 +203,21 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$[*].contentType", not(hasItem("JSON"))));
     }
 
+
+    @Test
+    void findAllFiltersByTag() throws Exception {
+        createNote("Backend runbook", "Deploy the API", null, "MARKDOWN", "backend", "runbook");
+        createNote("Frontend runbook", "Deploy the UI", null, "MARKDOWN", "frontend", "runbook");
+        createNote("Backend bug", "Triage service defect", null, "PLAIN_TEXT", "backend");
+
+        mockMvc.perform(get("/api/v1/notes").param("tag", "backend"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].title", hasItem("Backend runbook")))
+                .andExpect(jsonPath("$[*].title", hasItem("Backend bug")))
+                .andExpect(jsonPath("$[*].title", not(hasItem("Frontend runbook"))));
+    }
+
     @Test
     void findByTaskIdAndQuerySearchesTaskLinkedNoteBodyFragment() throws Exception {
         Task selectedTask = saveTask("Task with searchable notes");
@@ -261,7 +293,7 @@ class NoteControllerApiTest {
         return createNote(title, body, taskId, null);
     }
 
-    private long createNote(String title, String body, Long taskId, String contentType) throws Exception {
+    private long createNote(String title, String body, Long taskId, String contentType, String... tags) throws Exception {
         ObjectNode payload = objectMapper.createObjectNode()
                 .put("title", title)
                 .put("body", body);
@@ -270,6 +302,12 @@ class NoteControllerApiTest {
         }
         if (contentType != null) {
             payload.put("contentType", contentType);
+        }
+        if (tags != null && tags.length > 0) {
+            var tagsNode = payload.putArray("tags");
+            for (String tag : tags) {
+                tagsNode.add(tag);
+            }
         }
 
         String response = mockMvc.perform(post("/api/v1/notes")

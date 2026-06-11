@@ -30,9 +30,10 @@ public class NoteController {
     public List<NoteResponse> all(
             @RequestParam(required = false) Long taskId,
             @RequestParam(required = false, name = "q") String query,
-            @RequestParam(required = false) NoteContentType contentType
+            @RequestParam(required = false) NoteContentType contentType,
+            @RequestParam(required = false, name = "tag") List<String> tags
     ) {
-        return noteService.findAll(taskId, query, contentType);
+        return noteService.findAll(taskId, query, contentType, tags);
     }
 
     @GetMapping("/{id}")
