@@ -6,6 +6,7 @@ export interface NoteRecord {
   body: string;
   contentType: NoteContentType;
   taskId?: number | null;
+  tags?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

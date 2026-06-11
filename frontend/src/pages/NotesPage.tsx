@@ -6,12 +6,13 @@ import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes'
 import { latestResult, useNoteMutations, useNotesQuery } from '../hooks/useApiQueries';
 
 const NOTE_CONTENT_TYPES: NoteContentType[] = ['PLAIN_TEXT', 'MARKDOWN', 'SHELL_COMMANDS', 'XML', 'JSON'];
-const EMPTY_FORM: NoteFormState = { title: '', contentType: 'PLAIN_TEXT', taskId: '', body: '' };
+const EMPTY_FORM: NoteFormState = { title: '', contentType: 'PLAIN_TEXT', taskId: '', tags: '', body: '' };
 
 interface NoteFormState {
   title: string;
   contentType: NoteContentType;
   taskId: string;
+  tags: string;
   body: string;
 }
 
@@ -30,6 +31,7 @@ function noteToForm(note: NoteRecord): NoteFormState {
     title: note.title,
     contentType: note.contentType,
     taskId: note.taskId == null ? '' : String(note.taskId),
+    tags: note.tags?.join(', ') ?? '',
     body: note.body,
   };
 }
@@ -38,12 +40,17 @@ function emptyFormForTask(taskId: string): NoteFormState {
   return { ...EMPTY_FORM, taskId };
 }
 
+function parseTags(value: string): string[] {
+  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
 function buildPayload(form: NoteFormState) {
   const trimmedTaskId = form.taskId.trim();
   return {
     title: form.title.trim(),
     contentType: form.contentType,
     taskId: trimmedTaskId ? Number(trimmedTaskId) : null,
+    tags: parseTags(form.tags),
     body: form.body,
   };
 }
@@ -53,11 +60,12 @@ export function NotesPage() {
   const linkedTaskId = searchParams.get('taskId')?.trim() ?? '';
   const [search, setSearch] = useState('');
   const [contentTypeFilter, setContentTypeFilter] = useState<NoteContentType | 'all'>('all');
+  const [tagFilter, setTagFilter] = useState('');
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
 
-  const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId });
+  const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId, tags: tagFilter });
   const { createNote, updateNote, deleteNote } = useNoteMutations();
   const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data);
   const notes = useMemo(() => notesQuery.data?.data ?? [], [notesQuery.data]);
@@ -112,7 +120,7 @@ export function NotesPage() {
         <div className="section-header">
           <div>
             <h3 id="notes-filters-title">{linkedTaskId ? `Notes for task #${linkedTaskId}` : 'Browse notes'}</h3>
-            <p className="muted">{linkedTaskId ? 'Showing only notes linked to this task. Search and content-type filters still apply.' : 'Search note titles and bodies, then narrow by content type.'}</p>
+            <p className="muted">{linkedTaskId ? 'Showing only notes linked to this task. Search and content-type filters still apply.' : 'Search note titles and bodies, then narrow by content type or tag.'}</p>
           </div>
           <button type="button" className="secondary-action" onClick={() => notesQuery.refetch()} disabled={notesQuery.isFetching}>
             {notesQuery.isFetching ? 'Loading...' : 'Reload notes'}
@@ -128,6 +136,15 @@ export function NotesPage() {
               value={search}
               placeholder="Search title or body"
               onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <label className="field-stack" htmlFor="noteTagFilter" style={{ flex: '1 1 16rem' }}>
+            <span>Tags</span>
+            <input
+              id="noteTagFilter"
+              value={tagFilter}
+              placeholder="Filter by tag, e.g. backend"
+              onChange={(event) => setTagFilter(event.target.value)}
             />
           </label>
           <label className="field-stack" htmlFor="noteContentTypeFilter" style={{ flex: '0 1 16rem' }}>
@@ -154,6 +171,7 @@ export function NotesPage() {
                   <p className="eyebrow">{humanizeContentType(note.contentType)}</p>
                   <h3>{note.title}</h3>
                   <p className="muted">Task {note.taskId ?? 'none'} · Updated {formatDate(note.updatedAt)}</p>
+                  {note.tags && note.tags.length > 0 ? <p className="muted">Tags: {note.tags.join(', ')}</p> : null}
                 </div>
                 <div className="row compact-row">
                   <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? 'Copied' : 'Copy body'}</button>
@@ -191,6 +209,10 @@ export function NotesPage() {
             <label className="field-stack" htmlFor="noteTaskId" style={{ flex: '0 1 12rem' }}>
               <span>Task ID (optional)</span>
               <input id="noteTaskId" type="number" min="1" value={activeForm.taskId} onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))} />
+            </label>
+            <label className="field-stack" htmlFor="noteTags" style={{ flex: '1 1 16rem' }}>
+              <span>Tags</span>
+              <input id="noteTags" value={activeForm.tags} placeholder="Comma-separated tags" onChange={(event) => setForm((current) => ({ ...current, tags: event.target.value }))} />
             </label>
           </div>
 

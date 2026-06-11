@@ -10,6 +10,7 @@ export interface NotesQueryFilters {
   q?: string;
   contentType?: NoteContentType | 'all';
   taskId?: number | string;
+  tags?: string | string[];
 }
 
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
@@ -18,7 +19,7 @@ type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
   taskBlockers: ['tasks', 'blockers'] as const,
-  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? ''] as const,
+  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
@@ -40,6 +41,8 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     if (q) params.set('q', q);
     if (filters.contentType && filters.contentType !== 'all') params.set('contentType', filters.contentType);
     if (filters.taskId !== undefined && String(filters.taskId).trim() !== '') params.set('taskId', String(filters.taskId).trim());
+    const tags = Array.isArray(filters.tags) ? filters.tags : filters.tags?.split(',') ?? [];
+    tags.map((tag) => tag.trim()).filter(Boolean).forEach((tag) => params.append('tag', tag));
     const query = params.toString();
     return apiJson<NoteRecord[]>('GET', `/api/v1/notes${query ? `?${query}` : ''}`);
   },
