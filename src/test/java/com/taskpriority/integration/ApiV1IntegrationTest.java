@@ -51,6 +51,11 @@ class ApiV1IntegrationTest {
         mockMvc.perform(get("/api/v1/tasks/{id}/notes", taskId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].body").value("remember this"));
+        mockMvc.perform(get("/api/v1/tasks/{id}/detail", taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.task.id").value((int) taskId))
+                .andExpect(jsonPath("$.task.title").value("Test Task"))
+                .andExpect(jsonPath("$.notes[0].body").value("remember this"));
         mockMvc.perform(get("/api/v1/tasks")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/today")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/weekly")).andExpect(status().isOk());

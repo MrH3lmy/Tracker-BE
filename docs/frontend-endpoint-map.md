@@ -83,6 +83,17 @@ Tracker-BE core entity is **Task** (`TaskControllerV1`).
   - detail panel
   - request/response inspector
 
+### `GET /api/v1/tasks/{id}/detail`
+- UI screen: `TaskDetailPage`
+- Purpose: load the task and its ordered notes in a single request
+- Response: `TaskDetailResponse` with:
+  - `task`: existing `TaskResponse` payload
+  - `notes`: ordered `NoteResponse[]` for the task
+- Components:
+  - detail panel from `task`
+  - notes panel/canvas from `notes`
+  - request/response inspector
+
 ## Task Create / Update / Delete
 
 ### `POST /api/v1/tasks`

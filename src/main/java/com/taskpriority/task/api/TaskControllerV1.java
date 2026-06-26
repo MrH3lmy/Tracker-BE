@@ -29,6 +29,7 @@ public class TaskControllerV1 {
 
     @GetMapping public List<TaskResponse> all(){ return taskService.findAll().stream().map(mapper::toResponse).toList(); }
     @GetMapping("/{id}") public TaskResponse byId(@PathVariable Long id){ return mapper.toResponse(taskService.findById(id)); }
+    @GetMapping("/{id}/detail") public TaskDetailResponse detail(@PathVariable Long id){ TaskResponse task = mapper.toResponse(taskService.findById(id)); return new TaskDetailResponse(task, noteService.findByTaskId(id)); }
     @PostMapping public ResponseEntity<TaskResponse> create(@Validated @RequestBody CreateTaskRequest r){ Task s=taskService.save(mapper.fromCreateRequest(r)); if (r.dependencyIds() != null) { s = taskService.replaceDependencies(s.getId(), r.dependencyIds()); } return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(s));}
     @PutMapping("/{id}") public TaskResponse update(@PathVariable Long id,@Validated @RequestBody UpdateTaskRequest r){return mapper.toResponse(taskService.updateTask(id,r));}
     @DeleteMapping("/{id}") public ResponseEntity<Void> delete(@PathVariable Long id){taskService.delete(id);return ResponseEntity.noContent().build();}
