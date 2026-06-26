@@ -19,6 +19,7 @@ public record NoteResponse(
         String color,
         Integer zIndex,
         List<String> tags,
+        List<NoteAttachmentResponse> attachments,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

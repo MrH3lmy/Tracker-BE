@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.taskpriority.model.Task;
+import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,6 +26,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -36,7 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:notes-api-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false"
+        "spring.flyway.enabled=false",
+        "app.notes.screenshots.max-file-size-bytes=16"
 })
 class NoteControllerApiTest {
 
@@ -50,10 +54,14 @@ class NoteControllerApiTest {
     private NoteRepository noteRepository;
 
     @Autowired
+    private NoteAttachmentRepository noteAttachmentRepository;
+
+    @Autowired
     private TaskRepository taskRepository;
 
     @BeforeEach
     void cleanDatabase() {
+        noteAttachmentRepository.deleteAll();
         noteRepository.deleteAll();
         taskRepository.deleteAll();
     }
@@ -297,6 +305,101 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.height").value(180))
                 .andExpect(jsonPath("$.color").value("#ffeeaa"))
                 .andExpect(jsonPath("$.zIndex").value(3));
+    }
+
+
+    @Test
+    void uploadScreenshotAddsAttachmentMetadataToNoteResponse() throws Exception {
+        long noteId = createNote("Screenshot note", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.fileName").value("capture.png"))
+                .andExpect(jsonPath("$.contentType").value("image/png"))
+                .andExpect(jsonPath("$.sizeBytes").value(3))
+                .andExpect(jsonPath("$.kind").value("SCREENSHOT"));
+
+        mockMvc.perform(get("/api/v1/notes/{id}", noteId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments", hasSize(1)))
+                .andExpect(jsonPath("$.attachments[0].fileName").value("capture.png"))
+                .andExpect(jsonPath("$.attachments[0].contentType").value("image/png"))
+                .andExpect(jsonPath("$.attachments[0].data").doesNotExist());
+    }
+
+    @Test
+    void fetchScreenshotReturnsBinaryContent() throws Exception {
+        long noteId = createNote("Fetch screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.webp", "image/webp", new byte[]{9, 8, 7});
+        String uploadResponse = mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long attachmentId = objectMapper.readTree(uploadResponse).get("id").asLong();
+
+        mockMvc.perform(get("/api/v1/notes/{id}/screenshots/{attachmentId}", noteId, attachmentId))
+                .andExpect(status().isOk())
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsByteArray()).containsExactly(9, 8, 7));
+    }
+
+    @Test
+    void deleteScreenshotRemovesAttachmentMetadata() throws Exception {
+        long noteId = createNote("Delete screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.jpg", "image/jpeg", new byte[]{1});
+        String uploadResponse = mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long attachmentId = objectMapper.readTree(uploadResponse).get("id").asLong();
+
+        mockMvc.perform(delete("/api/v1/notes/{id}/screenshots/{attachmentId}", noteId, attachmentId))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/notes/{id}", noteId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments", hasSize(0)));
+    }
+
+    @Test
+    void uploadScreenshotRejectsInvalidContentType() throws Exception {
+        long noteId = createNote("Invalid screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.gif", "image/gif", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Screenshot content type must be one of: image/png, image/jpeg, image/webp"));
+    }
+
+    @Test
+    void uploadScreenshotReturnsNotFoundForMissingNote() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", 999999L).file(file))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Note with id 999999 not found"));
+    }
+
+    @Test
+    void deletingNoteCascadesScreenshotAttachments() throws Exception {
+        long noteId = createNote("Cascade screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1});
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/v1/notes/{id}", noteId))
+                .andExpect(status().isNoContent());
+
+        org.assertj.core.api.Assertions.assertThat(noteAttachmentRepository.count()).isZero();
+    }
+
+    @Test
+    void uploadScreenshotRejectsOversizedFile() throws Exception {
+        long noteId = createNote("Oversized screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[17]);
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Screenshot file size must not exceed 16 bytes"));
     }
 
     @Test
