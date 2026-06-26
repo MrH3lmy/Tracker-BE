@@ -26,6 +26,10 @@ function formatDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function getStickyNoteNumber(note: NoteRecord): number {
+  return note.displayOrder ?? 0;
+}
+
 function noteToForm(note: NoteRecord): NoteFormState {
   return {
     title: note.title,
@@ -68,7 +72,15 @@ export function NotesPage() {
   const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId, tags: tagFilter });
   const { createNote, updateNote, deleteNote } = useNoteMutations();
   const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data);
-  const notes = useMemo(() => notesQuery.data?.data ?? [], [notesQuery.data]);
+  const notes = useMemo(() => {
+    const records = notesQuery.data?.data ?? [];
+    if (!linkedTaskId) return records;
+
+    return [...records].sort((first, second) => {
+      const orderDelta = getStickyNoteNumber(first) - getStickyNoteNumber(second);
+      return orderDelta === 0 ? first.id - second.id : orderDelta;
+    });
+  }, [linkedTaskId, notesQuery.data]);
   const isBusy = createNote.isPending || updateNote.isPending || deleteNote.isPending;
   const activeForm = editingNoteId === null && linkedTaskId && form.taskId.trim() === '' ? { ...form, taskId: linkedTaskId } : form;
   const canSubmit = activeForm.title.trim().length > 0 && activeForm.body.trim().length > 0 && !isBusy;
@@ -168,10 +180,14 @@ export function NotesPage() {
             <article key={note.id} className="panel" style={{ padding: 'var(--space-5)', marginTop: 'var(--space-4)' }}>
               <div className="section-header">
                 <div>
-                  <p className="eyebrow">{humanizeContentType(note.contentType)}</p>
+                  <p className="eyebrow">Sticky note #{getStickyNoteNumber(note)} · {humanizeContentType(note.contentType)}</p>
                   <h3>{note.title}</h3>
                   <p className="muted">Task {note.taskId ?? 'none'} · Updated {formatDate(note.updatedAt)}</p>
-                  {note.tags && note.tags.length > 0 ? <p className="muted">Tags: {note.tags.join(', ')}</p> : null}
+                  {note.tags && note.tags.length > 0 ? (
+                    <div className="row compact-row" aria-label={`Tags for ${note.title}`} style={{ marginTop: 'var(--space-2)' }}>
+                      {note.tags.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="row compact-row">
                   <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? 'Copied' : 'Copy body'}</button>
