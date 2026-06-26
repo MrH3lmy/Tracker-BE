@@ -22,6 +22,21 @@ public record UpdateNoteRequest(
         @Positive(message = "taskId must be greater than 0")
         Long taskId,
 
+        Integer displayOrder,
+
+        Integer positionX,
+
+        Integer positionY,
+
+        Integer width,
+
+        Integer height,
+
+        @Size(max = 40, message = "color must be at most 40 characters")
+        String color,
+
+        Integer zIndex,
+
         @Size(max = 20, message = "tags must contain at most 20 items")
         List<@Size(max = 80, message = "tag must be at most 80 characters") String> tags
 ) {
