@@ -10,6 +10,11 @@ public record NoteAttachmentResponse(
         String contentType,
         Long sizeBytes,
         NoteAttachmentKind kind,
+        String caption,
+        String source,
+        Integer width,
+        Integer height,
+        String downloadUrl,
         LocalDateTime createdAt
 ) {
 }
