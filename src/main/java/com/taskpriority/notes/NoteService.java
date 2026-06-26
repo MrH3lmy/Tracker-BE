@@ -10,6 +10,7 @@ import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.UpdateNoteRequest;
+import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
@@ -106,6 +107,19 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(request.tags()));
+        return toResponse(noteRepository.save(note));
+    }
+
+    @Transactional
+    public NoteResponse updateLayout(Long id, UpdateNoteLayoutRequest request) {
+        Note note = getNote(id);
+        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        note.setPositionX(request.positionX());
+        note.setPositionY(request.positionY());
+        note.setWidth(request.width());
+        note.setHeight(request.height());
+        note.setColor(normalizeColor(request.color()));
+        note.setZIndex(defaultZero(request.zIndex()));
         return toResponse(noteRepository.save(note));
     }
 
