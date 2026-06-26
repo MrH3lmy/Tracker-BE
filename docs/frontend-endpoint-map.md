@@ -91,8 +91,13 @@ Tracker-BE core entity is **Task** (`TaskControllerV1`).
   - `notes`: ordered `NoteResponse[]` for the task
 - Components:
   - detail panel from `task`
-  - notes panel/canvas from `notes`
+  - floating sticky-note canvas from `notes`
   - request/response inspector
+- Notes frontend contract for the task-detail sticky-note canvas:
+  - `displayOrder` is the visible sticky note number and the primary sort key for task notes.
+  - `title` is the sticky-note heading/header text.
+  - `tags` are categorization labels/chips rendered on each sticky note.
+  - Layout fields (`positionX`, `positionY`, `width`, `height`, `color`, `zIndex`) restore the floating sticky-note placement when task detail loads.
 
 ## Task Create / Update / Delete
 
@@ -108,6 +113,20 @@ Tracker-BE core entity is **Task** (`TaskControllerV1`).
 ### `DELETE /api/v1/tasks/{id}`
 - UI: delete action with `ConfirmDialog`
 - Expected: HTTP `204`
+
+## Notes / Sticky Notes
+
+### `GET /api/v1/notes?taskId={taskId}`
+- UI placement: task-linked notes view and reusable notes data source.
+- For task-scoped notes, render in ascending `displayOrder` and use `displayOrder` as the visible sticky note number.
+- Keep `title` as the sticky-note heading/header.
+- Render `tags` as categorization chips/labels on the sticky note; do not use tags as the note number or title.
+- Use layout fields (`positionX`, `positionY`, `width`, `height`, `color`, `zIndex`) to restore floating sticky-note placement on task detail load.
+
+### `PATCH /api/v1/notes/{id}/layout`
+- UI trigger: sticky-note drag, resize, color, stacking, or order change.
+- Body: `UpdateNoteLayoutRequest` with `displayOrder` plus layout fields.
+- Persist `displayOrder` whenever the visible sticky note number or sort order changes.
 
 ## Task State Actions
 
