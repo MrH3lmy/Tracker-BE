@@ -78,6 +78,13 @@ public class NoteService {
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
+        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        note.setPositionX(request.positionX());
+        note.setPositionY(request.positionY());
+        note.setWidth(request.width());
+        note.setHeight(request.height());
+        note.setColor(normalizeColor(request.color()));
+        note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(request.tags()));
         return toResponse(noteRepository.save(note));
     }
@@ -91,6 +98,13 @@ public class NoteService {
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
+        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        note.setPositionX(request.positionX());
+        note.setPositionY(request.positionY());
+        note.setWidth(request.width());
+        note.setHeight(request.height());
+        note.setColor(normalizeColor(request.color()));
+        note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(request.tags()));
         return toResponse(noteRepository.save(note));
     }
@@ -161,6 +175,17 @@ public class NoteService {
         return query.trim();
     }
 
+    private Integer defaultZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private String normalizeColor(String color) {
+        if (color == null || color.isBlank()) {
+            return null;
+        }
+        return color.trim();
+    }
+
     private String formatBody(String body, NoteContentType contentType) {
         if (body == null) {
             return null;
@@ -199,6 +224,13 @@ public class NoteService {
                 note.getBody(),
                 note.getContentType(),
                 taskId,
+                note.getDisplayOrder(),
+                note.getPositionX(),
+                note.getPositionY(),
+                note.getWidth(),
+                note.getHeight(),
+                note.getColor(),
+                note.getZIndex(),
                 tags,
                 note.getCreatedAt(),
                 note.getUpdatedAt()

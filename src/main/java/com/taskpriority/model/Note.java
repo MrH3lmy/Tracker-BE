@@ -60,6 +60,27 @@ public class Note {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 0;
+
+    @Column(name = "position_x")
+    private Integer positionX;
+
+    @Column(name = "position_y")
+    private Integer positionY;
+
+    @Column(name = "width")
+    private Integer width;
+
+    @Column(name = "height")
+    private Integer height;
+
+    @Column(name = "color", length = 40)
+    private String color;
+
+    @Column(name = "z_index", nullable = false)
+    private Integer zIndex = 0;
+
     @ManyToMany
     @JoinTable(
             name = "note_tags",
@@ -88,6 +109,20 @@ public class Note {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+    public Integer getPositionX() { return positionX; }
+    public void setPositionX(Integer positionX) { this.positionX = positionX; }
+    public Integer getPositionY() { return positionY; }
+    public void setPositionY(Integer positionY) { this.positionY = positionY; }
+    public Integer getWidth() { return width; }
+    public void setWidth(Integer width) { this.width = width; }
+    public Integer getHeight() { return height; }
+    public void setHeight(Integer height) { this.height = height; }
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
+    public Integer getZIndex() { return zIndex; }
+    public void setZIndex(Integer zIndex) { this.zIndex = zIndex; }
     public Set<Tag> getTags() { return tags; }
     public void setTags(Set<Tag> tags) { this.tags = tags; }
 
