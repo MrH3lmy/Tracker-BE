@@ -11,7 +11,7 @@ import java.util.List;
 
 public interface NoteRepository extends JpaRepository<Note, Long> {
 
-    List<Note> findByTaskIdOrderByUpdatedAtDescIdDesc(Long taskId);
+    List<Note> findByTaskIdOrderByDisplayOrderAscIdAsc(Long taskId);
 
     List<Note> findByTaskIsNullOrderByUpdatedAtDescIdDesc();
 
@@ -21,11 +21,39 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
         return findAllMatching(taskId, query, contentType, false, List.of());
     }
 
+    default List<Note> findAllMatching(Long taskId, String query, NoteContentType contentType, boolean hasTags, List<String> tagNames) {
+        if (taskId == null) {
+            return findAllMatchingGlobally(query, contentType, hasTags, tagNames);
+        }
+        return findAllMatchingForTask(taskId, query, contentType, hasTags, tagNames);
+    }
+
     @EntityGraph(attributePaths = "tags")
     @Query("""
             select distinct n from Note n
-            where (:taskId is null or n.task.id = :taskId)
+            where n.task.id = :taskId
               and (:contentType is null or n.contentType = :contentType)
+              and (:query is null
+                   or lower(cast(n.title as string)) like lower(concat('%', cast(:query as string), '%'))
+                   or lower(cast(coalesce(n.body, '') as string)) like lower(concat('%', cast(:query as string), '%')))
+              and (:hasTags = false or exists (
+                   select tagFilter from n.tags tagFilter
+                   where tagFilter.name in :tagNames
+              ))
+            order by n.displayOrder asc, n.id asc
+            """)
+    List<Note> findAllMatchingForTask(
+            @Param("taskId") Long taskId,
+            @Param("query") String query,
+            @Param("contentType") NoteContentType contentType,
+            @Param("hasTags") boolean hasTags,
+            @Param("tagNames") List<String> tagNames
+    );
+
+    @EntityGraph(attributePaths = "tags")
+    @Query("""
+            select distinct n from Note n
+            where (:contentType is null or n.contentType = :contentType)
               and (:query is null
                    or lower(cast(n.title as string)) like lower(concat('%', cast(:query as string), '%'))
                    or lower(cast(coalesce(n.body, '') as string)) like lower(concat('%', cast(:query as string), '%')))
@@ -35,8 +63,7 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
               ))
             order by n.updatedAt desc, n.id desc
             """)
-    List<Note> findAllMatching(
-            @Param("taskId") Long taskId,
+    List<Note> findAllMatchingGlobally(
             @Param("query") String query,
             @Param("contentType") NoteContentType contentType,
             @Param("hasTags") boolean hasTags,
