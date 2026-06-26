@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -271,6 +272,31 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.body").value("Updated body"))
                 .andExpect(jsonPath("$.contentType").value("JSON"))
                 .andExpect(jsonPath("$.taskId").value(updatedTask.getId().intValue()));
+    }
+
+    @Test
+    void updateNoteLayoutUpdatesOnlyLayoutFields() throws Exception {
+        Task task = saveTask("Layout task");
+        long noteId = createNote("Layout title", "Layout body", task.getId());
+        String payload = """
+                {"displayOrder":7,"positionX":10,"positionY":20,"width":300,"height":180,"color":" #ffeeaa ","zIndex":3}
+                """;
+
+        mockMvc.perform(patch("/api/v1/notes/{id}/layout", noteId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value((int) noteId))
+                .andExpect(jsonPath("$.title").value("Layout title"))
+                .andExpect(jsonPath("$.body").value("Layout body"))
+                .andExpect(jsonPath("$.taskId").value(task.getId().intValue()))
+                .andExpect(jsonPath("$.displayOrder").value(7))
+                .andExpect(jsonPath("$.positionX").value(10))
+                .andExpect(jsonPath("$.positionY").value(20))
+                .andExpect(jsonPath("$.width").value(300))
+                .andExpect(jsonPath("$.height").value(180))
+                .andExpect(jsonPath("$.color").value("#ffeeaa"))
+                .andExpect(jsonPath("$.zIndex").value(3));
     }
 
     @Test

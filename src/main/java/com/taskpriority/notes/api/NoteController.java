@@ -8,6 +8,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +50,11 @@ public class NoteController {
     @PutMapping("/{id}")
     public NoteResponse update(@PathVariable Long id, @Validated @RequestBody UpdateNoteRequest request) {
         return noteService.update(id, request);
+    }
+
+    @PatchMapping("/{id}/layout")
+    public NoteResponse updateLayout(@PathVariable Long id, @Validated @RequestBody UpdateNoteLayoutRequest request) {
+        return noteService.updateLayout(id, request);
     }
 
     @DeleteMapping("/{id}")
