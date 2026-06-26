@@ -4,19 +4,26 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Note;
+import com.taskpriority.model.NoteAttachment;
+import com.taskpriority.model.NoteAttachmentKind;
 import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
+import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.UpdateNoteRequest;
 import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
+import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -24,21 +31,30 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class NoteService {
     private final NoteRepository noteRepository;
+    private static final Set<String> ALLOWED_SCREENSHOT_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
+
     private final TaskRepository taskRepository;
     private final TagRepository tagRepository;
+    private final NoteAttachmentRepository noteAttachmentRepository;
     private final ObjectMapper objectMapper;
+    private final long maxScreenshotSizeBytes;
 
-    public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, TagRepository tagRepository, ObjectMapper objectMapper) {
+    public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, TagRepository tagRepository,
+                       NoteAttachmentRepository noteAttachmentRepository, ObjectMapper objectMapper,
+                       @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.taskRepository = taskRepository;
         this.tagRepository = tagRepository;
+        this.noteAttachmentRepository = noteAttachmentRepository;
         this.objectMapper = objectMapper;
+        this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 
     @Transactional(readOnly = true)
@@ -121,6 +137,42 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         return toResponse(noteRepository.save(note));
+    }
+
+
+    @Transactional
+    public NoteAttachmentResponse uploadScreenshot(Long noteId, MultipartFile file) {
+        Note note = getNote(noteId);
+        validateScreenshot(file);
+
+        NoteAttachment attachment = new NoteAttachment();
+        attachment.setNote(note);
+        attachment.setFileName(cleanFileName(file.getOriginalFilename()));
+        attachment.setContentType(file.getContentType());
+        attachment.setSizeBytes(file.getSize());
+        attachment.setStorageKey(UUID.randomUUID().toString());
+        attachment.setKind(NoteAttachmentKind.SCREENSHOT);
+        try {
+            attachment.setData(file.getBytes());
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("Unable to read screenshot file");
+        }
+        return toAttachmentResponse(noteAttachmentRepository.save(attachment));
+    }
+
+    @Transactional(readOnly = true)
+    public NoteAttachment getScreenshot(Long noteId, Long attachmentId) {
+        if (!noteRepository.existsById(noteId)) {
+            throw new ResourceNotFoundException("Note with id " + noteId + " not found");
+        }
+        return noteAttachmentRepository.findByIdAndNoteIdAndKind(attachmentId, noteId, NoteAttachmentKind.SCREENSHOT)
+                .orElseThrow(() -> new ResourceNotFoundException("Screenshot attachment with id " + attachmentId + " not found for note " + noteId));
+    }
+
+    @Transactional
+    public void deleteScreenshot(Long noteId, Long attachmentId) {
+        NoteAttachment attachment = getScreenshot(noteId, attachmentId);
+        noteAttachmentRepository.delete(attachment);
     }
 
     @Transactional
@@ -226,6 +278,36 @@ public class NoteService {
         }
     }
 
+    private void validateScreenshot(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Screenshot file is required");
+        }
+        if (!ALLOWED_SCREENSHOT_CONTENT_TYPES.contains(file.getContentType())) {
+            throw new IllegalArgumentException("Screenshot content type must be one of: image/png, image/jpeg, image/webp");
+        }
+        if (file.getSize() > maxScreenshotSizeBytes) {
+            throw new IllegalArgumentException("Screenshot file size must not exceed " + maxScreenshotSizeBytes + " bytes");
+        }
+    }
+
+    private String cleanFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "screenshot";
+        }
+        return fileName.replace("\\", "/").substring(fileName.replace("\\", "/").lastIndexOf('/') + 1);
+    }
+
+    private NoteAttachmentResponse toAttachmentResponse(NoteAttachment attachment) {
+        return new NoteAttachmentResponse(
+                attachment.getId(),
+                attachment.getFileName(),
+                attachment.getContentType(),
+                attachment.getSizeBytes(),
+                attachment.getKind(),
+                attachment.getCreatedAt()
+        );
+    }
+
     private NoteResponse toResponse(Note note) {
         Long taskId = note.getTask() == null ? null : note.getTask().getId();
         List<String> tags = note.getTags().stream()
@@ -246,6 +328,10 @@ public class NoteService {
                 note.getColor(),
                 note.getZIndex(),
                 tags,
+                noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
+                        .stream()
+                        .map(this::toAttachmentResponse)
+                        .toList(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );
