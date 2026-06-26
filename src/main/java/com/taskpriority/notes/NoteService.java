@@ -58,7 +58,7 @@ public class NoteService {
         if (!taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return noteRepository.findByTaskIdOrderByUpdatedAtDescIdDesc(taskId)
+        return noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
