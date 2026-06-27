@@ -8,6 +8,8 @@ import { latestResult, useNoteMutations, useNotesQuery, useTasksQuery } from '..
 
 const NOTE_CONTENT_TYPES: NoteContentType[] = ['PLAIN_TEXT', 'MARKDOWN', 'SHELL_COMMANDS', 'XML', 'JSON'];
 const EMPTY_FORM: NoteFormState = { title: '', contentType: 'PLAIN_TEXT', taskId: '', tags: '', body: '' };
+const SCREENSHOT_MAX_FILE_SIZE_BYTES = 5_242_880;
+const SUPPORTED_SCREENSHOT_TYPES = 'PNG, JPEG, or WebP';
 
 interface NoteFormState {
   title: string;
@@ -25,6 +27,10 @@ function formatDate(value?: string): string {
   if (!value) return 'Not available';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatBytes(value: number): string {
+  return `${value.toLocaleString()} bytes (${(value / 1024 / 1024).toFixed(1)} MiB)`;
 }
 
 function getStickyNoteNumber(note: NoteRecord): number {
@@ -69,11 +75,12 @@ export function NotesPage() {
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
+  const [attachmentCaptions, setAttachmentCaptions] = useState<Record<number, string>>({});
 
   const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId, tags: tagFilter });
   const tasksQuery = useTasksQuery('active');
-  const { createNote, updateNote, deleteNote } = useNoteMutations();
-  const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data);
+  const { createNote, updateNote, deleteNote, uploadScreenshot } = useNoteMutations();
+  const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data, uploadScreenshot.data);
   const availableTasks = useMemo<TaskRecord[]>(() => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []), [tasksQuery.data]);
   const notes = useMemo(() => {
     const records = notesQuery.data?.data ?? [];
@@ -85,6 +92,7 @@ export function NotesPage() {
     });
   }, [linkedTaskId, notesQuery.data]);
   const isBusy = createNote.isPending || updateNote.isPending || deleteNote.isPending;
+  const isUploadPending = uploadScreenshot.isPending;
   const activeForm = editingNoteId === null && linkedTaskId && form.taskId.trim() === '' ? { ...form, taskId: linkedTaskId } : form;
   const canSubmit = activeForm.title.trim().length > 0 && activeForm.body.trim().length > 0 && !isBusy;
 
@@ -104,6 +112,28 @@ export function NotesPage() {
     }
 
     updateNote.mutate({ id: editingNoteId, body: payload }, { onSuccess: (result) => { if (result.ok) resetForm(); } });
+  };
+
+
+  const handleScreenshotSubmit = (event: FormEvent<HTMLFormElement>, note: NoteRecord) => {
+    event.preventDefault();
+    if (isUploadPending) return;
+
+    const formData = new FormData(event.currentTarget);
+    const file = formData.get('screenshot');
+    if (!(file instanceof File) || file.size === 0) return;
+
+    const caption = attachmentCaptions[note.id]?.trim() || note.title.trim();
+    uploadScreenshot.mutate(
+      { noteId: note.id, file, caption },
+      {
+        onSuccess: (result) => {
+          if (!result.ok) return;
+          event.currentTarget.reset();
+          setAttachmentCaptions((current) => ({ ...current, [note.id]: '' }));
+        },
+      },
+    );
   };
 
   const copyBody = (note: NoteRecord) => {
@@ -199,6 +229,43 @@ export function NotesPage() {
                 </div>
               </div>
               <CodePreview body={note.body} contentType={note.contentType} />
+              <form className="panel" onSubmit={(event) => handleScreenshotSubmit(event, note)} style={{ margin: 'var(--space-4) 0 0', padding: 'var(--space-3)' }}>
+                <div className="section-header" style={{ alignItems: 'end', gap: 'var(--space-3)' }}>
+                  <div>
+                    <h4 style={{ margin: 0 }}>Attach image</h4>
+                    <p className="muted" id={`screenshot-help-${note.id}`}>
+                      Supports {SUPPORTED_SCREENSHOT_TYPES}. Backend limit from <code>app.notes.screenshots.max-file-size-bytes</code>: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.
+                    </p>
+                  </div>
+                  <button type="submit" className="secondary-action" disabled={isUploadPending}>
+                    {isUploadPending ? 'Uploading...' : 'Attach image'}
+                  </button>
+                </div>
+                <div className="row" style={{ alignItems: 'end', flexWrap: 'wrap' }}>
+                  <label className="field-stack" htmlFor={`screenshot-file-${note.id}`} style={{ flex: '1 1 18rem' }}>
+                    <span>Image file</span>
+                    <input
+                      id={`screenshot-file-${note.id}`}
+                      name="screenshot"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      aria-describedby={`screenshot-help-${note.id}`}
+                      disabled={isUploadPending}
+                      required
+                    />
+                  </label>
+                  <label className="field-stack" htmlFor={`screenshot-caption-${note.id}`} style={{ flex: '1 1 18rem' }}>
+                    <span>Caption (optional)</span>
+                    <input
+                      id={`screenshot-caption-${note.id}`}
+                      value={attachmentCaptions[note.id] ?? ''}
+                      placeholder={`Defaults to “${note.title}”`}
+                      onChange={(event) => setAttachmentCaptions((current) => ({ ...current, [note.id]: event.target.value }))}
+                      disabled={isUploadPending}
+                    />
+                  </label>
+                </div>
+              </form>
               {note.attachments?.filter((attachment) => attachment.kind === 'SCREENSHOT' && attachment.downloadUrl).map((attachment) => (
                 <figure key={attachment.id} className="panel" style={{ margin: 'var(--space-4) 0 0', padding: 'var(--space-3)' }}>
                   <img
