@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiJson, apiText, type ApiCallResult } from '../apiClient';
+import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
 import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
@@ -14,6 +14,7 @@ export interface NotesQueryFilters {
 }
 
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
+type UploadScreenshotVariables = { noteId: number; file: File; caption?: string; source?: string; width?: number; height?: number };
 type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 
 export const queryKeys = {
@@ -132,6 +133,18 @@ export function useNoteMutations() {
     createNote: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/notes', body), onSuccess }),
     updateNote: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/notes/${id}`, body), onSuccess }),
     deleteNote: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/notes/${id}`), onSuccess }),
+    uploadScreenshot: useMutation({
+      mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (caption !== undefined) formData.append('caption', caption);
+        if (source !== undefined) formData.append('source', source);
+        if (width !== undefined) formData.append('width', String(width));
+        if (height !== undefined) formData.append('height', String(height));
+        return apiFormData('POST', `/api/v1/notes/${noteId}/tools/screenshot`, formData);
+      },
+      onSuccess,
+    }),
   };
 }
 
