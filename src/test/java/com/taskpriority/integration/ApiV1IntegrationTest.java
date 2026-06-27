@@ -28,6 +28,16 @@ class ApiV1IntegrationTest {
     }
 
     @Test
+    void allowsLocalFrontendScreenshotToolCorsPreflight() throws Exception {
+        mockMvc.perform(options("/api/v1/notes/1/tools/screenshot")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("POST")));
+    }
+
+    @Test
     void endpointContracts() throws Exception {
         String body = """
                 {"title":"Test Task","description":"d"}
