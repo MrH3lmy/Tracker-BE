@@ -128,6 +128,24 @@ Tracker-BE core entity is **Task** (`TaskControllerV1`).
 - Body: `UpdateNoteLayoutRequest` with `displayOrder` plus layout fields.
 - Persist `displayOrder` whenever the visible sticky note number or sort order changes.
 
+### Screenshot attachments
+
+#### `POST /api/v1/notes/{id}/screenshots`
+#### `POST /api/v1/notes/{id}/tools/screenshot`
+- UI trigger: screenshot upload or browser-extension screenshot capture for a note.
+- Body: `multipart/form-data` with `file`, optional `caption`, optional `source`, optional `width`, and optional `height`.
+- Response: `NoteAttachmentResponse`.
+
+#### `GET /api/v1/notes/{id}/screenshots/{attachmentId}`
+- UI trigger: open, preview, or download an existing screenshot attachment.
+- The response is the binary screenshot payload with the stored image content type.
+
+#### `NoteAttachmentResponse.downloadUrl` resolution contract
+- `downloadUrl` is emitted as an absolute backend URL when the response is created in an HTTP request context, for example `http://localhost:8080/api/v1/notes/42/screenshots/7`.
+- Clients should treat `downloadUrl` as the canonical URL for opening/downloading the attachment. If a legacy or non-HTTP backend path is ever returned as an API-relative value beginning with `/api/v1/`, clients must resolve it against the configured API base URL, not against the frontend origin.
+- Do not concatenate the frontend app origin with `downloadUrl`; use the URL as-is when it is absolute, otherwise prefix the configured backend/API base URL (for local development, `VITE_API_BASE_URL=http://localhost:8080`).
+
+
 ## Task State Actions
 
 ### `PATCH /api/v1/tasks/{id}/complete`

@@ -22,6 +22,8 @@ import com.taskpriority.repository.TagRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -356,7 +358,14 @@ public class NoteService {
     }
 
     private String screenshotDownloadUrl(NoteAttachment attachment) {
-        return "/api/v1/notes/" + attachment.getNote().getId() + "/screenshots/" + attachment.getId();
+        String path = "/api/v1/notes/" + attachment.getNote().getId() + "/screenshots/" + attachment.getId();
+        if (RequestContextHolder.getRequestAttributes() == null) {
+            return path;
+        }
+        return ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path(path)
+                .build()
+                .toUriString();
     }
 
     private NoteResponse toResponse(Note note) {
