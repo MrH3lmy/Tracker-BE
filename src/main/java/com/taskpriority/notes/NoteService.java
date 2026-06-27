@@ -165,7 +165,7 @@ public class NoteService {
         try {
             attachment.setData(file.getBytes());
         } catch (IOException ex) {
-            throw new IllegalArgumentException("Unable to read screenshot file");
+            throw new IllegalArgumentException("Unable to read screenshot file", ex);
         }
         return toAttachmentResponse(noteAttachmentRepository.save(attachment));
     }
