@@ -199,6 +199,20 @@ export function NotesPage() {
                 </div>
               </div>
               <CodePreview body={note.body} contentType={note.contentType} />
+              {note.attachments?.filter((attachment) => attachment.kind === 'SCREENSHOT' && attachment.downloadUrl).map((attachment) => (
+                <figure key={attachment.id} className="panel" style={{ margin: 'var(--space-4) 0 0', padding: 'var(--space-3)' }}>
+                  <img
+                    src={attachment.downloadUrl!}
+                    alt={attachment.caption ?? attachment.fileName}
+                    style={{ display: 'block', maxWidth: '100%', height: 'auto', borderRadius: 'var(--radius-md)' }}
+                  />
+                  <figcaption className="muted" style={{ marginTop: 'var(--space-2)' }}>
+                    {attachment.caption ?? attachment.fileName}
+                    {' · '}
+                    <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a>
+                  </figcaption>
+                </figure>
+              ))}
             </article>
           ))}
         </div>
