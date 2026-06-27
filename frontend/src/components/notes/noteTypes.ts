@@ -1,5 +1,19 @@
 export type NoteContentType = 'PLAIN_TEXT' | 'MARKDOWN' | 'SHELL_COMMANDS' | 'XML' | 'JSON';
 
+export interface NoteAttachmentRecord {
+  id: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  kind: 'SCREENSHOT';
+  caption?: string | null;
+  source?: string | null;
+  width?: number | null;
+  height?: number | null;
+  downloadUrl?: string | null;
+  createdAt?: string;
+}
+
 export interface NoteRecord {
   id: number;
   title: string;
@@ -14,6 +28,7 @@ export interface NoteRecord {
   color?: string | null;
   zIndex?: number | null;
   tags?: string[];
+  attachments?: NoteAttachmentRecord[];
   createdAt?: string;
   updatedAt?: string;
 }
