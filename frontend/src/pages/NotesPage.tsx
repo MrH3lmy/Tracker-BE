@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { QueryState } from '../components/QueryState';
 import { CodePreview } from '../components/notes/CodePreview';
 import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
-import { latestResult, useNoteMutations, useNotesQuery } from '../hooks/useApiQueries';
+import type { TaskRecord } from '../components/tasks/taskTypes';
+import { latestResult, useNoteMutations, useNotesQuery, useTasksQuery } from '../hooks/useApiQueries';
 
 const NOTE_CONTENT_TYPES: NoteContentType[] = ['PLAIN_TEXT', 'MARKDOWN', 'SHELL_COMMANDS', 'XML', 'JSON'];
 const EMPTY_FORM: NoteFormState = { title: '', contentType: 'PLAIN_TEXT', taskId: '', tags: '', body: '' };
@@ -70,8 +71,10 @@ export function NotesPage() {
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
 
   const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId, tags: tagFilter });
+  const tasksQuery = useTasksQuery('active');
   const { createNote, updateNote, deleteNote } = useNoteMutations();
   const latestMutationResult = latestResult(createNote.data, updateNote.data, deleteNote.data);
+  const availableTasks = useMemo<TaskRecord[]>(() => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []), [tasksQuery.data]);
   const notes = useMemo(() => {
     const records = notesQuery.data?.data ?? [];
     if (!linkedTaskId) return records;
@@ -231,8 +234,11 @@ export function NotesPage() {
               </select>
             </label>
             <label className="field-stack" htmlFor="noteTaskId" style={{ flex: '0 1 12rem' }}>
-              <span>Task ID (optional)</span>
-              <input id="noteTaskId" type="number" min="1" value={activeForm.taskId} onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))} />
+              <span>Linked task (optional)</span>
+              <select id="noteTaskId" value={activeForm.taskId} onChange={(event) => setForm((current) => ({ ...current, taskId: event.target.value }))}>
+                <option value="">No linked task</option>
+                {availableTasks.map((task) => <option key={task.id} value={String(task.id)}>{task.title}</option>)}
+              </select>
             </label>
             <label className="field-stack" htmlFor="noteTags" style={{ flex: '1 1 16rem' }}>
               <span>Tags</span>
