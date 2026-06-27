@@ -14,7 +14,7 @@ export interface NotesQueryFilters {
 }
 
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
-type UploadScreenshotVariables = { noteId: number; file: File; caption?: string; source?: string; width?: number; height?: number };
+export type UploadScreenshotVariables = { noteId: number; file: File | Blob; caption?: string; source?: string; width?: number; height?: number };
 type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 
 export const queryKeys = {
@@ -136,7 +136,7 @@ export function useNoteMutations() {
     uploadScreenshot: useMutation({
       mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', file instanceof File ? file : new File([file], 'screenshot.png', { type: file.type || 'image/png' }));
         if (caption !== undefined) formData.append('caption', caption);
         if (source !== undefined) formData.append('source', source);
         if (width !== undefined) formData.append('width', String(width));
