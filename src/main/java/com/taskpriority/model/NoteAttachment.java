@@ -9,7 +9,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -17,6 +16,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -47,7 +48,7 @@ public class NoteAttachment {
     @Column(name = "storage_key", nullable = false, unique = true)
     private String storageKey;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.VARBINARY)
     @Column(nullable = false, columnDefinition = "bytea")
     private byte[] data;
 
