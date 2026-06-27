@@ -3,6 +3,7 @@ package com.taskpriority.notes.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.Task;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
@@ -327,7 +328,8 @@ class NoteControllerApiTest {
     @Test
     void uploadScreenshotAddsAttachmentMetadataToNoteResponse() throws Exception {
         long noteId = createNote("Screenshot note", "Body", null);
-        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1, 2, 3});
+        byte[] bytes = new byte[]{1, 2, 3};
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", bytes);
 
         String uploadResponse = mockMvc.perform(multipart("/api/v1/notes/{id}/tools/screenshot", noteId)
                         .file(file)
@@ -347,7 +349,15 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.height").value(900))
                 .andExpect(jsonPath("$.downloadUrl").value(org.hamcrest.Matchers.matchesPattern("/api/v1/notes/" + noteId + "/screenshots/\\d+")))
                 .andReturn().getResponse().getContentAsString();
-        String downloadUrl = objectMapper.readTree(uploadResponse).get("downloadUrl").asText();
+        JsonNode uploadJson = objectMapper.readTree(uploadResponse);
+        long attachmentId = uploadJson.get("id").asLong();
+        String downloadUrl = uploadJson.get("downloadUrl").asText();
+
+        NoteAttachment attachment = noteAttachmentRepository.findById(attachmentId).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(attachment.getData()).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(attachment.getData()).containsExactly(bytes);
+        org.assertj.core.api.Assertions.assertThat(attachment.getSizeBytes()).isEqualTo((long) bytes.length);
+        org.assertj.core.api.Assertions.assertThat(attachment.getNote().getId()).isEqualTo(noteId);
 
         mockMvc.perform(get("/api/v1/notes/{id}", noteId))
                 .andExpect(status().isOk())
