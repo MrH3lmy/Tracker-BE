@@ -13,7 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.util.unit.DataSize;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -58,6 +60,9 @@ class NoteControllerApiTest {
 
     @Autowired
     private TaskRepository taskRepository;
+
+    @Autowired
+    private Environment environment;
 
     @BeforeEach
     void cleanDatabase() {
@@ -406,13 +411,18 @@ class NoteControllerApiTest {
     }
 
     @Test
-    void uploadScreenshotRejectsOversizedFile() throws Exception {
+    void uploadScreenshotRejectsOversizedFileWithControlledApiResponse() throws Exception {
         long noteId = createNote("Oversized screenshot", "Body", null);
         MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[17]);
 
+        assertMultipartLimitsExceedBusinessScreenshotLimit();
+
         mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Screenshot file size must not exceed 16 bytes"));
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Screenshot file size must not exceed 16 bytes"))
+                .andExpect(jsonPath("$.path").value("/api/v1/notes/" + noteId + "/screenshots"));
     }
 
     @Test
@@ -425,6 +435,15 @@ class NoteControllerApiTest {
         mockMvc.perform(get("/api/v1/notes/{id}", noteId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Note with id " + noteId + " not found"));
+    }
+
+    private void assertMultipartLimitsExceedBusinessScreenshotLimit() {
+        long businessLimit = environment.getRequiredProperty("app.notes.screenshots.max-file-size-bytes", Long.class);
+        long multipartFileLimit = environment.getRequiredProperty("spring.servlet.multipart.max-file-size", DataSize.class).toBytes();
+        long multipartRequestLimit = environment.getRequiredProperty("spring.servlet.multipart.max-request-size", DataSize.class).toBytes();
+
+        org.assertj.core.api.Assertions.assertThat(multipartFileLimit).isGreaterThanOrEqualTo(businessLimit);
+        org.assertj.core.api.Assertions.assertThat(multipartRequestLimit).isGreaterThanOrEqualTo(businessLimit);
     }
 
     private Task saveTask(String title) {
