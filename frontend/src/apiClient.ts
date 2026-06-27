@@ -209,6 +209,15 @@ export async function apiText<T>(method: HttpMethod, path: string, body?: string
   });
 }
 
+export async function apiFormData<T>(method: HttpMethod, path: string, formData: FormData, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ApiCallResult<T>> {
+  return apiRequest<T>(method, path, {
+    body: formData,
+    payload: Object.fromEntries(formData.entries()),
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+  });
+}
+
 export async function apiDownload<T>(method: HttpMethod, path: string, fileName: string, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ApiCallResult<T>> {
   return apiRequest<T>(method, path, {
     downloadFileName: fileName,
