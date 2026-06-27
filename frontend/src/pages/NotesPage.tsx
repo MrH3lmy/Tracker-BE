@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { QueryState } from '../components/QueryState';
 import { CodePreview } from '../components/notes/CodePreview';
@@ -10,6 +10,8 @@ const NOTE_CONTENT_TYPES: NoteContentType[] = ['PLAIN_TEXT', 'MARKDOWN', 'SHELL_
 const EMPTY_FORM: NoteFormState = { title: '', contentType: 'PLAIN_TEXT', taskId: '', tags: '', body: '' };
 const SCREENSHOT_MAX_FILE_SIZE_BYTES = 5_242_880;
 const SUPPORTED_SCREENSHOT_TYPES = 'PNG, JPEG, or WebP';
+const SCREEN_CAPTURE_UNAVAILABLE_MESSAGE = 'Screen capture is not available in this browser. Please attach an image file instead.';
+const SCREEN_CAPTURE_DENIED_MESSAGE = 'Screen capture was cancelled or denied. Please allow screen sharing to take a screenshot.';
 
 interface NoteFormState {
   title: string;
@@ -76,6 +78,9 @@ export function NotesPage() {
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [attachmentCaptions, setAttachmentCaptions] = useState<Record<number, string>>({});
+  const [screenshotMessages, setScreenshotMessages] = useState<Record<number, { kind: 'error' | 'success'; text: string }>>({});
+  const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
+  const screenshotFileInputs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const notesQuery = useNotesQuery({ q: search, contentType: contentTypeFilter, taskId: linkedTaskId, tags: tagFilter });
   const tasksQuery = useTasksQuery('active');
@@ -93,6 +98,7 @@ export function NotesPage() {
   }, [linkedTaskId, notesQuery.data]);
   const isBusy = createNote.isPending || updateNote.isPending || deleteNote.isPending;
   const isUploadPending = uploadScreenshot.isPending;
+  const isCapturePending = capturingNoteId !== null;
   const activeForm = editingNoteId === null && linkedTaskId && form.taskId.trim() === '' ? { ...form, taskId: linkedTaskId } : form;
   const canSubmit = activeForm.title.trim().length > 0 && activeForm.body.trim().length > 0 && !isBusy;
 
@@ -115,6 +121,83 @@ export function NotesPage() {
   };
 
 
+  const setScreenshotMessage = (noteId: number, kind: 'error' | 'success', text: string) => {
+    setScreenshotMessages((current) => ({ ...current, [noteId]: { kind, text } }));
+  };
+
+  const handleTakeScreenshot = async (note: NoteRecord) => {
+    if (isUploadPending || isCapturePending) return;
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setScreenshotMessage(note.id, 'error', SCREEN_CAPTURE_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
+    let stream: MediaStream | null = null;
+    setCapturingNoteId(note.id);
+    setScreenshotMessage(note.id, 'success', 'Choose a screen, window, or tab to capture.');
+
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const [track] = stream.getVideoTracks();
+      if (!track) throw new Error('No video track was returned from screen capture.');
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          resolve();
+          return;
+        }
+        video.addEventListener('loadeddata', () => resolve(), { once: true });
+      });
+
+      const settings = track.getSettings();
+      const width = video.videoWidth || settings.width || 1;
+      const height = video.videoHeight || settings.height || 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Could not prepare the screenshot canvas.');
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Could not convert the screenshot to PNG.');
+
+      const file = new File([blob], `note-${note.id}-screenshot-${Date.now()}.png`, { type: 'image/png' });
+      const caption = attachmentCaptions[note.id]?.trim() || note.title.trim();
+
+      uploadScreenshot.mutate(
+        { noteId: note.id, file, caption, source: 'browser-screen-capture', width, height },
+        {
+          onSuccess: (result) => {
+            if (!result.ok) {
+              setScreenshotMessage(note.id, 'error', result.error?.message ?? 'Screenshot upload failed.');
+              return;
+            }
+            screenshotFileInputs.current[note.id]?.form?.reset();
+            setAttachmentCaptions((current) => ({ ...current, [note.id]: '' }));
+            setScreenshotMessage(note.id, 'success', 'Screenshot captured and uploaded.');
+          },
+          onError: () => setScreenshotMessage(note.id, 'error', 'Screenshot upload failed.'),
+        },
+      );
+    } catch (error) {
+      const message = error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'AbortError')
+        ? SCREEN_CAPTURE_DENIED_MESSAGE
+        : error instanceof Error ? error.message : 'Screenshot capture failed.';
+      setScreenshotMessage(note.id, 'error', message);
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+      setCapturingNoteId(null);
+    }
+  };
+
   const handleScreenshotSubmit = (event: FormEvent<HTMLFormElement>, note: NoteRecord) => {
     event.preventDefault();
     if (isUploadPending) return;
@@ -128,8 +211,12 @@ export function NotesPage() {
       { noteId: note.id, file, caption },
       {
         onSuccess: (result) => {
-          if (!result.ok) return;
+          if (!result.ok) {
+            setScreenshotMessage(note.id, 'error', result.error?.message ?? 'Image upload failed.');
+            return;
+          }
           event.currentTarget.reset();
+          setScreenshotMessage(note.id, 'success', 'Image uploaded.');
           setAttachmentCaptions((current) => ({ ...current, [note.id]: '' }));
         },
       },
@@ -237,9 +324,14 @@ export function NotesPage() {
                       Supports {SUPPORTED_SCREENSHOT_TYPES}. Backend limit from <code>app.notes.screenshots.max-file-size-bytes</code>: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.
                     </p>
                   </div>
-                  <button type="submit" className="secondary-action" disabled={isUploadPending}>
-                    {isUploadPending ? 'Uploading...' : 'Attach image'}
-                  </button>
+                  <div className="row compact-row">
+                    <button type="button" className="secondary-action" onClick={() => void handleTakeScreenshot(note)} disabled={isUploadPending || isCapturePending}>
+                      {capturingNoteId === note.id ? 'Capturing...' : 'Take screenshot'}
+                    </button>
+                    <button type="submit" className="secondary-action" disabled={isUploadPending || isCapturePending}>
+                      {isUploadPending ? 'Uploading...' : 'Attach image'}
+                    </button>
+                  </div>
                 </div>
                 <div className="row" style={{ alignItems: 'end', flexWrap: 'wrap' }}>
                   <label className="field-stack" htmlFor={`screenshot-file-${note.id}`} style={{ flex: '1 1 18rem' }}>
@@ -251,6 +343,7 @@ export function NotesPage() {
                       accept="image/png,image/jpeg,image/webp"
                       aria-describedby={`screenshot-help-${note.id}`}
                       disabled={isUploadPending}
+                      ref={(element) => { screenshotFileInputs.current[note.id] = element; }}
                       required
                     />
                   </label>
@@ -265,6 +358,11 @@ export function NotesPage() {
                     />
                   </label>
                 </div>
+                {screenshotMessages[note.id] ? (
+                  <p className={screenshotMessages[note.id].kind === 'error' ? 'error-text' : 'muted'} role={screenshotMessages[note.id].kind === 'error' ? 'alert' : 'status'}>
+                    {screenshotMessages[note.id].text}
+                  </p>
+                ) : null}
               </form>
               {note.attachments?.filter((attachment) => attachment.kind === 'SCREENSHOT' && attachment.downloadUrl).map((attachment) => (
                 <figure key={attachment.id} className="panel" style={{ margin: 'var(--space-4) 0 0', padding: 'var(--space-3)' }}>
