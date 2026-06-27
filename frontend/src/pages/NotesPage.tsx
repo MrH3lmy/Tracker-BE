@@ -207,10 +207,18 @@ export function NotesPage() {
             <h3 id="note-form-title">{editingNoteId === null ? 'Create note' : 'Edit note'}</h3>
             <p className="muted">Notes require a title, content type, and body. Task IDs link notes to tasks while keeping task descriptions separate.</p>
           </div>
-          {editingNoteId !== null && <button type="button" onClick={resetForm} disabled={isBusy}>Cancel edit</button>}
+          <div className="row compact-row" style={{ alignItems: 'center' }}>
+            {editingNoteId !== null && <button type="button" onClick={resetForm} disabled={isBusy}>Cancel edit</button>}
+            <div className="field-stack" style={{ alignItems: 'flex-end' }}>
+              <button type="submit" form="note-form" className="button-primary" disabled={!canSubmit}>
+                {isBusy ? 'Saving...' : 'Save note'}
+              </button>
+              {!canSubmit ? <span className="muted">Title and body are required before saving.</span> : null}
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="config-panel">
+        <form id="note-form" onSubmit={handleSubmit} className="config-panel">
           <div className="row" style={{ alignItems: 'end', flexWrap: 'wrap' }}>
             <label className="field-stack" htmlFor="noteTitle" style={{ flex: '1 1 18rem' }}>
               <span>Title</span>
@@ -249,7 +257,7 @@ export function NotesPage() {
               <strong>{editingNoteId === null ? 'Ready to create' : `Editing note #${editingNoteId}`}</strong>
               <p className="muted">Uses the shared API client against <code>/api/v1/notes</code>.</p>
             </div>
-            <button type="submit" className="button-primary" disabled={!canSubmit}>{isBusy ? 'Saving...' : editingNoteId === null ? 'Create note' : 'Save note'}</button>
+            <button type="submit" className="button-primary" disabled={!canSubmit}>{isBusy ? 'Saving...' : 'Save note'}</button>
           </div>
         </form>
 
