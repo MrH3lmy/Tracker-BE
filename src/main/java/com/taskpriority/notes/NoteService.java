@@ -10,6 +10,7 @@ import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
+import com.taskpriority.notes.api.CreateScreenshotRequest;
 import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.UpdateNoteRequest;
@@ -141,9 +142,14 @@ public class NoteService {
 
 
     @Transactional
-    public NoteAttachmentResponse uploadScreenshot(Long noteId, MultipartFile file) {
+    public NoteAttachmentResponse uploadScreenshot(Long noteId, CreateScreenshotRequest request) {
         Note note = getNote(noteId);
+        if (request == null) {
+            throw new IllegalArgumentException("Screenshot upload request is required");
+        }
+        MultipartFile file = request.getFile();
         validateScreenshot(file);
+        validateDimensions(request.getWidth(), request.getHeight());
 
         NoteAttachment attachment = new NoteAttachment();
         attachment.setNote(note);
@@ -152,6 +158,10 @@ public class NoteService {
         attachment.setSizeBytes(file.getSize());
         attachment.setStorageKey(UUID.randomUUID().toString());
         attachment.setKind(NoteAttachmentKind.SCREENSHOT);
+        attachment.setCaption(trimToNull(request.getCaption()));
+        attachment.setSource(trimToNull(request.getSource()));
+        attachment.setWidth(request.getWidth());
+        attachment.setHeight(request.getHeight());
         try {
             attachment.setData(file.getBytes());
         } catch (IOException ex) {
@@ -290,6 +300,22 @@ public class NoteService {
         }
     }
 
+    private void validateDimensions(Integer width, Integer height) {
+        if (width != null && width <= 0) {
+            throw new IllegalArgumentException("Screenshot width must be greater than zero when provided");
+        }
+        if (height != null && height <= 0) {
+            throw new IllegalArgumentException("Screenshot height must be greater than zero when provided");
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private String cleanFileName(String fileName) {
         if (fileName == null || fileName.isBlank()) {
             return "screenshot";
@@ -304,8 +330,17 @@ public class NoteService {
                 attachment.getContentType(),
                 attachment.getSizeBytes(),
                 attachment.getKind(),
+                attachment.getCaption(),
+                attachment.getSource(),
+                attachment.getWidth(),
+                attachment.getHeight(),
+                screenshotDownloadUrl(attachment),
                 attachment.getCreatedAt()
         );
+    }
+
+    private String screenshotDownloadUrl(NoteAttachment attachment) {
+        return "/api/v1/notes/" + attachment.getNote().getId() + "/screenshots/" + attachment.getId();
     }
 
     private NoteResponse toResponse(Note note) {

@@ -313,19 +313,32 @@ class NoteControllerApiTest {
         long noteId = createNote("Screenshot note", "Body", null);
         MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1, 2, 3});
 
-        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+        String uploadResponse = mockMvc.perform(multipart("/api/v1/notes/{id}/tools/screenshot", noteId)
+                        .file(file)
+                        .param("caption", " Login failure ")
+                        .param("source", "browser-extension")
+                        .param("width", "1440")
+                        .param("height", "900"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.fileName").value("capture.png"))
                 .andExpect(jsonPath("$.contentType").value("image/png"))
                 .andExpect(jsonPath("$.sizeBytes").value(3))
-                .andExpect(jsonPath("$.kind").value("SCREENSHOT"));
+                .andExpect(jsonPath("$.kind").value("SCREENSHOT"))
+                .andExpect(jsonPath("$.caption").value("Login failure"))
+                .andExpect(jsonPath("$.source").value("browser-extension"))
+                .andExpect(jsonPath("$.width").value(1440))
+                .andExpect(jsonPath("$.height").value(900))
+                .andExpect(jsonPath("$.downloadUrl").value(org.hamcrest.Matchers.matchesPattern("/api/v1/notes/" + noteId + "/screenshots/\\d+")))
+                .andReturn().getResponse().getContentAsString();
+        String downloadUrl = objectMapper.readTree(uploadResponse).get("downloadUrl").asText();
 
         mockMvc.perform(get("/api/v1/notes/{id}", noteId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.attachments", hasSize(1)))
                 .andExpect(jsonPath("$.attachments[0].fileName").value("capture.png"))
                 .andExpect(jsonPath("$.attachments[0].contentType").value("image/png"))
+                .andExpect(jsonPath("$.attachments[0].downloadUrl").value(downloadUrl))
                 .andExpect(jsonPath("$.attachments[0].data").doesNotExist());
     }
 

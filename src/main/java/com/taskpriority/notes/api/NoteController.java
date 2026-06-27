@@ -14,12 +14,17 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 import java.util.List;
 
@@ -62,9 +67,27 @@ public class NoteController {
         return noteService.updateLayout(id, request);
     }
 
+    @Operation(
+            summary = "Attach a client-captured screenshot to a note",
+            description = "Screenshot tool contract: clients or integrations capture an image in their own UI, then POST multipart/form-data with required field `file` and optional fields `caption`, `source`, `width`, and `height`. The backend validates and stores the image as a note attachment and returns metadata plus a stable download URL.",
+            responses = {
+                    @ApiResponse(responseCode = "201", description = "Screenshot attached", content = @Content(schema = @Schema(implementation = NoteAttachmentResponse.class))),
+                    @ApiResponse(responseCode = "400", description = "Invalid screenshot upload"),
+                    @ApiResponse(responseCode = "404", description = "Note not found")
+            }
+    )
+    @PostMapping(value = "/{id}/tools/screenshot", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<NoteAttachmentResponse> createScreenshot(
+            @Parameter(description = "Note id that will receive the screenshot attachment") @PathVariable Long id,
+            @ModelAttribute CreateScreenshotRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteService.uploadScreenshot(id, request));
+    }
+
+    @Deprecated
     @PostMapping(value = "/{id}/screenshots", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<NoteAttachmentResponse> uploadScreenshot(@PathVariable Long id, @RequestPart("file") MultipartFile file) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(noteService.uploadScreenshot(id, file));
+    public ResponseEntity<NoteAttachmentResponse> uploadScreenshot(@PathVariable Long id, @ModelAttribute CreateScreenshotRequest request) {
+        return createScreenshot(id, request);
     }
 
     @GetMapping("/{id}/screenshots/{attachmentId}")

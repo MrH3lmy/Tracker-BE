@@ -56,6 +56,16 @@ public class NoteAttachment {
     @Column(nullable = false, length = 40)
     private NoteAttachmentKind kind = NoteAttachmentKind.SCREENSHOT;
 
+    @Column(length = 500)
+    private String caption;
+
+    @Column(length = 100)
+    private String source;
+
+    private Integer width;
+
+    private Integer height;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -75,6 +85,14 @@ public class NoteAttachment {
     public void setData(byte[] data) { this.data = data; }
     public NoteAttachmentKind getKind() { return kind; }
     public void setKind(NoteAttachmentKind kind) { this.kind = kind; }
+    public String getCaption() { return caption; }
+    public void setCaption(String caption) { this.caption = caption; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+    public Integer getWidth() { return width; }
+    public void setWidth(Integer width) { this.width = width; }
+    public Integer getHeight() { return height; }
+    public void setHeight(Integer height) { this.height = height; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
