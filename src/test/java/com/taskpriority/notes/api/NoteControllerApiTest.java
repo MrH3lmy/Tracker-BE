@@ -399,6 +399,47 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.attachments", hasSize(0)));
     }
 
+
+    @Test
+    void uploadScreenshotRejectsOverlongFileName() throws Exception {
+        long noteId = createNote("Overlong filename screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "a".repeat(256) + ".png", "image/png", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Screenshot file name must not exceed 255 characters"));
+    }
+
+    @Test
+    void uploadScreenshotRejectsOverlongCaption() throws Exception {
+        long noteId = createNote("Overlong caption screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId)
+                        .file(file)
+                        .param("caption", "a".repeat(501)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Screenshot caption must not exceed 500 characters"));
+    }
+
+    @Test
+    void uploadScreenshotRejectsOverlongSource() throws Exception {
+        long noteId = createNote("Overlong source screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId)
+                        .file(file)
+                        .param("source", "a".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Screenshot source must not exceed 100 characters"));
+    }
+
     @Test
     void uploadScreenshotRejectsInvalidContentType() throws Exception {
         long noteId = createNote("Invalid screenshot", "Body", null);

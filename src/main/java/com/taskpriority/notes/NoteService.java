@@ -40,6 +40,9 @@ import java.util.stream.Collectors;
 public class NoteService {
     private final NoteRepository noteRepository;
     private static final Set<String> ALLOWED_SCREENSHOT_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
+    private static final int MAX_ATTACHMENT_FILE_NAME_LENGTH = 255;
+    private static final int MAX_ATTACHMENT_CAPTION_LENGTH = 500;
+    private static final int MAX_ATTACHMENT_SOURCE_LENGTH = 100;
 
     private final TaskRepository taskRepository;
     private final TagRepository tagRepository;
@@ -151,15 +154,22 @@ public class NoteService {
         validateScreenshot(file);
         validateDimensions(request.getWidth(), request.getHeight());
 
+        String fileName = cleanFileName(file.getOriginalFilename());
+        String caption = trimToNull(request.getCaption());
+        String source = trimToNull(request.getSource());
+        validateMaxLength(fileName, MAX_ATTACHMENT_FILE_NAME_LENGTH, "Screenshot file name");
+        validateMaxLength(caption, MAX_ATTACHMENT_CAPTION_LENGTH, "Screenshot caption");
+        validateMaxLength(source, MAX_ATTACHMENT_SOURCE_LENGTH, "Screenshot source");
+
         NoteAttachment attachment = new NoteAttachment();
         attachment.setNote(note);
-        attachment.setFileName(cleanFileName(file.getOriginalFilename()));
+        attachment.setFileName(fileName);
         attachment.setContentType(file.getContentType());
         attachment.setSizeBytes(file.getSize());
         attachment.setStorageKey(UUID.randomUUID().toString());
         attachment.setKind(NoteAttachmentKind.SCREENSHOT);
-        attachment.setCaption(trimToNull(request.getCaption()));
-        attachment.setSource(trimToNull(request.getSource()));
+        attachment.setCaption(caption);
+        attachment.setSource(source);
         attachment.setWidth(request.getWidth());
         attachment.setHeight(request.getHeight());
         try {
@@ -314,6 +324,12 @@ public class NoteService {
             return null;
         }
         return value.trim();
+    }
+
+    private void validateMaxLength(String value, int maxLength, String fieldName) {
+        if (value != null && value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + " must not exceed " + maxLength + " characters");
+        }
     }
 
     private String cleanFileName(String fileName) {

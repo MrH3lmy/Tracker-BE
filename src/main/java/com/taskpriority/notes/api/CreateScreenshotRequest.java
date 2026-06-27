@@ -8,10 +8,10 @@ public class CreateScreenshotRequest {
     @Schema(description = "Screenshot image file. Supported content types: image/png, image/jpeg, image/webp.", requiredMode = Schema.RequiredMode.REQUIRED, type = "string", format = "binary")
     private MultipartFile file;
 
-    @Schema(description = "Optional human-readable caption for the screenshot.", example = "Error state after saving")
+    @Schema(description = "Optional human-readable caption for the screenshot. Maximum length: 500 characters.", example = "Error state after saving", maxLength = 500)
     private String caption;
 
-    @Schema(description = "Optional capture source or integration name.", example = "browser-extension")
+    @Schema(description = "Optional capture source or integration name. Maximum length: 100 characters.", example = "browser-extension", maxLength = 100)
     private String source;
 
     @Schema(description = "Optional screenshot width in pixels.", example = "1440")
