@@ -31,7 +31,7 @@ export const queryKeys = {
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
 
-export const useTasksQuery = (tab: TaskTab) => useQuery({ queryKey: queryKeys.tasks(tab), queryFn: () => apiJson<unknown>('GET', taskPathByTab[tab]) });
+export const useTasksQuery = (tab: TaskTab) => useQuery({ queryKey: queryKeys.tasks(tab), queryFn: () => apiJson<TaskRecord[]>('GET', taskPathByTab[tab]) });
 export const useTaskBlockersQuery = () => useQuery({ queryKey: queryKeys.taskBlockers, queryFn: () => apiJson<unknown>('GET', '/api/v1/tasks/blockers') });
 export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
   queryKey: queryKeys.notes(filters),
