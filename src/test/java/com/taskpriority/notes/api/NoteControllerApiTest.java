@@ -326,6 +326,17 @@ class NoteControllerApiTest {
 
 
     @Test
+    void screenshotAttachmentDataFieldUsesBinaryJdbcMapping() throws Exception {
+        java.lang.reflect.Field dataField = NoteAttachment.class.getDeclaredField("data");
+
+        org.assertj.core.api.Assertions.assertThat(dataField.getType()).isEqualTo(byte[].class);
+        org.assertj.core.api.Assertions.assertThat(dataField.isAnnotationPresent(jakarta.persistence.Lob.class)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(dataField.getAnnotation(jakarta.persistence.Column.class).columnDefinition()).isEqualTo("bytea");
+        org.assertj.core.api.Assertions.assertThat(dataField.getAnnotation(org.hibernate.annotations.JdbcTypeCode.class).value())
+                .isEqualTo(org.hibernate.type.SqlTypes.VARBINARY);
+    }
+
+    @Test
     void uploadScreenshotAddsAttachmentMetadataToNoteResponse() throws Exception {
         long noteId = createNote("Screenshot note", "Body", null);
         byte[] bytes = new byte[]{1, 2, 3};
