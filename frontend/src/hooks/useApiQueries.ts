@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
-import type { NoteContentType, NoteRecord } from '../components/notes/noteTypes';
+import type { NoteAttachmentRecord, NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
@@ -141,7 +141,7 @@ export function useNoteMutations() {
         if (source !== undefined) formData.append('source', source);
         if (width !== undefined) formData.append('width', String(width));
         if (height !== undefined) formData.append('height', String(height));
-        return apiFormData('POST', `/api/v1/notes/${noteId}/tools/screenshot`, formData);
+        return apiFormData<NoteAttachmentRecord>('POST', `/api/v1/notes/${noteId}/tools/screenshot`, formData);
       },
       onSuccess,
     }),

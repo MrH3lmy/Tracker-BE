@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
 import type {
+  NoteAttachmentRecord,
   NoteContentType,
   NoteRecord,
 } from "../components/notes/noteTypes";
@@ -406,23 +407,6 @@ export function NotesPage() {
     return null;
   };
 
-  const extractDownloadUrl = (data: unknown): string | null => {
-    if (!data || typeof data !== "object") return null;
-
-    if ("downloadUrl" in data) {
-      const downloadUrl = (data as { downloadUrl?: unknown }).downloadUrl;
-      return typeof downloadUrl === "string" && downloadUrl.trim()
-        ? downloadUrl
-        : null;
-    }
-
-    if ("attachment" in data) {
-      return extractDownloadUrl((data as { attachment?: unknown }).attachment);
-    }
-
-    return null;
-  };
-
   const getClipboardImageFile = (
     clipboardData: DataTransfer,
   ): File | null => {
@@ -439,14 +423,22 @@ export function NotesPage() {
     return item?.getAsFile() ?? null;
   };
 
-  const buildClipboardReference = (caption: string, downloadUrl: string | null) => {
+  const buildClipboardReference = (
+    attachment: NoteAttachmentRecord,
+    fallbackCaption: string,
+  ) => {
+    const caption = attachment.caption?.trim() || fallbackCaption;
+    const fileName = attachment.fileName;
+    const downloadUrl = attachment.downloadUrl?.trim() || null;
+    const label = caption || fileName;
+
     if (activeForm.contentType === "MARKDOWN" && downloadUrl) {
-      return `![${caption}](${downloadUrl})`;
+      return `![${label}](${downloadUrl})`;
     }
 
     return downloadUrl
-      ? `[Screenshot: ${caption}] ${downloadUrl}`
-      : `[Screenshot: ${caption}]`;
+      ? `[Screenshot: ${label} (${fileName})] ${downloadUrl}`
+      : `[Screenshot: ${label} (${fileName})]`;
   };
 
   const insertBodyReference = (
@@ -540,8 +532,17 @@ export function NotesPage() {
         return;
       }
 
+      const attachment = uploadResult.data;
+      if (!attachment) {
+        setClipboardImageMessage({
+          kind: "error",
+          text: "Clipboard image upload failed: the response did not include attachment metadata.",
+        });
+        return;
+      }
+
       insertBodyReference(
-        buildClipboardReference(caption, extractDownloadUrl(uploadResult.data)),
+        buildClipboardReference(attachment, caption),
         selectionStart,
         selectionEnd,
       );
