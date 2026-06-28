@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
@@ -30,6 +30,11 @@ const EMPTY_FORM: NoteFormState = {
 };
 const SCREENSHOT_MAX_FILE_SIZE_BYTES = 5_242_880;
 const SUPPORTED_SCREENSHOT_TYPES = "PNG, JPEG, or WebP";
+const SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
 const SCREEN_CAPTURE_UNAVAILABLE_MESSAGE =
   "Screen capture is not available in this browser. Please attach an image file instead.";
 const SCREEN_CAPTURE_DENIED_MESSAGE =
@@ -142,12 +147,17 @@ export function NotesPage() {
     kind: "error" | "success";
     text: string;
   } | null>(null);
+  const [clipboardImageMessage, setClipboardImageMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
   const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
   const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
     useState(false);
   const screenshotFileInputs = useRef<Record<number, HTMLInputElement | null>>(
     {},
   );
+  const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const cropImageRef = useRef<HTMLImageElement | null>(null);
   const [cropOverlay, setCropOverlay] = useState<CropOverlayState | null>(null);
   const cropOverlayRef = useRef<CropOverlayState | null>(null);
@@ -394,6 +404,160 @@ export function NotesPage() {
       return Number.isFinite(id) ? id : null;
     }
     return null;
+  };
+
+  const extractDownloadUrl = (data: unknown): string | null => {
+    if (!data || typeof data !== "object") return null;
+
+    if ("downloadUrl" in data) {
+      const downloadUrl = (data as { downloadUrl?: unknown }).downloadUrl;
+      return typeof downloadUrl === "string" && downloadUrl.trim()
+        ? downloadUrl
+        : null;
+    }
+
+    if ("attachment" in data) {
+      return extractDownloadUrl((data as { attachment?: unknown }).attachment);
+    }
+
+    return null;
+  };
+
+  const getClipboardImageFile = (
+    clipboardData: DataTransfer,
+  ): File | null => {
+    const files = Array.from(clipboardData.files).find((file) =>
+      SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES.has(file.type),
+    );
+    if (files) return files;
+
+    const item = Array.from(clipboardData.items).find(
+      (clipboardItem) =>
+        clipboardItem.kind === "file" &&
+        SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES.has(clipboardItem.type),
+    );
+    return item?.getAsFile() ?? null;
+  };
+
+  const buildClipboardReference = (caption: string, downloadUrl: string | null) => {
+    if (activeForm.contentType === "MARKDOWN" && downloadUrl) {
+      return `![${caption}](${downloadUrl})`;
+    }
+
+    return downloadUrl
+      ? `[Screenshot: ${caption}] ${downloadUrl}`
+      : `[Screenshot: ${caption}]`;
+  };
+
+  const insertBodyReference = (
+    reference: string,
+    selectionStart?: number | null,
+    selectionEnd?: number | null,
+  ) => {
+    setForm((current) => {
+      const body = current.body;
+      const start = Math.max(0, Math.min(selectionStart ?? body.length, body.length));
+      const end = Math.max(start, Math.min(selectionEnd ?? start, body.length));
+      const prefix = body.slice(0, start);
+      const suffix = body.slice(end);
+      const spacingBefore = prefix && !prefix.endsWith("\n") ? "\n" : "";
+      const spacingAfter = suffix && !suffix.startsWith("\n") ? "\n" : "";
+      const cursorPosition = prefix.length + spacingBefore.length + reference.length;
+
+      window.setTimeout(() => {
+        noteBodyRef.current?.focus();
+        noteBodyRef.current?.setSelectionRange(cursorPosition, cursorPosition);
+      }, 0);
+
+      return {
+        ...current,
+        body: `${prefix}${spacingBefore}${reference}${spacingAfter}${suffix}`,
+      };
+    });
+  };
+
+  const handleBodyPaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedImage = getClipboardImageFile(event.clipboardData);
+    if (!pastedImage) return;
+
+    event.preventDefault();
+    if (isBusy || isUploadPending) return;
+
+    const caption = `Pasted screenshot - ${new Date().toLocaleString()}`;
+    const selectionStart = event.currentTarget.selectionStart;
+    const selectionEnd = event.currentTarget.selectionEnd;
+    let noteId = editingNoteId;
+
+    setClipboardImageMessage({
+      kind: "success",
+      text: "Uploading pasted image...",
+    });
+
+    try {
+      if (noteId === null) {
+        if (!activeForm.title.trim()) {
+          setClipboardImageMessage({
+            kind: "error",
+            text: "Enter a note title before pasting an image into a new note.",
+          });
+          return;
+        }
+
+        const createResult = await createNote.mutateAsync({
+          ...buildPayload(activeForm),
+          body: activeForm.body || caption,
+        });
+        if (!createResult.ok) {
+          setClipboardImageMessage({
+            kind: "error",
+            text: `Note creation failed: ${createResult.error?.message ?? "Unable to create note for pasted image."}`,
+          });
+          return;
+        }
+
+        noteId = extractCreatedNoteId(createResult.data);
+        if (noteId === null) {
+          setClipboardImageMessage({
+            kind: "error",
+            text: "Note creation failed: the response did not include the new note id.",
+          });
+          return;
+        }
+        setEditingNoteId(noteId);
+      }
+
+      const uploadResult = await uploadScreenshot.mutateAsync({
+        noteId,
+        file: pastedImage,
+        caption,
+        source: "clipboard",
+      });
+      if (!uploadResult.ok) {
+        setClipboardImageMessage({
+          kind: "error",
+          text: uploadResult.error?.message ?? "Clipboard image upload failed.",
+        });
+        return;
+      }
+
+      insertBodyReference(
+        buildClipboardReference(caption, extractDownloadUrl(uploadResult.data)),
+        selectionStart,
+        selectionEnd,
+      );
+      setClipboardImageMessage({
+        kind: "success",
+        text: "Pasted image uploaded and inserted into the note body.",
+      });
+    } catch (error) {
+      setClipboardImageMessage({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Clipboard image upload failed.",
+      });
+    }
   };
 
   const handleScreenshotNote = async () => {
@@ -1149,12 +1313,24 @@ export function NotesPage() {
               className="text-block"
               rows={12}
               value={activeForm.body}
+              ref={noteBodyRef}
+              onPaste={(event) => void handleBodyPaste(event)}
               onChange={(event) =>
                 setForm((current) => ({ ...current, body: event.target.value }))
               }
               required
             />
           </label>
+          {clipboardImageMessage ? (
+            <p
+              className={
+                clipboardImageMessage.kind === "error" ? "error-text" : "muted"
+              }
+              role={clipboardImageMessage.kind === "error" ? "alert" : "status"}
+            >
+              {clipboardImageMessage.text}
+            </p>
+          ) : null}
 
           <div className="save-bar">
             <div>
