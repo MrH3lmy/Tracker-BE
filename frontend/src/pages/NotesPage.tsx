@@ -43,6 +43,7 @@ const SCREEN_CAPTURE_DENIED_MESSAGE =
 const SCREENSHOT_NOTE_BODY =
   "Screenshot captured from the notes page for the selected task.";
 const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
+const PASTED_SCREENSHOT_PENDING_REFERENCE = "[Pasted screenshot pending upload]";
 const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
 
 interface CropPoint {
@@ -72,6 +73,12 @@ interface NoteFormState {
   taskId: string;
   tags: string;
   body: string;
+}
+
+interface PendingClipboardImage {
+  placeholder: string;
+  caption: string;
+  fileName: string;
 }
 
 function humanizeContentType(value: string): string {
@@ -152,6 +159,9 @@ export function NotesPage() {
     kind: "error" | "success";
     text: string;
   } | null>(null);
+  const [pendingClipboardImages, setPendingClipboardImages] = useState<
+    PendingClipboardImage[]
+  >([]);
   const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
   const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
     useState(false);
@@ -426,13 +436,14 @@ export function NotesPage() {
   const buildClipboardReference = (
     attachment: NoteAttachmentRecord,
     fallbackCaption: string,
+    contentType = activeForm.contentType,
   ) => {
     const caption = attachment.caption?.trim() || fallbackCaption;
     const fileName = attachment.fileName;
     const downloadUrl = attachment.downloadUrl?.trim() || null;
     const label = caption || fileName;
 
-    if (activeForm.contentType === "MARKDOWN" && downloadUrl) {
+    if (contentType === "MARKDOWN" && downloadUrl) {
       return `![${label}](${downloadUrl})`;
     }
 
@@ -441,31 +452,32 @@ export function NotesPage() {
       : `[Screenshot: ${label} (${fileName})]`;
   };
 
-  const insertBodyReference = (
+  const insertReferenceIntoBody = (
+    body: string,
     reference: string,
     selectionStart?: number | null,
     selectionEnd?: number | null,
   ) => {
-    setForm((current) => {
-      const body = current.body;
-      const start = Math.max(0, Math.min(selectionStart ?? body.length, body.length));
-      const end = Math.max(start, Math.min(selectionEnd ?? start, body.length));
-      const prefix = body.slice(0, start);
-      const suffix = body.slice(end);
-      const spacingBefore = prefix && !prefix.endsWith("\n") ? "\n" : "";
-      const spacingAfter = suffix && !suffix.startsWith("\n") ? "\n" : "";
-      const cursorPosition = prefix.length + spacingBefore.length + reference.length;
+    const start = Math.max(0, Math.min(selectionStart ?? body.length, body.length));
+    const end = Math.max(start, Math.min(selectionEnd ?? start, body.length));
+    const prefix = body.slice(0, start);
+    const suffix = body.slice(end);
+    const spacingBefore = prefix && !prefix.endsWith("\n") ? "\n" : "";
+    const spacingAfter = suffix && !suffix.startsWith("\n") ? "\n" : "";
 
-      window.setTimeout(() => {
-        noteBodyRef.current?.focus();
-        noteBodyRef.current?.setSelectionRange(cursorPosition, cursorPosition);
-      }, 0);
+    return `${prefix}${spacingBefore}${reference}${spacingAfter}${suffix}`;
+  };
 
-      return {
-        ...current,
-        body: `${prefix}${spacingBefore}${reference}${spacingAfter}${suffix}`,
-      };
-    });
+  const moveBodyCursorAfterReference = (reference: string) => {
+    window.setTimeout(() => {
+      const body = noteBodyRef.current?.value ?? "";
+      const referenceIndex = body.indexOf(reference);
+      const cursorPosition =
+        referenceIndex === -1 ? body.length : referenceIndex + reference.length;
+
+      noteBodyRef.current?.focus();
+      noteBodyRef.current?.setSelectionRange(cursorPosition, cursorPosition);
+    }, 0);
   };
 
   const handleBodyPaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -476,18 +488,37 @@ export function NotesPage() {
     if (isBusy || isUploadPending) return;
 
     const caption = `Pasted screenshot - ${new Date().toLocaleString()}`;
+    const pendingImage: PendingClipboardImage = {
+      placeholder: PASTED_SCREENSHOT_PENDING_REFERENCE,
+      caption,
+      fileName: pastedImage.name || "pasted-screenshot",
+    };
     const selectionStart = event.currentTarget.selectionStart;
     const selectionEnd = event.currentTarget.selectionEnd;
+    const formWithLinkedTask = activeForm;
+    const bodyWithPendingReference = insertReferenceIntoBody(
+      formWithLinkedTask.body,
+      pendingImage.placeholder,
+      selectionStart,
+      selectionEnd,
+    );
+    const formWithPendingReference = {
+      ...formWithLinkedTask,
+      body: bodyWithPendingReference,
+    };
     let noteId = editingNoteId;
 
+    setPendingClipboardImages((current) => [...current, pendingImage]);
+    setForm(formWithPendingReference);
+    moveBodyCursorAfterReference(pendingImage.placeholder);
     setClipboardImageMessage({
       kind: "success",
-      text: "Uploading pasted image...",
+      text: "Pasted image added to the note body. Uploading...",
     });
 
     try {
       if (noteId === null) {
-        if (!activeForm.title.trim()) {
+        if (!formWithPendingReference.title.trim()) {
           setClipboardImageMessage({
             kind: "error",
             text: "Enter a note title before pasting an image into a new note.",
@@ -495,10 +526,9 @@ export function NotesPage() {
           return;
         }
 
-        const createResult = await createNote.mutateAsync({
-          ...buildPayload(activeForm),
-          body: activeForm.body || caption,
-        });
+        const createResult = await createNote.mutateAsync(
+          buildPayload(formWithPendingReference),
+        );
         if (!createResult.ok) {
           setClipboardImageMessage({
             kind: "error",
@@ -541,11 +571,38 @@ export function NotesPage() {
         return;
       }
 
-      insertBodyReference(
-        buildClipboardReference(attachment, caption),
-        selectionStart,
-        selectionEnd,
+      const finalReference = buildClipboardReference(
+        attachment,
+        caption,
+        formWithPendingReference.contentType,
       );
+      const bodyWithFinalReference = bodyWithPendingReference.replace(
+        pendingImage.placeholder,
+        finalReference,
+      );
+      const updatedForm = {
+        ...formWithPendingReference,
+        body: bodyWithFinalReference,
+      };
+
+      setForm(updatedForm);
+      moveBodyCursorAfterReference(finalReference);
+      setPendingClipboardImages((current) =>
+        current.filter((image) => image !== pendingImage),
+      );
+
+      const updateResult = await updateNote.mutateAsync({
+        id: noteId,
+        body: buildPayload(updatedForm),
+      });
+      if (!updateResult.ok) {
+        setClipboardImageMessage({
+          kind: "error",
+          text: `Pasted image uploaded, but the note body still has the pending placeholder: ${updateResult.error?.message ?? "Unable to update note body."}`,
+        });
+        return;
+      }
+
       setClipboardImageMessage({
         kind: "success",
         text: "Pasted image uploaded and inserted into the note body.",
@@ -1331,6 +1388,18 @@ export function NotesPage() {
             >
               {clipboardImageMessage.text}
             </p>
+          ) : null}
+          {pendingClipboardImages.length > 0 ? (
+            <div className="muted" role="status">
+              <strong>Pending pasted screenshots</strong>
+              <ul>
+                {pendingClipboardImages.map((image, index) => (
+                  <li key={`${image.fileName}-${image.caption}-${index}`}>
+                    {image.placeholder} — {image.fileName}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           <div className="save-bar">
