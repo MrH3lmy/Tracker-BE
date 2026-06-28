@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
@@ -37,6 +37,28 @@ const SCREEN_CAPTURE_DENIED_MESSAGE =
 const SCREENSHOT_NOTE_BODY =
   "Screenshot captured from the notes page for the selected task.";
 const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
+const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Shift+S";
+
+interface CropPoint {
+  x: number;
+  y: number;
+}
+
+interface CropSelection {
+  start: CropPoint;
+  end: CropPoint;
+}
+
+interface CropOverlayState {
+  fileName: string;
+  imageSrc: string;
+  width: number;
+  height: number;
+  selection: CropSelection | null;
+  isDragging: boolean;
+  resolve: (value: { file: File; width: number; height: number }) => void;
+  reject: (reason?: unknown) => void;
+}
 
 interface NoteFormState {
   title: string;
@@ -126,6 +148,10 @@ export function NotesPage() {
   const screenshotFileInputs = useRef<Record<number, HTMLInputElement | null>>(
     {},
   );
+  const cropImageRef = useRef<HTMLImageElement | null>(null);
+  const [cropOverlay, setCropOverlay] = useState<CropOverlayState | null>(null);
+  const cropOverlayRef = useRef<CropOverlayState | null>(null);
+  const screenshotNoteHandlerRef = useRef<() => Promise<void>>(async () => undefined);
 
   const notesQuery = useNotesQuery({
     q: search,
@@ -211,6 +237,91 @@ export function NotesPage() {
     }));
   };
 
+  const getCropPoint = (event: PointerEvent<HTMLImageElement>): CropPoint | null => {
+    if (!cropOverlay || !cropImageRef.current) return null;
+
+    const bounds = cropImageRef.current.getBoundingClientRect();
+    if (bounds.width === 0 || bounds.height === 0) return null;
+
+    return {
+      x: Math.min(
+        cropOverlay.width,
+        Math.max(0, ((event.clientX - bounds.left) / bounds.width) * cropOverlay.width),
+      ),
+      y: Math.min(
+        cropOverlay.height,
+        Math.max(0, ((event.clientY - bounds.top) / bounds.height) * cropOverlay.height),
+      ),
+    };
+  };
+
+  const getNormalizedSelection = (selection: CropSelection | null) => {
+    if (!selection) return null;
+
+    const left = Math.min(selection.start.x, selection.end.x);
+    const top = Math.min(selection.start.y, selection.end.y);
+    const width = Math.abs(selection.end.x - selection.start.x);
+    const height = Math.abs(selection.end.y - selection.start.y);
+
+    if (width < 1 || height < 1) return null;
+    return { left, top, width, height };
+  };
+
+  const cancelCropOverlay = (message = "Screenshot area selection was cancelled.") => {
+    setCropOverlay((current) => {
+      current?.reject(new Error(message));
+      return null;
+    });
+  };
+
+  const confirmCropOverlay = async () => {
+    if (!cropOverlay) return;
+
+    const selection = getNormalizedSelection(cropOverlay.selection);
+    if (!selection) return;
+
+    try {
+      const sourceImage = new Image();
+      sourceImage.src = cropOverlay.imageSrc;
+      await sourceImage.decode();
+
+      const cropWidth = Math.max(1, Math.round(selection.width));
+      const cropHeight = Math.max(1, Math.round(selection.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not prepare the screenshot crop canvas.");
+
+      context.drawImage(
+        sourceImage,
+        Math.round(selection.left),
+        Math.round(selection.top),
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        cropWidth,
+        cropHeight,
+      );
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/png"),
+      );
+      if (!blob) throw new Error("Could not convert the cropped screenshot to PNG.");
+
+      cropOverlay.resolve({
+        file: new File([blob], cropOverlay.fileName, { type: "image/png" }),
+        width: cropWidth,
+        height: cropHeight,
+      });
+      setCropOverlay(null);
+    } catch (error) {
+      cropOverlay.reject(error);
+      setCropOverlay(null);
+    }
+  };
+
   const captureScreenshotFile = async (
     fileName: string,
   ): Promise<{ file: File; width: number; height: number }> => {
@@ -249,16 +360,21 @@ export function NotesPage() {
       if (!context) throw new Error("Could not prepare the screenshot canvas.");
       context.drawImage(video, 0, 0, width, height);
 
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png"),
+      const imageSrc = canvas.toDataURL("image/png");
+      return await new Promise<{ file: File; width: number; height: number }>(
+        (resolve, reject) => {
+          setCropOverlay({
+            fileName,
+            imageSrc,
+            width,
+            height,
+            selection: null,
+            isDragging: false,
+            resolve,
+            reject,
+          });
+        },
       );
-      if (!blob) throw new Error("Could not convert the screenshot to PNG.");
-
-      return {
-        file: new File([blob], fileName, { type: "image/png" }),
-        width,
-        height,
-      };
     } catch (error) {
       if (
         error instanceof DOMException &&
@@ -293,7 +409,7 @@ export function NotesPage() {
     setIsCreatingScreenshotNote(true);
     setScreenshotNoteMessage({
       kind: "success",
-      text: "Choose a screen, window, or tab to capture.",
+      text: `Choose a screen, window, or tab, then drag to crop the area. Shortcut: ${AREA_SCREENSHOT_SHORTCUT}.`,
     });
 
     let createdNoteId: number | null = null;
@@ -375,7 +491,7 @@ export function NotesPage() {
     setScreenshotMessage(
       note.id,
       "success",
-      "Choose a screen, window, or tab to capture.",
+      "Choose a screen, window, or tab, then drag to crop the area.",
     );
 
     try {
@@ -424,6 +540,53 @@ export function NotesPage() {
     } finally {
       setCapturingNoteId(null);
     }
+  };
+
+  const handleCropPointerDown = (event: PointerEvent<HTMLImageElement>) => {
+    const point = getCropPoint(event);
+    if (!point) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setCropOverlay((current) =>
+      current
+        ? {
+            ...current,
+            selection: { start: point, end: point },
+            isDragging: true,
+          }
+        : current,
+    );
+  };
+
+  const handleCropPointerMove = (event: PointerEvent<HTMLImageElement>) => {
+    const point = getCropPoint(event);
+    if (!point) return;
+
+    setCropOverlay((current) =>
+      current?.isDragging && current.selection
+        ? { ...current, selection: { ...current.selection, end: point } }
+        : current,
+    );
+  };
+
+  const handleCropPointerUp = (event: PointerEvent<HTMLImageElement>) => {
+    const point = getCropPoint(event);
+    if (point) {
+      setCropOverlay((current) =>
+        current?.selection
+          ? {
+              ...current,
+              selection: { ...current.selection, end: point },
+              isDragging: false,
+            }
+          : current,
+      );
+      return;
+    }
+
+    setCropOverlay((current) =>
+      current ? { ...current, isDragging: false } : current,
+    );
   };
 
   const handleScreenshotSubmit = (
@@ -476,6 +639,39 @@ export function NotesPage() {
       .catch(() => setCopiedNoteId(null));
   };
 
+  useEffect(() => {
+    screenshotNoteHandlerRef.current = handleScreenshotNote;
+  });
+
+  useEffect(() => {
+    cropOverlayRef.current = cropOverlay;
+  }, [cropOverlay]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && cropOverlayRef.current) {
+        event.preventDefault();
+        cancelCropOverlay();
+        return;
+      }
+
+      const target = event.target;
+      const isTypingTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+      if (isTypingTarget) return;
+
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void screenshotNoteHandlerRef.current();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="page-pattern notes-page">
       <header className="page-header">
@@ -497,7 +693,7 @@ export function NotesPage() {
             >
               {isCreatingScreenshotNote
                 ? "Creating screenshot note..."
-                : "Screenshot note"}
+                : "Capture area note"}
             </button>
           ) : null}
           {linkedTaskId ? (
@@ -684,7 +880,7 @@ export function NotesPage() {
                   <div>
                     <h4 style={{ margin: 0 }}>Attach image</h4>
                     <p className="muted" id={`screenshot-help-${note.id}`}>
-                      Supports {SUPPORTED_SCREENSHOT_TYPES}. Backend limit from{" "}
+                      Supports {SUPPORTED_SCREENSHOT_TYPES}. Use “Take area screenshot” to capture and crop part of a screen, window, or tab. Backend limit from{" "}
                       <code>app.notes.screenshots.max-file-size-bytes</code>:{" "}
                       {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.
                     </p>
@@ -698,7 +894,7 @@ export function NotesPage() {
                     >
                       {capturingNoteId === note.id
                         ? "Capturing..."
-                        : "Take screenshot"}
+                        : "Take area screenshot"}
                     </button>
                     <button
                       type="submit"
@@ -987,6 +1183,94 @@ export function NotesPage() {
           }
         />
       </section>
+
+      {cropOverlay ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="crop-overlay-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--space-3)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "var(--space-4)",
+            background: "rgba(15, 23, 42, 0.88)",
+          }}
+        >
+          <div className="panel" style={{ maxWidth: "min(96vw, 72rem)" }}>
+            <div className="section-header" style={{ gap: "var(--space-3)" }}>
+              <div>
+                <h3 id="crop-overlay-title">Capture area screenshot</h3>
+                <p className="muted" role="status">
+                  Drag over the preview to select the area to upload. Press Escape or Cancel to stop.
+                </p>
+              </div>
+              <div className="row compact-row">
+                <button type="button" onClick={() => cancelCropOverlay()}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={() => void confirmCropOverlay()}
+                  disabled={!getNormalizedSelection(cropOverlay.selection)}
+                >
+                  Confirm crop
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                position: "relative",
+                display: "inline-block",
+                maxWidth: "100%",
+                lineHeight: 0,
+                cursor: "crosshair",
+              }}
+            >
+              <img
+                ref={cropImageRef}
+                src={cropOverlay.imageSrc}
+                alt="Captured screen preview for area selection"
+                draggable={false}
+                onPointerDown={handleCropPointerDown}
+                onPointerMove={handleCropPointerMove}
+                onPointerUp={handleCropPointerUp}
+                style={{
+                  display: "block",
+                  maxWidth: "min(92vw, 70rem)",
+                  maxHeight: "70vh",
+                  width: "auto",
+                  height: "auto",
+                  userSelect: "none",
+                  borderRadius: "var(--radius-md)",
+                }}
+              />
+              {getNormalizedSelection(cropOverlay.selection) ? (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    left: `${(getNormalizedSelection(cropOverlay.selection)!.left / cropOverlay.width) * 100}%`,
+                    top: `${(getNormalizedSelection(cropOverlay.selection)!.top / cropOverlay.height) * 100}%`,
+                    width: `${(getNormalizedSelection(cropOverlay.selection)!.width / cropOverlay.width) * 100}%`,
+                    height: `${(getNormalizedSelection(cropOverlay.selection)!.height / cropOverlay.height) * 100}%`,
+                    border: "2px solid #38bdf8",
+                    background: "rgba(56, 189, 248, 0.2)",
+                    boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.45)",
+                    pointerEvents: "none",
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
