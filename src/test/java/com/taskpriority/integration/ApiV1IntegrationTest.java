@@ -1,5 +1,7 @@
 package com.taskpriority.integration;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -7,7 +9,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -15,6 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("local-test")
 class ApiV1IntegrationTest {
+    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
     @Autowired MockMvc mockMvc;
 
     @Test
@@ -35,6 +41,62 @@ class ApiV1IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
                 .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("POST")));
+    }
+
+
+    @Test
+    void taskDetailReturnsScreenshotsInNavigationOrder() throws Exception {
+        long taskId = createTask("Screenshot task");
+        long laterNoteId = createNote(taskId, "Later note", 20);
+        long firstNoteId = createNote(taskId, "First note", 10);
+        long unrelatedTaskId = createTask("Other screenshot task");
+        long unrelatedNoteId = createNote(unrelatedTaskId, "Other note", 1);
+
+        long laterFirstAttachmentId = uploadScreenshot(laterNoteId, "later-a.png");
+        long laterSecondAttachmentId = uploadScreenshot(laterNoteId, "later-b.png");
+        long firstAttachmentId = uploadScreenshot(firstNoteId, "first-a.png");
+        uploadScreenshot(unrelatedNoteId, "other-a.png");
+
+        mockMvc.perform(get("/api/v1/tasks/{id}/detail", taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.screenshots.length()").value(3))
+                .andExpect(jsonPath("$.screenshots[0].id").value((int) firstAttachmentId))
+                .andExpect(jsonPath("$.screenshots[0].noteId").value((int) firstNoteId))
+                .andExpect(jsonPath("$.screenshots[0].fileName").value("first-a.png"))
+                .andExpect(jsonPath("$.screenshots[0].downloadUrl").value("http://localhost/api/v1/notes/" + firstNoteId + "/screenshots/" + firstAttachmentId))
+                .andExpect(jsonPath("$.screenshots[1].id").value((int) laterFirstAttachmentId))
+                .andExpect(jsonPath("$.screenshots[1].noteId").value((int) laterNoteId))
+                .andExpect(jsonPath("$.screenshots[1].fileName").value("later-a.png"))
+                .andExpect(jsonPath("$.screenshots[2].id").value((int) laterSecondAttachmentId))
+                .andExpect(jsonPath("$.screenshots[2].noteId").value((int) laterNoteId))
+                .andExpect(jsonPath("$.screenshots[2].fileName").value("later-b.png"));
+    }
+
+    private long createTask(String title) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"" + title + "\",\"description\":\"d\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(response).get("id").asLong();
+    }
+
+    private long createNote(long taskId, String title, int displayOrder) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/notes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"" + title + "\",\"body\":\"body\",\"taskId\":" + taskId + ",\"displayOrder\":" + displayOrder + "}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(response).get("id").asLong();
+    }
+
+    private long uploadScreenshot(long noteId, String fileName) throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", fileName, "image/png", new byte[]{1, 2, 3});
+        String response = mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId).file(file))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode json = jsonMapper.readTree(response);
+        return json.get("id").asLong();
     }
 
     @Test
@@ -65,13 +127,14 @@ class ApiV1IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.task.id").value((int) taskId))
                 .andExpect(jsonPath("$.task.title").value("Test Task"))
-                .andExpect(jsonPath("$.notes[0].body").value("remember this"));
+                .andExpect(jsonPath("$.notes[0].body").value("remember this"))
+                .andExpect(jsonPath("$.screenshots").isArray());
         mockMvc.perform(get("/api/v1/tasks")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/today")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/weekly")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/planning/recommendations"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].task.title").value("Test Task"))
+                .andExpect(jsonPath("$[*].task.title", hasItem("Test Task")))
                 .andExpect(jsonPath("$[0].recommendedAction").exists())
                 .andExpect(jsonPath("$[0].reasonCodes").isArray())
                 .andExpect(jsonPath("$[0].explanation").exists())

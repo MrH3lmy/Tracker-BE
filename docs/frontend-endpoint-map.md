@@ -89,10 +89,18 @@ Tracker-BE core entity is **Task** (`TaskControllerV1`).
 - Response: `TaskDetailResponse` with:
   - `task`: existing `TaskResponse` payload
   - `notes`: ordered `NoteResponse[]` for the task
+  - `screenshots`: task-level `TaskScreenshotResponse[]` flattened from all task-linked notes. Each item includes attachment metadata plus `noteId` so the FE can jump back to the parent sticky note.
 - Components:
   - detail panel from `task`
   - floating sticky-note canvas from `notes`
+  - screenshot thumbnail/preview strip or gallery from `screenshots`
   - request/response inspector
+- Screenshot frontend contract for task detail:
+  - Render screenshot thumbnails/previews inline inside the task-detail experience rather than as links that navigate away.
+  - Open selected screenshots in an in-page viewer/lightbox using the item `downloadUrl`; do not open a separate browser page/tab for normal preview.
+  - Support previous/next navigation in the viewer over the `screenshots` array order returned by the API.
+  - Use `noteId` to highlight, scroll to, or otherwise identify the parent sticky note for the selected screenshot.
+  - Treat the API order as the canonical navigation order: parent note `displayOrder`, parent note id, attachment `createdAt`, attachment id.
 - Notes frontend contract for the task-detail sticky-note canvas:
   - `displayOrder` is the visible sticky note number and the primary sort key for task notes.
   - `title` is the sticky-note heading/header text.
