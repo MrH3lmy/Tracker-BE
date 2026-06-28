@@ -37,7 +37,7 @@ const SCREEN_CAPTURE_DENIED_MESSAGE =
 const SCREENSHOT_NOTE_BODY =
   "Screenshot captured from the notes page for the selected task.";
 const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
-const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Shift+S";
+const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
 
 interface CropPoint {
   x: number;
@@ -662,10 +662,15 @@ export function NotesPage() {
         target instanceof HTMLSelectElement;
       if (isTypingTarget) return;
 
-      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void screenshotNoteHandlerRef.current();
-      }
+      const isScreenshotShortcut =
+        event.ctrlKey &&
+        event.key.toLowerCase() === "s" &&
+        (event.altKey || event.shiftKey);
+
+      if (!isScreenshotShortcut) return;
+
+      event.preventDefault();
+      void screenshotNoteHandlerRef.current();
     };
 
     window.addEventListener("keydown", handleKeyDown);

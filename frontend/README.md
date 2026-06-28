@@ -75,10 +75,10 @@ Because this is a Vite app, the variable must use the `VITE_` prefix to be expos
 The Notes page supports cropped browser screen captures for screenshot notes and note attachments:
 
 1. Open the Notes page for a linked task so the header **Capture area note** button is visible.
-2. Click **Capture area note** or press **Ctrl+Shift+S** while focus is not in an input, textarea, or select.
+2. Click **Capture area note** or press **Ctrl+Alt+S** (or **Ctrl+Shift+S**) while focus is not in an input, textarea, or select.
 3. Choose the screen, window, or tab to share in the browser picker.
 4. In the crop overlay, drag over the captured preview to select a rectangular area.
 5. Verify **Confirm crop** is disabled until an area is selected, then click **Confirm crop** to create a screenshot note and upload the cropped PNG.
 6. Repeat from an existing note with **Take area screenshot** and verify the cropped PNG attaches to that note.
 7. Verify **Cancel** and **Escape** close the crop overlay and announce cancellation through the page status/error message.
-8. Verify **Ctrl+Shift+S** does not trigger capture while typing in note search, filters, the note form, or caption fields.
+8. Verify **Ctrl+Alt+S** and **Ctrl+Shift+S** do not trigger capture while typing in note search, filters, the note form, or caption fields.
