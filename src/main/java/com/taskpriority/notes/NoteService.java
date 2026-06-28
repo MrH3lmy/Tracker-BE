@@ -15,6 +15,7 @@ import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.UpdateNoteRequest;
 import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
+import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.TaskRepository;
@@ -84,6 +85,18 @@ public class NoteService {
         return noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId)
                 .stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<TaskScreenshotResponse> findTaskScreenshots(Long taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            throw new ResourceNotFoundException("Task with id " + taskId + " not found");
+        }
+        return noteAttachmentRepository.findTaskAttachmentsByKindInNavigationOrder(taskId, NoteAttachmentKind.SCREENSHOT)
+                .stream()
+                .map(this::toTaskScreenshotResponse)
                 .toList();
     }
 
@@ -344,6 +357,24 @@ public class NoteService {
     private NoteAttachmentResponse toAttachmentResponse(NoteAttachment attachment) {
         return new NoteAttachmentResponse(
                 attachment.getId(),
+                attachment.getFileName(),
+                attachment.getContentType(),
+                attachment.getSizeBytes(),
+                attachment.getKind(),
+                attachment.getCaption(),
+                attachment.getSource(),
+                attachment.getWidth(),
+                attachment.getHeight(),
+                screenshotDownloadUrl(attachment),
+                attachment.getCreatedAt()
+        );
+    }
+
+
+    private TaskScreenshotResponse toTaskScreenshotResponse(NoteAttachment attachment) {
+        return new TaskScreenshotResponse(
+                attachment.getId(),
+                attachment.getNote().getId(),
                 attachment.getFileName(),
                 attachment.getContentType(),
                 attachment.getSizeBytes(),

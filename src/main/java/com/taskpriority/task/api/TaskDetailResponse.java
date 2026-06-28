@@ -6,6 +6,7 @@ import java.util.List;
 
 public record TaskDetailResponse(
         TaskResponse task,
-        List<NoteResponse> notes
+        List<NoteResponse> notes,
+        List<TaskScreenshotResponse> screenshots
 ) {
 }
