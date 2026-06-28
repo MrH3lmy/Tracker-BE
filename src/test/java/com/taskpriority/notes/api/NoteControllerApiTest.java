@@ -358,7 +358,7 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.source").value("browser-extension"))
                 .andExpect(jsonPath("$.width").value(1440))
                 .andExpect(jsonPath("$.height").value(900))
-                .andExpect(jsonPath("$.downloadUrl").value(org.hamcrest.Matchers.matchesPattern("/api/v1/notes/" + noteId + "/screenshots/\\d+")))
+                .andExpect(jsonPath("$.downloadUrl").value(org.hamcrest.Matchers.matchesPattern("http://localhost/api/v1/notes/" + noteId + "/screenshots/\\d+")))
                 .andReturn().getResponse().getContentAsString();
         JsonNode uploadJson = objectMapper.readTree(uploadResponse);
         long attachmentId = uploadJson.get("id").asLong();
@@ -377,6 +377,32 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.attachments[0].contentType").value("image/png"))
                 .andExpect(jsonPath("$.attachments[0].downloadUrl").value(downloadUrl))
                 .andExpect(jsonPath("$.attachments[0].data").doesNotExist());
+    }
+
+    @Test
+    void noteResponseDownloadUrlUsesRequestBackendOrigin() throws Exception {
+        long noteId = createNote("Backend URL screenshot", "Body", null);
+        MockMultipartFile file = new MockMultipartFile("file", "capture.png", "image/png", new byte[]{4, 5, 6});
+        String uploadResponse = mockMvc.perform(multipart("/api/v1/notes/{id}/screenshots", noteId)
+                        .file(file)
+                        .with(request -> {
+                            request.setServerName("api.example.test");
+                            request.setServerPort(8443);
+                            return request;
+                        }))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.downloadUrl").value(org.hamcrest.Matchers.matchesPattern("http://api.example.test:8443/api/v1/notes/" + noteId + "/screenshots/\\d+")))
+                .andReturn().getResponse().getContentAsString();
+        String uploadDownloadUrl = objectMapper.readTree(uploadResponse).get("downloadUrl").asText();
+
+        mockMvc.perform(get("/api/v1/notes/{id}", noteId)
+                        .with(request -> {
+                            request.setServerName("api.example.test");
+                            request.setServerPort(8443);
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attachments[0].downloadUrl").value(uploadDownloadUrl));
     }
 
     @Test
