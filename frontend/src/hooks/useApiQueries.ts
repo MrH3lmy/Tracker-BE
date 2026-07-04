@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
-import type { NoteAttachmentRecord, NoteContentType, NoteRecord } from '../components/notes/noteTypes';
+import type { NoteAttachmentRecord, NoteBlockRecord, NoteContentType, NoteRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
@@ -20,6 +20,7 @@ type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
   taskBlockers: ['tasks', 'blockers'] as const,
+  noteBlocks: (noteId: number) => ['notes', noteId, 'blocks'] as const,
   notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
@@ -48,6 +49,7 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     return apiJson<NoteRecord[]>('GET', `/api/v1/notes${query ? `?${query}` : ''}`);
   },
 });
+export const useNoteBlocksQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteBlocks(noteId), queryFn: () => apiJson<NoteBlockRecord[]>('GET', `/api/v1/notes/${noteId}/blocks`), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
@@ -133,6 +135,10 @@ export function useNoteMutations() {
     createNote: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/notes', body), onSuccess }),
     updateNote: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/notes/${id}`, body), onSuccess }),
     deleteNote: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/notes/${id}`), onSuccess }),
+    createBlock: useMutation({ mutationFn: ({ noteId, body }: { noteId: number; body: unknown }) => apiJson<NoteBlockRecord>('POST', `/api/v1/notes/${noteId}/blocks`, body), onSuccess }),
+    updateBlock: useMutation({ mutationFn: ({ noteId, blockId, body }: { noteId: number; blockId: number; body: unknown }) => apiJson<NoteBlockRecord>('PATCH', `/api/v1/notes/${noteId}/blocks/${blockId}`, body), onSuccess }),
+    deleteBlock: useMutation({ mutationFn: ({ noteId, blockId }: { noteId: number; blockId: number }) => apiJson('DELETE', `/api/v1/notes/${noteId}/blocks/${blockId}`), onSuccess }),
+    reorderBlocks: useMutation({ mutationFn: ({ noteId, blockIds }: { noteId: number; blockIds: number[] }) => apiJson<NoteBlockRecord[]>('PATCH', `/api/v1/notes/${noteId}/blocks/reorder`, { blockIds }), onSuccess }),
     uploadScreenshot: useMutation({
       mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
         const formData = new FormData();
