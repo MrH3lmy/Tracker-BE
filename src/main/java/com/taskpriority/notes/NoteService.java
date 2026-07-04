@@ -18,6 +18,7 @@ import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
 import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
+import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,16 +51,20 @@ public class NoteService {
     private final TaskRepository taskRepository;
     private final TagRepository tagRepository;
     private final NoteAttachmentRepository noteAttachmentRepository;
+    private final NoteTaskLinkRepository noteTaskLinkRepository;
+    private final NoteTaskLinkMapper noteTaskLinkMapper;
     private final ObjectMapper objectMapper;
     private final long maxScreenshotSizeBytes;
 
     public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, TagRepository tagRepository,
-                       NoteAttachmentRepository noteAttachmentRepository, ObjectMapper objectMapper,
+                       NoteAttachmentRepository noteAttachmentRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.taskRepository = taskRepository;
         this.tagRepository = tagRepository;
         this.noteAttachmentRepository = noteAttachmentRepository;
+        this.noteTaskLinkRepository = noteTaskLinkRepository;
+        this.noteTaskLinkMapper = noteTaskLinkMapper;
         this.objectMapper = objectMapper;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
@@ -98,6 +103,14 @@ public class NoteService {
                 .stream()
                 .map(this::toTaskScreenshotResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.taskpriority.notes.api.NoteTaskLinkResponse> findLinkedNotesForTask(Long taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            throw new ResourceNotFoundException("Task with id " + taskId + " not found");
+        }
+        return noteTaskLinkRepository.findByTaskId(taskId).stream().map(noteTaskLinkMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -423,6 +436,7 @@ public class NoteService {
                         .stream()
                         .map(this::toAttachmentResponse)
                         .toList(),
+                noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList(),
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

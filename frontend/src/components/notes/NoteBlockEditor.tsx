@@ -12,6 +12,7 @@ export interface DraftNoteBlock extends Pick<NoteBlockRecord, 'type' | 'content'
 interface NoteBlockEditorProps {
   blocks: DraftNoteBlock[];
   onChange: (blocks: DraftNoteBlock[]) => void;
+  onConvertToTask?: (block: DraftNoteBlock) => void;
   disabled?: boolean;
 }
 
@@ -53,7 +54,7 @@ const getSlashCommandMatch = (value: string, cursorPosition: number) => {
   };
 };
 
-export function NoteBlockEditor({ blocks, onChange, disabled }: NoteBlockEditorProps) {
+export function NoteBlockEditor({ blocks, onChange, onConvertToTask, disabled }: NoteBlockEditorProps) {
   const [slashMenu, setSlashMenu] = useState<{ clientId: string; query: string; start: number; end: number; activeIndex: number } | null>(null);
   const textAreaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const updateBlock = (clientId: string, patch: Partial<DraftNoteBlock>) => onChange(blocks.map((block) => block.clientId === clientId ? { ...block, ...patch } : block));
@@ -163,6 +164,7 @@ export function NoteBlockEditor({ blocks, onChange, disabled }: NoteBlockEditorP
           <button type="button" disabled={disabled || index === 0} onClick={() => moveBlock(index, -1)}>Up</button>
           <button type="button" disabled={disabled || index === blocks.length - 1} onClick={() => moveBlock(index, 1)}>Down</button>
           <button type="button" disabled={disabled || blocks.length === 1} onClick={() => removeBlock(block.clientId)}>Remove</button>
+          {block.type === 'checklist' ? <button type="button" disabled={disabled || !onConvertToTask || !(block.content ?? '').trim()} onClick={() => onConvertToTask?.(block)}>Convert to task</button> : null}
         </div>
         {block.type === 'checklist' ? <label className="row compact-row"><input type="checkbox" checked={Boolean(block.checked)} disabled={disabled} onChange={(event) => updateBlock(block.clientId, { checked: event.target.checked })} /> Checked</label> : null}
         {block.type === 'divider' ? <p className="muted">Divider blocks do not need content.</p> : <div className="slash-command-anchor">

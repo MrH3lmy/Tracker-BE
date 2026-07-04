@@ -82,6 +82,18 @@ interface PendingClipboardImage {
   fileName: string;
 }
 
+interface ConvertTaskModalState {
+  noteId: number;
+  blockId?: number;
+  sourceText: string;
+  title: string;
+  dueDate: string;
+  priority: string;
+  area: string;
+  effort: string;
+  parentTaskId: string;
+}
+
 function humanizeContentType(value: string): string {
   return value
     .toLowerCase()
@@ -164,6 +176,7 @@ export function NotesPage() {
   const [pendingClipboardImages, setPendingClipboardImages] = useState<
     PendingClipboardImage[]
   >([]);
+  const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
   const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
   const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
     useState(false);
@@ -183,13 +196,14 @@ export function NotesPage() {
     tags: tagFilter,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, updateNote, deleteNote, uploadScreenshot } =
+  const { createNote, updateNote, deleteNote, uploadScreenshot, convertNoteToTask } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
     updateNote.data,
     deleteNote.data,
     uploadScreenshot.data,
+    convertNoteToTask.data,
   );
   const availableTasks = useMemo<TaskRecord[]>(
     () => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []),
@@ -206,7 +220,7 @@ export function NotesPage() {
     });
   }, [linkedTaskId, notesQuery.data]);
   const isBusy =
-    createNote.isPending || updateNote.isPending || deleteNote.isPending;
+    createNote.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending;
   const isUploadPending = uploadScreenshot.isPending;
   const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
@@ -220,6 +234,32 @@ export function NotesPage() {
     activeForm.title.trim().length > 0 &&
     effectiveBody.trim().length > 0 &&
     !isBusy;
+
+  const openConvertTaskModal = (sourceText: string, blockId?: number) => {
+    if (editingNoteId === null) {
+      setClipboardImageMessage({ kind: "error", text: "Save the note before converting note content into a task." });
+      return;
+    }
+    const trimmed = sourceText.trim();
+    setConvertTaskModal({ noteId: editingNoteId, blockId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", priority: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
+  };
+
+  const submitConvertTask = () => {
+    if (!convertTaskModal) return;
+    convertNoteToTask.mutate({
+      noteId: convertTaskModal.noteId,
+      blockId: convertTaskModal.blockId,
+      body: {
+        title: convertTaskModal.title,
+        selectedText: convertTaskModal.sourceText,
+        dueDate: convertTaskModal.dueDate || null,
+        priority: convertTaskModal.priority || null,
+        area: convertTaskModal.area || null,
+        effort: convertTaskModal.effort || null,
+        parentTaskId: convertTaskModal.parentTaskId ? Number(convertTaskModal.parentTaskId) : null,
+      },
+    }, { onSuccess: (result) => { if (result.ok) setConvertTaskModal(null); } });
+  };
 
   const resetForm = () => {
     setForm(emptyFormForTask(linkedTaskId));
@@ -1376,6 +1416,7 @@ export function NotesPage() {
               setForm((current) => ({ ...current, body: bodyFromBlocks(blocks) }));
             }}
             disabled={isBusy}
+            onConvertToTask={(block) => openConvertTaskModal(block.content ?? "")}
           />
           <label className="field-stack" htmlFor="noteBody">
             <span>Fallback body / migration source</span>
@@ -1393,6 +1434,16 @@ export function NotesPage() {
               required
             />
           </label>
+          <div className="row compact-row">
+            <button type="button" disabled={editingNoteId === null || !activeForm.body.trim()} onClick={() => {
+              const textarea = noteBodyRef.current;
+              const selected = textarea && textarea.selectionStart !== textarea.selectionEnd
+                ? activeForm.body.slice(textarea.selectionStart, textarea.selectionEnd)
+                : activeForm.body;
+              openConvertTaskModal(selected);
+            }}>Convert selected text to task</button>
+            {editingNoteId === null ? <span className="muted">Save the note before converting selected text.</span> : null}
+          </div>
           {clipboardImageMessage ? (
             <p
               className={
@@ -1448,6 +1499,27 @@ export function NotesPage() {
           }
         />
       </section>
+
+      {convertTaskModal ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="convert-task-title">
+            <div className="section-header">
+              <h3 id="convert-task-title">Convert to task</h3>
+              <button type="button" onClick={() => setConvertTaskModal(null)}>Close</button>
+            </div>
+            <div className="config-panel">
+              <label className="field-stack"><span>Title</span><input value={convertTaskModal.title} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, title: event.target.value } : current)} /></label>
+              <label className="field-stack"><span>Due date</span><input type="date" value={convertTaskModal.dueDate} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, dueDate: event.target.value } : current)} /></label>
+              <label className="field-stack"><span>Priority</span><select value={convertTaskModal.priority} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, priority: event.target.value } : current)}><option value="">Backlog</option><option value="NOT_STARTED">Not started</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="WAITING">Waiting</option></select></label>
+              <label className="field-stack"><span>Area</span><select value={convertTaskModal.area} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, area: event.target.value } : current)}><option value="PERSONAL">Personal</option><option value="WORK">Work</option><option value="STUDY">Study</option><option value="HEALTH">Health</option><option value="FAMILY">Family</option></select></label>
+              <label className="field-stack"><span>Effort</span><select value={convertTaskModal.effort} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, effort: event.target.value } : current)}><option value="QUICK">Quick</option><option value="MEDIUM">Medium</option><option value="DEEP_WORK">Deep work</option><option value="LARGE">Large</option></select></label>
+              <label className="field-stack"><span>Linked task parent</span><select value={convertTaskModal.parentTaskId} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, parentTaskId: event.target.value } : current)}><option value="">No parent</option>{availableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+              <p className="muted">Created from note text: {convertTaskModal.sourceText.slice(0, 160)}</p>
+              <button type="button" className="button-primary" disabled={!convertTaskModal.title.trim() || convertNoteToTask.isPending} onClick={submitConvertTask}>Create linked task</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {cropOverlay ? (
         <div

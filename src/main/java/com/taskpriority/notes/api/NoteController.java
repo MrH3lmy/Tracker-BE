@@ -4,6 +4,7 @@ import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteContentType;
 import com.taskpriority.notes.NoteService;
 import com.taskpriority.notes.NoteBlockService;
+import com.taskpriority.notes.NoteTaskConversionService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -34,10 +35,12 @@ import java.util.List;
 public class NoteController {
     private final NoteService noteService;
     private final NoteBlockService noteBlockService;
+    private final NoteTaskConversionService noteTaskConversionService;
 
-    public NoteController(NoteService noteService, NoteBlockService noteBlockService) {
+    public NoteController(NoteService noteService, NoteBlockService noteBlockService, NoteTaskConversionService noteTaskConversionService) {
         this.noteService = noteService;
         this.noteBlockService = noteBlockService;
+        this.noteTaskConversionService = noteTaskConversionService;
     }
 
     @GetMapping
@@ -90,6 +93,16 @@ public class NoteController {
     public ResponseEntity<Void> deleteBlock(@PathVariable Long id, @PathVariable Long blockId) {
         noteBlockService.delete(id, blockId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/blocks/{blockId}/convert-to-task")
+    public ResponseEntity<ConvertNoteToTaskResponse> convertBlockToTask(@PathVariable Long id, @PathVariable Long blockId, @Validated @RequestBody ConvertNoteToTaskRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteTaskConversionService.convertBlock(id, blockId, request));
+    }
+
+    @PostMapping("/{id}/convert-selection-to-task")
+    public ResponseEntity<ConvertNoteToTaskResponse> convertSelectionToTask(@PathVariable Long id, @Validated @RequestBody ConvertNoteToTaskRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteTaskConversionService.convertSelection(id, request));
     }
 
     @PatchMapping("/{id}/blocks/reorder")
