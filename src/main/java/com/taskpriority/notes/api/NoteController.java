@@ -48,9 +48,13 @@ public class NoteController {
             @RequestParam(required = false) Long taskId,
             @RequestParam(required = false, name = "q") String query,
             @RequestParam(required = false) NoteContentType contentType,
-            @RequestParam(required = false, name = "tag") List<String> tags
+            @RequestParam(required = false, name = "tag") List<String> tags,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDirection,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return noteService.findAll(taskId, query, contentType, tags);
+        return noteService.findAll(taskId, query, contentType, tags, sortBy, sortDirection, page, size);
     }
 
     @GetMapping("/{id}")
