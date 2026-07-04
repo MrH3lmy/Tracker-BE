@@ -7,11 +7,13 @@ import type {
   NoteAttachmentRecord,
   NoteContentType,
   NoteRecord,
+  NoteTemplateRecord,
 } from "../components/notes/noteTypes";
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
   latestResult,
   useNoteMutations,
+  useNoteTemplatesQuery,
   useNotesQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
@@ -45,6 +47,7 @@ const SCREENSHOT_NOTE_BODY =
   "Screenshot captured from the notes page for the selected task.";
 const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
 const PASTED_SCREENSHOT_PENDING_REFERENCE = "[Pasted screenshot pending upload]";
+const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
 const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
 
 interface CropPoint {
@@ -80,6 +83,14 @@ interface PendingClipboardImage {
   placeholder: string;
   caption: string;
   fileName: string;
+}
+
+interface TemplateVariableState {
+  taskTitle: string;
+  date: string;
+  area: string;
+  priority: string;
+  dueDate: string;
 }
 
 interface ConvertTaskModalState {
@@ -176,6 +187,8 @@ export function NotesPage() {
   const [pendingClipboardImages, setPendingClipboardImages] = useState<
     PendingClipboardImage[]
   >([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [templateVariables, setTemplateVariables] = useState<TemplateVariableState>({ taskTitle: '', date: new Date().toISOString().slice(0, 10), area: '', priority: '', dueDate: '' });
   const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
   const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
   const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
@@ -189,6 +202,7 @@ export function NotesPage() {
   const cropOverlayRef = useRef<CropOverlayState | null>(null);
   const screenshotNoteHandlerRef = useRef<() => Promise<void>>(async () => undefined);
 
+  const templatesQuery = useNoteTemplatesQuery();
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
@@ -196,10 +210,11 @@ export function NotesPage() {
     tags: tagFilter,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink } =
+  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
+    createNoteFromTemplate.data,
     updateNote.data,
     deleteNote.data,
     uploadScreenshot.data,
@@ -222,7 +237,7 @@ export function NotesPage() {
     });
   }, [linkedTaskId, notesQuery.data]);
   const isBusy =
-    createNote.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending;
+    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending;
   const isUploadPending = uploadScreenshot.isPending;
   const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
@@ -232,6 +247,10 @@ export function NotesPage() {
       ? { ...form, taskId: linkedTaskId }
       : form;
   const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
+  const templates = useMemo<NoteTemplateRecord[]>(() => templatesQuery.data?.data ?? [], [templatesQuery.data]);
+  const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
+  const renderedTemplatePreview = selectedTemplate ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content) : '';
+  const canCreateFromTemplate = Boolean(selectedTemplate) && !isBusy;
   const canSubmit =
     activeForm.title.trim().length > 0 &&
     effectiveBody.trim().length > 0 &&
@@ -291,6 +310,26 @@ export function NotesPage() {
     setForm(emptyFormForTask(linkedTaskId));
     setDraftBlocks(blocksFromBody(""));
     setEditingNoteId(null);
+  };
+
+
+  const handleCreateFromTemplate = () => {
+    if (!selectedTemplate || !canCreateFromTemplate) return;
+    const linkedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
+    createNoteFromTemplate.mutate({
+      templateId: selectedTemplate.id,
+      title: renderedTemplatePreview.split('\n')[0]?.replace(/^#+\s*/, '') || selectedTemplate.name,
+      taskId: activeForm.taskId.trim() ? Number(activeForm.taskId.trim()) : null,
+      tags: parseTags(activeForm.tags),
+      variables: {
+        ...templateVariables,
+        taskTitle: templateVariables.taskTitle || linkedTask?.title || '',
+      },
+    }, {
+      onSuccess: (result) => {
+        if (result.ok) resetForm();
+      },
+    });
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1354,6 +1393,43 @@ export function NotesPage() {
               ) : null}
             </div>
           </div>
+        </div>
+
+
+        <div className="config-panel" style={{ marginBottom: "var(--space-4)" }}>
+          <div className="section-header">
+            <div>
+              <h4>New from template</h4>
+              <p className="muted">Pick a default template, preview the rendered note, and fill variables like task title, date, area, priority, and due date.</p>
+            </div>
+            <button type="button" className="button-primary" disabled={!canCreateFromTemplate} onClick={handleCreateFromTemplate}>
+              {createNoteFromTemplate.isPending ? "Creating..." : "Create from template"}
+            </button>
+          </div>
+          <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}>
+            <label className="field-stack" style={{ flex: "1 1 16rem" }}>
+              <span>Template</span>
+              <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={templatesQuery.isLoading}>
+                <option value="">Select a template</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={String(template.id)}>{template.category ? `${template.category} · ` : ""}{template.name}</option>
+                ))}
+              </select>
+            </label>
+            {TEMPLATE_VARIABLE_KEYS.map((key) => (
+              <label key={key} className="field-stack" style={{ flex: "1 1 10rem" }}>
+                <span>{key.replace(/([A-Z])/g, " $1")}</span>
+                <input type={key.toLowerCase().includes("date") ? "date" : "text"} value={templateVariables[key]} onChange={(event) => setTemplateVariables((current) => ({ ...current, [key]: event.target.value }))} />
+              </label>
+            ))}
+          </div>
+          {selectedTemplate ? (
+            <div className="panel" style={{ marginTop: "var(--space-3)" }}>
+              <strong>{selectedTemplate.name}</strong>
+              <p className="muted">{selectedTemplate.description}</p>
+              <pre className="text-block" style={{ whiteSpace: "pre-wrap" }}>{renderedTemplatePreview}</pre>
+            </div>
+          ) : null}
         </div>
 
         <form id="note-form" onSubmit={handleSubmit} className="config-panel">
