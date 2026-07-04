@@ -3,6 +3,7 @@ package com.taskpriority.notes.api;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteContentType;
 import com.taskpriority.notes.NoteService;
+import com.taskpriority.notes.NoteBlockService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -32,9 +33,11 @@ import java.util.List;
 @RequestMapping("/api/v1/notes")
 public class NoteController {
     private final NoteService noteService;
+    private final NoteBlockService noteBlockService;
 
-    public NoteController(NoteService noteService) {
+    public NoteController(NoteService noteService, NoteBlockService noteBlockService) {
         this.noteService = noteService;
+        this.noteBlockService = noteBlockService;
     }
 
     @GetMapping
@@ -65,6 +68,33 @@ public class NoteController {
     @PatchMapping("/{id}/layout")
     public NoteResponse updateLayout(@PathVariable Long id, @Validated @RequestBody UpdateNoteLayoutRequest request) {
         return noteService.updateLayout(id, request);
+    }
+
+
+    @GetMapping("/{id}/blocks")
+    public List<NoteBlockResponse> blocks(@PathVariable Long id) {
+        return noteBlockService.findByNoteId(id);
+    }
+
+    @PostMapping("/{id}/blocks")
+    public ResponseEntity<NoteBlockResponse> createBlock(@PathVariable Long id, @Validated @RequestBody CreateNoteBlockRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteBlockService.create(id, request));
+    }
+
+    @PatchMapping("/{id}/blocks/{blockId}")
+    public NoteBlockResponse updateBlock(@PathVariable Long id, @PathVariable Long blockId, @RequestBody UpdateNoteBlockRequest request) {
+        return noteBlockService.update(id, blockId, request);
+    }
+
+    @DeleteMapping("/{id}/blocks/{blockId}")
+    public ResponseEntity<Void> deleteBlock(@PathVariable Long id, @PathVariable Long blockId) {
+        noteBlockService.delete(id, blockId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/blocks/reorder")
+    public List<NoteBlockResponse> reorderBlocks(@PathVariable Long id, @Validated @RequestBody ReorderNoteBlocksRequest request) {
+        return noteBlockService.reorder(id, request);
     }
 
     @Operation(

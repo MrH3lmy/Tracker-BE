@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEve
 import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
+import { NoteBlockEditor, blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
 import type {
   NoteAttachmentRecord,
   NoteContentType,
@@ -143,6 +144,7 @@ export function NotesPage() {
   >("all");
   const [tagFilter, setTagFilter] = useState("");
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
+  const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [attachmentCaptions, setAttachmentCaptions] = useState<
@@ -213,13 +215,15 @@ export function NotesPage() {
     editingNoteId === null && linkedTaskId && form.taskId.trim() === ""
       ? { ...form, taskId: linkedTaskId }
       : form;
+  const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
   const canSubmit =
     activeForm.title.trim().length > 0 &&
-    activeForm.body.trim().length > 0 &&
+    effectiveBody.trim().length > 0 &&
     !isBusy;
 
   const resetForm = () => {
     setForm(emptyFormForTask(linkedTaskId));
+    setDraftBlocks(blocksFromBody(""));
     setEditingNoteId(null);
   };
 
@@ -227,7 +231,7 @@ export function NotesPage() {
     event.preventDefault();
     if (!canSubmit) return;
 
-    const payload = buildPayload(activeForm);
+    const payload = { ...buildPayload(activeForm), body: effectiveBody };
     if (editingNoteId === null) {
       createNote.mutate(payload, {
         onSuccess: (result) => {
@@ -1078,6 +1082,7 @@ export function NotesPage() {
                     onClick={() => {
                       setEditingNoteId(note.id);
                       setForm(noteToForm(note));
+                      setDraftBlocks(blocksFromBody(note.body ?? ""));
                     }}
                   >
                     Edit
@@ -1364,18 +1369,27 @@ export function NotesPage() {
             </label>
           </div>
 
+          <NoteBlockEditor
+            blocks={draftBlocks}
+            onChange={(blocks) => {
+              setDraftBlocks(blocks);
+              setForm((current) => ({ ...current, body: bodyFromBlocks(blocks) }));
+            }}
+            disabled={isBusy}
+          />
           <label className="field-stack" htmlFor="noteBody">
-            <span>Body</span>
+            <span>Fallback body / migration source</span>
             <textarea
               id="noteBody"
               className="text-block"
-              rows={12}
+              rows={8}
               value={activeForm.body}
               ref={noteBodyRef}
               onPaste={(event) => void handleBodyPaste(event)}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, body: event.target.value }))
-              }
+              onChange={(event) => {
+                setForm((current) => ({ ...current, body: event.target.value }));
+                setDraftBlocks(blocksFromBody(event.target.value));
+              }}
               required
             />
           </label>

@@ -32,3 +32,18 @@ export interface NoteRecord {
   createdAt?: string;
   updatedAt?: string;
 }
+
+
+export type NoteBlockType = 'paragraph' | 'heading' | 'checklist' | 'bullet' | 'code' | 'quote' | 'divider' | 'screenshot';
+
+export interface NoteBlockRecord {
+  id: number;
+  noteId: number;
+  type: NoteBlockType;
+  content?: string | null;
+  position: number;
+  checked: boolean;
+  metadata?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
