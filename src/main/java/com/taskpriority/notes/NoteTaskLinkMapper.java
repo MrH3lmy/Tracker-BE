@@ -13,7 +13,9 @@ public class NoteTaskLinkMapper {
                 link.getNoteBlock() == null ? null : link.getNoteBlock().getId(),
                 link.getTask().getId(),
                 link.getTask().getTitle(),
+                link.getNote().getTitle(),
                 link.getSelectedText(),
+                link.getLinkType(),
                 link.getCreatedAt()
         );
     }

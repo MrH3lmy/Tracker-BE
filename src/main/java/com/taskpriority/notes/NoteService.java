@@ -7,9 +7,13 @@ import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteAttachmentKind;
 import com.taskpriority.model.NoteContentType;
+import com.taskpriority.model.NoteBlock;
+import com.taskpriority.model.NoteTaskLink;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
+import com.taskpriority.notes.api.CreateNoteTaskLinkRequest;
+import com.taskpriority.notes.api.NoteTaskLinkResponse;
 import com.taskpriority.notes.api.CreateScreenshotRequest;
 import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
@@ -17,6 +21,7 @@ import com.taskpriority.notes.api.UpdateNoteRequest;
 import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
 import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
+import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.TaskRepository;
@@ -51,18 +56,20 @@ public class NoteService {
     private final TaskRepository taskRepository;
     private final TagRepository tagRepository;
     private final NoteAttachmentRepository noteAttachmentRepository;
+    private final NoteBlockRepository noteBlockRepository;
     private final NoteTaskLinkRepository noteTaskLinkRepository;
     private final NoteTaskLinkMapper noteTaskLinkMapper;
     private final ObjectMapper objectMapper;
     private final long maxScreenshotSizeBytes;
 
     public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, TagRepository tagRepository,
-                       NoteAttachmentRepository noteAttachmentRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
+                       NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.taskRepository = taskRepository;
         this.tagRepository = tagRepository;
         this.noteAttachmentRepository = noteAttachmentRepository;
+        this.noteBlockRepository = noteBlockRepository;
         this.noteTaskLinkRepository = noteTaskLinkRepository;
         this.noteTaskLinkMapper = noteTaskLinkMapper;
         this.objectMapper = objectMapper;
@@ -106,11 +113,58 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<com.taskpriority.notes.api.NoteTaskLinkResponse> findLinkedNotesForTask(Long taskId) {
+    public List<NoteTaskLinkResponse> findLinkedNotesForTask(Long taskId) {
         if (!taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
         return noteTaskLinkRepository.findByTaskId(taskId).stream().map(noteTaskLinkMapper::toResponse).toList();
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<NoteTaskLinkResponse> findLinksForNote(Long noteId) {
+        if (!noteRepository.existsById(noteId)) {
+            throw new ResourceNotFoundException("Note with id " + noteId + " not found");
+        }
+        return noteTaskLinkRepository.findByNoteId(noteId).stream().map(noteTaskLinkMapper::toResponse).toList();
+    }
+
+    @Transactional
+    public NoteTaskLinkResponse createTaskLink(Long noteId, CreateNoteTaskLinkRequest request) {
+        Note note = getNote(noteId);
+        Task task = resolveTask(request.taskId());
+        NoteBlock block = null;
+        if (request.blockId() != null) {
+            block = noteBlockRepository.findByIdAndNoteId(request.blockId(), noteId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Block with id " + request.blockId() + " not found for note " + noteId));
+        }
+        boolean exists = block == null
+                ? noteTaskLinkRepository.existsByNoteIdAndTaskIdAndNoteBlockIsNull(noteId, task.getId())
+                : noteTaskLinkRepository.existsByNoteIdAndTaskIdAndNoteBlockId(noteId, task.getId(), block.getId());
+        if (exists) {
+            Long blockId = block == null ? null : block.getId();
+            return findLinksForNote(noteId).stream()
+                    .filter(link -> link.taskId().equals(task.getId()) && (blockId == null ? link.blockId() == null : blockId.equals(link.blockId())))
+                    .findFirst()
+                    .orElseThrow();
+        }
+        NoteTaskLink link = new NoteTaskLink();
+        link.setNote(note);
+        link.setNoteBlock(block);
+        link.setTask(task);
+        link.setSelectedText(trimToNull(request.selectedText()));
+        link.setLinkType(normalizeLinkType(request.linkType()));
+        return noteTaskLinkMapper.toResponse(noteTaskLinkRepository.save(link));
+    }
+
+    @Transactional
+    public void deleteTaskLink(Long noteId, Long linkId) {
+        NoteTaskLink link = noteTaskLinkRepository.findById(linkId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task link with id " + linkId + " not found"));
+        if (!link.getNote().getId().equals(noteId)) {
+            throw new ResourceNotFoundException("Task link with id " + linkId + " not found for note " + noteId);
+        }
+        noteTaskLinkRepository.delete(link);
     }
 
     @Transactional(readOnly = true)
@@ -345,6 +399,13 @@ public class NoteService {
         if (height != null && height <= 0) {
             throw new IllegalArgumentException("Screenshot height must be greater than zero when provided");
         }
+    }
+
+    private String normalizeLinkType(String value) {
+        if (value == null || value.isBlank()) {
+            return "MENTION";
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
     private String trimToNull(String value) {

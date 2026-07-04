@@ -64,6 +64,7 @@ public class NoteTaskConversionService {
         link.setNoteBlock(block);
         link.setTask(savedTask);
         link.setSelectedText(sourceText);
+        link.setLinkType("CONVERTED_SELECTION");
         NoteTaskLink savedLink = linkRepository.save(link);
         return new ConvertNoteToTaskResponse(
                 taskApiMapper.toResponse(savedTask),

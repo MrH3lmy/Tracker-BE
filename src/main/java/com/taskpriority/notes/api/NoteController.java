@@ -73,6 +73,22 @@ public class NoteController {
         return noteService.updateLayout(id, request);
     }
 
+    @GetMapping("/{id}/task-links")
+    public List<NoteTaskLinkResponse> taskLinks(@PathVariable Long id) {
+        return noteService.findLinksForNote(id);
+    }
+
+    @PostMapping("/{id}/task-links")
+    public ResponseEntity<NoteTaskLinkResponse> createTaskLink(@PathVariable Long id, @Validated @RequestBody CreateNoteTaskLinkRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteService.createTaskLink(id, request));
+    }
+
+    @DeleteMapping("/{id}/task-links/{linkId}")
+    public ResponseEntity<Void> deleteTaskLink(@PathVariable Long id, @PathVariable Long linkId) {
+        noteService.deleteTaskLink(id, linkId);
+        return ResponseEntity.noContent().build();
+    }
+
 
     @GetMapping("/{id}/blocks")
     public List<NoteBlockResponse> blocks(@PathVariable Long id) {

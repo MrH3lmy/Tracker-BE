@@ -43,7 +43,9 @@ export interface NoteTaskLinkRecord {
   blockId?: number | null;
   taskId: number;
   taskTitle?: string;
+  noteTitle?: string;
   selectedText?: string | null;
+  linkType?: string;
   createdAt?: string;
 }
 
