@@ -31,10 +31,21 @@ export interface NoteRecord {
   attachments?: NoteAttachmentRecord[];
   createdAt?: string;
   updatedAt?: string;
+  taskLinks?: NoteTaskLinkRecord[];
 }
 
 
 export type NoteBlockType = 'paragraph' | 'heading' | 'checklist' | 'bullet' | 'code' | 'quote' | 'divider' | 'screenshot';
+
+export interface NoteTaskLinkRecord {
+  id: number;
+  noteId: number;
+  blockId?: number | null;
+  taskId: number;
+  taskTitle?: string;
+  selectedText?: string | null;
+  createdAt?: string;
+}
 
 export interface NoteBlockRecord {
   id: number;
@@ -46,4 +57,5 @@ export interface NoteBlockRecord {
   metadata?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  taskLinks?: NoteTaskLinkRecord[];
 }

@@ -20,6 +20,7 @@ public record NoteResponse(
         Integer zIndex,
         List<String> tags,
         List<NoteAttachmentResponse> attachments,
+        List<NoteTaskLinkResponse> taskLinks,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

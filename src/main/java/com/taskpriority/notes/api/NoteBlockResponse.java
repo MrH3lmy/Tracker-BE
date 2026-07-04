@@ -11,5 +11,6 @@ public record NoteBlockResponse(
         Boolean checked,
         String metadata,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        java.util.List<NoteTaskLinkResponse> taskLinks
 ) {}

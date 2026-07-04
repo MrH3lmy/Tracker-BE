@@ -22,10 +22,14 @@ public class NoteBlockService {
 
     private final NoteRepository noteRepository;
     private final NoteBlockRepository noteBlockRepository;
+    private final com.taskpriority.repository.NoteTaskLinkRepository noteTaskLinkRepository;
+    private final NoteTaskLinkMapper noteTaskLinkMapper;
 
-    public NoteBlockService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository) {
+    public NoteBlockService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository, com.taskpriority.repository.NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper) {
         this.noteRepository = noteRepository;
         this.noteBlockRepository = noteBlockRepository;
+        this.noteTaskLinkRepository = noteTaskLinkRepository;
+        this.noteTaskLinkMapper = noteTaskLinkMapper;
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +99,8 @@ public class NoteBlockService {
         return normalized;
     }
 
-    private NoteBlockResponse toResponse(NoteBlock block) {
-        return new NoteBlockResponse(block.getId(), block.getNote().getId(), block.getType(), block.getContent(), block.getPosition(), block.getChecked(), block.getMetadata(), block.getCreatedAt(), block.getUpdatedAt());
+    public NoteBlockResponse toResponse(NoteBlock block) {
+        var links = noteTaskLinkRepository.findByNoteBlockId(block.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return new NoteBlockResponse(block.getId(), block.getNote().getId(), block.getType(), block.getContent(), block.getPosition(), block.getChecked(), block.getMetadata(), block.getCreatedAt(), block.getUpdatedAt(), links);
     }
 }
