@@ -140,6 +140,8 @@ export function useNoteMutations() {
     deleteBlock: useMutation({ mutationFn: ({ noteId, blockId }: { noteId: number; blockId: number }) => apiJson('DELETE', `/api/v1/notes/${noteId}/blocks/${blockId}`), onSuccess }),
     reorderBlocks: useMutation({ mutationFn: ({ noteId, blockIds }: { noteId: number; blockIds: number[] }) => apiJson<NoteBlockRecord[]>('PATCH', `/api/v1/notes/${noteId}/blocks/reorder`, { blockIds }), onSuccess }),
     convertNoteToTask: useMutation({ mutationFn: ({ noteId, blockId, body }: { noteId: number; blockId?: number; body: unknown }) => apiJson('POST', blockId ? `/api/v1/notes/${noteId}/blocks/${blockId}/convert-to-task` : `/api/v1/notes/${noteId}/convert-selection-to-task`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
+    createTaskLink: useMutation({ mutationFn: ({ noteId, body }: { noteId: number; body: unknown }) => apiJson('POST', `/api/v1/notes/${noteId}/task-links`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
+    deleteTaskLink: useMutation({ mutationFn: ({ noteId, linkId }: { noteId: number; linkId: number }) => apiJson('DELETE', `/api/v1/notes/${noteId}/task-links/${linkId}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
     uploadScreenshot: useMutation({
       mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
         const formData = new FormData();

@@ -305,10 +305,10 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
 
             <section className={styles.detailSection} aria-labelledby={`task-${task.id}-notes-heading`}>
               <div className={styles.sectionHeader}>
-                <h4 id={`task-${task.id}-notes-heading`}>Notes</h4>
+                <h4 id={`task-${task.id}-notes-heading`}>Linked notes</h4>
                 <a className={styles.detailLink} href={taskNotesHref(task.id)}>{notesLabel}</a>
               </div>
-              <p className={styles.emptyNested}>Open linked notes without mixing note content into the task description.</p>
+              <p className={styles.emptyNested}>Open the linked notes panel to jump into notes connected by task IDs, @task mentions, /task commands, or converted note selections.</p>
             </section>
 
             <section className={styles.detailSection} aria-labelledby={`task-${task.id}-dependencies-heading`}>

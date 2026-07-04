@@ -35,6 +35,9 @@ public class NoteTaskLink {
     @Column(name = "selected_text", columnDefinition = "text")
     private String selectedText;
 
+    @Column(name = "link_type", nullable = false, length = 100)
+    private String linkType = "MENTION";
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -48,11 +51,14 @@ public class NoteTaskLink {
     public void setTask(Task task) { this.task = task; }
     public String getSelectedText() { return selectedText; }
     public void setSelectedText(String selectedText) { this.selectedText = selectedText; }
+    public String getLinkType() { return linkType; }
+    public void setLinkType(String linkType) { this.linkType = linkType; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
     @PrePersist
     public void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        if (linkType == null || linkType.isBlank()) linkType = "MENTION";
     }
 }

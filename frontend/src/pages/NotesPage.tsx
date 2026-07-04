@@ -196,7 +196,7 @@ export function NotesPage() {
     tags: tagFilter,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, updateNote, deleteNote, uploadScreenshot, convertNoteToTask } =
+  const { createNote, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
@@ -204,6 +204,8 @@ export function NotesPage() {
     deleteNote.data,
     uploadScreenshot.data,
     convertNoteToTask.data,
+    createTaskLink.data,
+    deleteTaskLink.data,
   );
   const availableTasks = useMemo<TaskRecord[]>(
     () => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []),
@@ -220,7 +222,7 @@ export function NotesPage() {
     });
   }, [linkedTaskId, notesQuery.data]);
   const isBusy =
-    createNote.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending;
+    createNote.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending;
   const isUploadPending = uploadScreenshot.isPending;
   const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
@@ -259,6 +261,30 @@ export function NotesPage() {
         parentTaskId: convertTaskModal.parentTaskId ? Number(convertTaskModal.parentTaskId) : null,
       },
     }, { onSuccess: (result) => { if (result.ok) setConvertTaskModal(null); } });
+  };
+
+
+  const linkMentionedTask = (noteId: number, taskId: number, selectedText: string, linkType = "MENTION") => {
+    createTaskLink.mutate({ noteId, body: { taskId, selectedText, linkType } });
+  };
+
+  const handleTaskMentionShortcut = () => {
+    if (editingNoteId === null) {
+      setClipboardImageMessage({ kind: "error", text: "Save the note before linking task mentions." });
+      return;
+    }
+
+    const textarea = noteBodyRef.current;
+    const selected = textarea && textarea.selectionStart !== textarea.selectionEnd
+      ? activeForm.body.slice(textarea.selectionStart, textarea.selectionEnd)
+      : "";
+    const firstTask = availableTasks.find((task) => String(task.id) === activeForm.taskId) ?? availableTasks[0];
+    if (!firstTask) {
+      setClipboardImageMessage({ kind: "error", text: "Create or load a task before adding a task mention." });
+      return;
+    }
+
+    linkMentionedTask(editingNoteId, firstTask.id, selected || `@task ${firstTask.title}`);
   };
 
   const resetForm = () => {
@@ -1137,6 +1163,15 @@ export function NotesPage() {
                 </div>
               </div>
               <CodePreview body={note.body} contentType={note.contentType} />
+              {note.taskLinks?.length ? (
+                <div className="row compact-row" aria-label={`Linked tasks for ${note.title}`} style={{ marginTop: "var(--space-3)" }}>
+                  {note.taskLinks.map((link) => (
+                    <Link key={link.id} className="status-badge status-other" to={`/tasks?focusTaskId=${encodeURIComponent(String(link.taskId))}`} title={link.selectedText ?? undefined}>
+                      {link.linkType === "CONVERTED_SELECTION" ? "Converted" : "@task"} #{link.taskId} {link.taskTitle ?? "Task"}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
               <form
                 className="panel"
                 onSubmit={(event) => handleScreenshotSubmit(event, note)}
@@ -1418,6 +1453,12 @@ export function NotesPage() {
             disabled={isBusy}
             onConvertToTask={(block) => openConvertTaskModal(block.content ?? "")}
           />
+          <div className="row compact-row">
+            <button type="button" disabled={editingNoteId === null || availableTasks.length === 0 || isBusy} onClick={handleTaskMentionShortcut}>
+              Link @task mention
+            </button>
+            <span className="muted">Type @task or /task in the note, select text, then link it to the current or first loaded task.</span>
+          </div>
           <label className="field-stack" htmlFor="noteBody">
             <span>Fallback body / migration source</span>
             <textarea
@@ -1428,12 +1469,29 @@ export function NotesPage() {
               ref={noteBodyRef}
               onPaste={(event) => void handleBodyPaste(event)}
               onChange={(event) => {
-                setForm((current) => ({ ...current, body: event.target.value }));
-                setDraftBlocks(blocksFromBody(event.target.value));
+                const nextBody = event.target.value;
+                setForm((current) => ({ ...current, body: nextBody }));
+                setDraftBlocks(blocksFromBody(nextBody));
+                if (editingNoteId !== null && /(^|\s)(@task|\/task)\b/i.test(nextBody)) {
+                  const selectedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
+                  if (selectedTask && !notes.find((note) => note.id === editingNoteId)?.taskLinks?.some((link) => link.taskId === selectedTask.id)) {
+                    linkMentionedTask(editingNoteId, selectedTask.id, selectedTask.title);
+                  }
+                }
               }}
               required
             />
           </label>
+          {editingNoteId !== null && notes.find((note) => note.id === editingNoteId)?.taskLinks?.length ? (
+            <div className="row compact-row" aria-label="Linked task chips">
+              {notes.find((note) => note.id === editingNoteId)?.taskLinks?.map((link) => (
+                <span key={link.id} className="status-badge status-other">
+                  <Link to={`/tasks?focusTaskId=${encodeURIComponent(String(link.taskId))}`}>#{link.taskId} {link.taskTitle ?? "Task"}</Link>
+                  <button type="button" onClick={() => deleteTaskLink.mutate({ noteId: editingNoteId, linkId: link.id })} disabled={isBusy}>×</button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="row compact-row">
             <button type="button" disabled={editingNoteId === null || !activeForm.body.trim()} onClick={() => {
               const textarea = noteBodyRef.current;
