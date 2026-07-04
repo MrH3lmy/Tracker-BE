@@ -61,3 +61,15 @@ export interface NoteBlockRecord {
   updatedAt?: string;
   taskLinks?: NoteTaskLinkRecord[];
 }
+
+
+export interface NoteTemplateRecord {
+  id: number;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  content: string;
+  blocksJson?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
