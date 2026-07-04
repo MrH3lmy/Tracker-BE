@@ -11,6 +11,10 @@ export interface NotesQueryFilters {
   contentType?: NoteContentType | 'all';
   taskId?: number | string;
   tags?: string | string[];
+  sortBy?: 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
+  sortDirection?: 'asc' | 'desc';
+  page?: number;
+  size?: number;
 }
 
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
@@ -22,7 +26,7 @@ export const queryKeys = {
   taskBlockers: ['tasks', 'blockers'] as const,
   noteBlocks: (noteId: number) => ['notes', noteId, 'blocks'] as const,
   noteTemplates: ['note-templates'] as const,
-  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? ''] as const,
+  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
@@ -46,6 +50,10 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     if (filters.taskId !== undefined && String(filters.taskId).trim() !== '') params.set('taskId', String(filters.taskId).trim());
     const tags = Array.isArray(filters.tags) ? filters.tags : filters.tags?.split(',') ?? [];
     tags.map((tag) => tag.trim()).filter(Boolean).forEach((tag) => params.append('tag', tag));
+    if (filters.sortBy) params.set('sortBy', filters.sortBy);
+    if (filters.sortDirection) params.set('sortDirection', filters.sortDirection);
+    if (filters.page !== undefined) params.set('page', String(filters.page));
+    if (filters.size !== undefined) params.set('size', String(filters.size));
     const query = params.toString();
     return apiJson<NoteRecord[]>('GET', `/api/v1/notes${query ? `?${query}` : ''}`);
   },

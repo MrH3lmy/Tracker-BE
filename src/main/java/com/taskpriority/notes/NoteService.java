@@ -27,6 +27,9 @@ import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -77,13 +80,15 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<NoteResponse> findAll(Long taskId, String query, NoteContentType contentType, List<String> tags) {
+    public List<NoteResponse> findAll(Long taskId, String query, NoteContentType contentType, List<String> tags,
+                                      String sortBy, String sortDirection, Integer page, Integer size) {
         if (taskId != null && !taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
-        return noteRepository.findAllMatching(taskId, normalizedQuery, contentType, !normalizedTags.isEmpty(), normalizedTags)
+        Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
+        return noteRepository.findAllMatching(taskId, normalizedQuery, contentType, !normalizedTags.isEmpty(), normalizedTags, pageable)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -334,6 +339,25 @@ public class NoteService {
                 .distinct()
                 .limit(20)
                 .toList();
+    }
+
+    private Pageable buildNotesPageable(String sortBy, String sortDirection, Integer page, Integer size, boolean taskScoped) {
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String property = switch (sortBy == null ? "" : sortBy.trim()) {
+            case "createdAt" -> "createdAt";
+            case "displayOrder" -> "displayOrder";
+            case "title" -> "title";
+            case "task" -> "task.title";
+            case "contentType" -> "contentType";
+            default -> taskScoped ? "displayOrder" : "updatedAt";
+        };
+        Sort sort = Sort.by(direction, property).and(Sort.by(direction, "id"));
+        if (page == null && size == null) {
+            return Pageable.unpaged(sort);
+        }
+        int safePage = Math.max(page == null ? 0 : page, 0);
+        int safeSize = Math.min(Math.max(size == null ? 50 : size, 1), 200);
+        return PageRequest.of(safePage, safeSize, sort);
     }
 
     private String normalizeQuery(String query) {

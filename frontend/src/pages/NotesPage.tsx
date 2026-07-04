@@ -93,6 +93,9 @@ interface TemplateVariableState {
   dueDate: string;
 }
 
+type NotesViewMode = 'sticky' | 'list' | 'table' | 'timeline';
+type NoteSortBy = 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
+
 interface ConvertTaskModalState {
   noteId: number;
   blockId?: number;
@@ -162,6 +165,9 @@ export function NotesPage() {
   const [searchParams] = useSearchParams();
   const linkedTaskId = searchParams.get("taskId")?.trim() ?? "";
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<NotesViewMode>("sticky");
+  const [sortBy, setSortBy] = useState<NoteSortBy>("updatedAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [contentTypeFilter, setContentTypeFilter] = useState<
     NoteContentType | "all"
   >("all");
@@ -208,6 +214,9 @@ export function NotesPage() {
     contentType: contentTypeFilter,
     taskId: linkedTaskId,
     tags: tagFilter,
+    sortBy,
+    sortDirection,
+    size: 100,
   });
   const tasksQuery = useTasksQuery("active");
   const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink } =
@@ -225,6 +234,10 @@ export function NotesPage() {
   const availableTasks = useMemo<TaskRecord[]>(
     () => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []),
     [tasksQuery.data],
+  );
+  const taskTitleById = useMemo(
+    () => new Map(availableTasks.map((task) => [task.id, task.title])),
+    [availableTasks],
   );
   const notes = useMemo(() => {
     const records = notesQuery.data?.data ?? [];
@@ -255,6 +268,23 @@ export function NotesPage() {
     activeForm.title.trim().length > 0 &&
     effectiveBody.trim().length > 0 &&
     !isBusy;
+  const groupedTimelineNotes = useMemo(() => {
+    return notes.reduce<Record<string, NoteRecord[]>>((groups, note) => {
+      const rawDate = sortBy === "createdAt" ? note.createdAt : note.updatedAt || note.createdAt;
+      const key = rawDate && !Number.isNaN(new Date(rawDate).getTime())
+        ? new Date(rawDate).toLocaleDateString()
+        : "No date";
+      groups[key] = [...(groups[key] ?? []), note];
+      return groups;
+    }, {});
+  }, [notes, sortBy]);
+
+  const noteStatus = (note: NoteRecord) => {
+    if (editingNoteId === note.id) return "Editing";
+    if ((note.attachments?.length ?? 0) > 0) return "Has attachments";
+    if ((note.taskLinks?.length ?? 0) > 0 || note.taskId) return "Linked";
+    return "Unlinked";
+  };
 
   const openConvertTaskModal = (sourceText: string, blockId?: number) => {
     if (editingNoteId === null) {
@@ -1128,6 +1158,44 @@ export function NotesPage() {
           </label>
         </div>
 
+        <div className="row compact-row" role="tablist" aria-label="Note view modes" style={{ marginTop: "var(--space-4)" }}>
+          {([
+            ["sticky", "Sticky board"],
+            ["list", "List"],
+            ["table", "Table"],
+            ["timeline", "Timeline"],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={viewMode === mode}
+              className={viewMode === mode ? "button-primary" : "secondary-action"}
+              onClick={() => setViewMode(mode)}
+            >
+              {label}
+            </button>
+          ))}
+          <label className="field-stack" htmlFor="noteSortBy" style={{ minWidth: "12rem" }}>
+            <span>Sort by</span>
+            <select id="noteSortBy" value={sortBy} onChange={(event) => setSortBy(event.target.value as NoteSortBy)}>
+              <option value="updatedAt">Updated date</option>
+              <option value="createdAt">Created date</option>
+              <option value="displayOrder">Sticky order</option>
+              <option value="title">Title</option>
+              <option value="task">Task</option>
+              <option value="contentType">Content type</option>
+            </select>
+          </label>
+          <label className="field-stack" htmlFor="noteSortDirection" style={{ minWidth: "10rem" }}>
+            <span>Direction</span>
+            <select id="noteSortDirection" value={sortDirection} onChange={(event) => setSortDirection(event.target.value as "asc" | "desc")}>
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </label>
+        </div>
+
         {screenshotNoteMessage ? (
           <p
             className={
@@ -1146,214 +1214,69 @@ export function NotesPage() {
           emptyMessage="No notes match the current filters."
         />
 
-        <div className="stacked-list" aria-label="Notes list">
-          {notes.map((note) => (
-            <article
-              key={note.id}
-              className="panel"
-              style={{ padding: "var(--space-5)", marginTop: "var(--space-4)" }}
-            >
-              <div className="section-header">
-                <div>
-                  <p className="eyebrow">
-                    Sticky note #{getStickyNoteNumber(note)} ·{" "}
-                    {humanizeContentType(note.contentType)}
-                  </p>
-                  <h3>{note.title}</h3>
-                  <p className="muted">
-                    Task {note.taskId ?? "none"} · Updated{" "}
-                    {formatDate(note.updatedAt)}
-                  </p>
-                  {note.tags && note.tags.length > 0 ? (
-                    <div
-                      className="row compact-row"
-                      aria-label={`Tags for ${note.title}`}
-                      style={{ marginTop: "var(--space-2)" }}
-                    >
-                      {note.tags.map((tag) => (
-                        <span key={tag} className="status-badge status-other">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
+        {viewMode === "sticky" ? (
+          <div className="panel" aria-label="Sticky note board" style={{ position: "relative", minHeight: "34rem", overflow: "auto", marginTop: "var(--space-4)", background: "linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(14, 165, 233, 0.08))" }}>
+            {notes.map((note, index) => (
+              <article key={note.id} className="panel" style={{ position: "absolute", left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, borderTop: `0.35rem solid ${note.color ?? "#facc15"}`, padding: "var(--space-4)" }}>
+                <p className="eyebrow">Sticky note #{getStickyNoteNumber(note)}</p>
+                <h3>{note.title}</h3>
+                <p className="muted">Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
+                <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
+                <div className="row compact-row" style={{ marginTop: "var(--space-3)" }}>
+                  <button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button>
+                  <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button>
                 </div>
-                <div className="row compact-row">
-                  <button type="button" onClick={() => copyBody(note)}>
-                    {copiedNoteId === note.id ? "Copied" : "Copy body"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingNoteId(note.id);
-                      setForm(noteToForm(note));
-                      setDraftBlocks(blocksFromBody(note.body ?? ""));
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteNote.mutate(note.id)}
-                    disabled={isBusy}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <CodePreview body={note.body} contentType={note.contentType} />
-              {note.taskLinks?.length ? (
-                <div className="row compact-row" aria-label={`Linked tasks for ${note.title}`} style={{ marginTop: "var(--space-3)" }}>
-                  {note.taskLinks.map((link) => (
-                    <Link key={link.id} className="status-badge status-other" to={`/tasks?focusTaskId=${encodeURIComponent(String(link.taskId))}`} title={link.selectedText ?? undefined}>
-                      {link.linkType === "CONVERTED_SELECTION" ? "Converted" : "@task"} #{link.taskId} {link.taskTitle ?? "Task"}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              <form
-                className="panel"
-                onSubmit={(event) => handleScreenshotSubmit(event, note)}
-                style={{
-                  margin: "var(--space-4) 0 0",
-                  padding: "var(--space-3)",
-                }}
-              >
-                <div
-                  className="section-header"
-                  style={{ alignItems: "end", gap: "var(--space-3)" }}
-                >
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {viewMode === "list" ? (
+          <div className="stacked-list" aria-label="Fast scanning notes list">
+            {notes.map((note) => (
+              <article key={note.id} className="panel" style={{ padding: "var(--space-4)", marginTop: "var(--space-3)" }}>
+                <div className="section-header">
                   <div>
-                    <h4 style={{ margin: 0 }}>Attach image</h4>
-                    <p className="muted" id={`screenshot-help-${note.id}`}>
-                      Supports {SUPPORTED_SCREENSHOT_TYPES}. Use “Take area screenshot” to capture and crop part of a screen, window, or tab. Backend limit from{" "}
-                      <code>app.notes.screenshots.max-file-size-bytes</code>:{" "}
-                      {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.
-                    </p>
+                    <h3>{note.title}</h3>
+                    <p className="muted">{humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
+                    <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
-                  <div className="row compact-row">
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      onClick={() => void handleTakeScreenshot(note)}
-                      disabled={isUploadPending || isCapturePending}
-                    >
-                      {capturingNoteId === note.id
-                        ? "Capturing..."
-                        : "Take area screenshot"}
-                    </button>
-                    <button
-                      type="submit"
-                      className="secondary-action"
-                      disabled={isUploadPending || isCapturePending}
-                    >
-                      {isUploadPending ? "Uploading..." : "Attach image"}
-                    </button>
+                  <div className="row compact-row"><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button></div>
+                </div>
+                <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
+                <form className="panel" onSubmit={(event) => handleScreenshotSubmit(event, note)} style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}>
+                  <div className="section-header" style={{ alignItems: "end", gap: "var(--space-3)" }}>
+                    <p className="muted" id={`screenshot-help-${note.id}`}>Attach {SUPPORTED_SCREENSHOT_TYPES}. Limit: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.</p>
+                    <div className="row compact-row"><button type="button" className="secondary-action" onClick={() => void handleTakeScreenshot(note)} disabled={isUploadPending || isCapturePending}>{capturingNoteId === note.id ? "Capturing..." : "Take area screenshot"}</button><button type="submit" className="secondary-action" disabled={isUploadPending || isCapturePending}>{isUploadPending ? "Uploading..." : "Attach image"}</button></div>
                   </div>
-                </div>
-                <div
-                  className="row"
-                  style={{ alignItems: "end", flexWrap: "wrap" }}
-                >
-                  <label
-                    className="field-stack"
-                    htmlFor={`screenshot-file-${note.id}`}
-                    style={{ flex: "1 1 18rem" }}
-                  >
-                    <span>Image file</span>
-                    <input
-                      id={`screenshot-file-${note.id}`}
-                      name="screenshot"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      aria-describedby={`screenshot-help-${note.id}`}
-                      disabled={isUploadPending}
-                      ref={(element) => {
-                        screenshotFileInputs.current[note.id] = element;
-                      }}
-                      required
-                    />
-                  </label>
-                  <label
-                    className="field-stack"
-                    htmlFor={`screenshot-caption-${note.id}`}
-                    style={{ flex: "1 1 18rem" }}
-                  >
-                    <span>Caption (optional)</span>
-                    <input
-                      id={`screenshot-caption-${note.id}`}
-                      value={attachmentCaptions[note.id] ?? ""}
-                      placeholder={`Defaults to “${note.title}”`}
-                      onChange={(event) =>
-                        setAttachmentCaptions((current) => ({
-                          ...current,
-                          [note.id]: event.target.value,
-                        }))
-                      }
-                      disabled={isUploadPending}
-                    />
-                  </label>
-                </div>
-                {screenshotMessages[note.id] ? (
-                  <p
-                    className={
-                      screenshotMessages[note.id].kind === "error"
-                        ? "error-text"
-                        : "muted"
-                    }
-                    role={
-                      screenshotMessages[note.id].kind === "error"
-                        ? "alert"
-                        : "status"
-                    }
-                  >
-                    {screenshotMessages[note.id].text}
-                  </p>
-                ) : null}
-              </form>
-              {note.attachments
-                ?.filter(
-                  (attachment) =>
-                    attachment.kind === "SCREENSHOT" && attachment.downloadUrl,
-                )
-                .map((attachment) => (
-                  <figure
-                    key={attachment.id}
-                    className="panel"
-                    style={{
-                      margin: "var(--space-4) 0 0",
-                      padding: "var(--space-3)",
-                    }}
-                  >
-                    <img
-                      src={attachment.downloadUrl!}
-                      alt={attachment.caption ?? attachment.fileName}
-                      style={{
-                        display: "block",
-                        maxWidth: "100%",
-                        height: "auto",
-                        borderRadius: "var(--radius-md)",
-                      }}
-                    />
-                    <figcaption
-                      className="muted"
-                      style={{ marginTop: "var(--space-2)" }}
-                    >
-                      {attachment.caption ?? attachment.fileName}
-                      {" · "}
-                      <a
-                        href={attachment.downloadUrl!}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open/download attachment
-                      </a>
-                    </figcaption>
-                  </figure>
-                ))}
-            </article>
-          ))}
-        </div>
+                  <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}><label className="field-stack" htmlFor={`screenshot-file-${note.id}`} style={{ flex: "1 1 16rem" }}><span>Image file</span><input id={`screenshot-file-${note.id}`} name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby={`screenshot-help-${note.id}`} disabled={isUploadPending} ref={(element) => { screenshotFileInputs.current[note.id] = element; }} /></label><label className="field-stack" htmlFor={`screenshot-caption-${note.id}`} style={{ flex: "1 1 16rem" }}><span>Caption</span><input id={`screenshot-caption-${note.id}`} value={attachmentCaptions[note.id] ?? ""} placeholder={`Defaults to “${note.title}”`} onChange={(event) => setAttachmentCaptions((current) => ({ ...current, [note.id]: event.target.value }))} disabled={isUploadPending} /></label></div>
+                  {screenshotMessages[note.id] ? <p className={screenshotMessages[note.id].kind === "error" ? "error-text" : "muted"} role={screenshotMessages[note.id].kind === "error" ? "alert" : "status"}>{screenshotMessages[note.id].text}</p> : null}
+                </form>
+                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => <figure key={attachment.id} className="panel" style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}><img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} style={{ display: "block", maxWidth: "100%", height: "auto", borderRadius: "var(--radius-md)" }} /><figcaption className="muted" style={{ marginTop: "var(--space-2)" }}>{attachment.caption ?? attachment.fileName} · <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a></figcaption></figure>)}
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {viewMode === "table" ? (
+          <div className="table-scroll" style={{ marginTop: "var(--space-4)", overflowX: "auto" }}>
+            <table className="data-table" style={{ width: "100%" }}>
+              <thead><tr><th>Title</th><th>Task</th><th>Tags</th><th>Content type</th><th>Updated date</th><th>Attachments</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button></td></tr>)}</tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {viewMode === "timeline" ? (
+          <div className="stacked-list" aria-label="Notes timeline">
+            {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
+              <section key={date} className="panel" style={{ marginTop: "var(--space-4)", padding: "var(--space-4)" }}>
+                <h3>{date}</h3>
+                {dateNotes.map((note) => <article key={note.id} className="panel" style={{ marginTop: "var(--space-3)", padding: "var(--space-3)" }}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p></article>)}
+              </section>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section
