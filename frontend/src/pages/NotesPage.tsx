@@ -241,11 +241,17 @@ export function NotesPage() {
     () => new Map(availableTasks.map((task) => [task.id, task.title])),
     [availableTasks],
   );
-  const collections = collectionsQuery.data?.data ?? [];
-  const savedViews = savedViewsQuery.data?.data ?? [];
+  const collections = Array.isArray(collectionsQuery.data?.data)
+    ? collectionsQuery.data.data
+    : [];
+  const savedViews = Array.isArray(savedViewsQuery.data?.data)
+    ? savedViewsQuery.data.data
+    : [];
 
-  const notes = useMemo(() => {
-    const records = notesQuery.data?.data ?? [];
+  const notes = useMemo<NoteRecord[]>(() => {
+    const records: NoteRecord[] = Array.isArray(notesQuery.data?.data)
+      ? notesQuery.data.data
+      : [];
     if (!linkedTaskId) return records;
 
     return [...records].sort((first, second) => {
@@ -270,11 +276,20 @@ export function NotesPage() {
   const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
   const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
   const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
-  const aiGenerations = useMemo<NoteAiGenerationRecord[]>(() => aiGenerationsQuery.data?.data ?? [], [aiGenerationsQuery.data]);
-  const noteVersions = useMemo<NoteVersionRecord[]>(() => noteVersionsQuery.data?.data ?? [], [noteVersionsQuery.data]);
+  const aiGenerations = useMemo<NoteAiGenerationRecord[]>(
+    () => (Array.isArray(aiGenerationsQuery.data?.data) ? aiGenerationsQuery.data.data : []),
+    [aiGenerationsQuery.data],
+  );
+  const noteVersions = useMemo<NoteVersionRecord[]>(
+    () => (Array.isArray(noteVersionsQuery.data?.data) ? noteVersionsQuery.data.data : []),
+    [noteVersionsQuery.data],
+  );
   const selectedVersion = useMemo(() => noteVersions.find((version) => version.id === selectedVersionId) ?? noteVersions[0] ?? null, [noteVersions, selectedVersionId]);
   const versionHistoryNote = useMemo(() => notes.find((note) => note.id === versionHistoryNoteId) ?? null, [notes, versionHistoryNoteId]);
-  const templates = useMemo<NoteTemplateRecord[]>(() => templatesQuery.data?.data ?? [], [templatesQuery.data]);
+  const templates = useMemo<NoteTemplateRecord[]>(
+    () => (Array.isArray(templatesQuery.data?.data) ? templatesQuery.data.data : []),
+    [templatesQuery.data],
+  );
   const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
   const renderedTemplatePreview = selectedTemplate ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content) : '';
   const canCreateFromTemplate = Boolean(selectedTemplate) && !isBusy;
