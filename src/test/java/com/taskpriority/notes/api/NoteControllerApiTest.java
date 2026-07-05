@@ -187,6 +187,38 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
+
+    @Test
+    void findAllReturnsBadRequestForInvalidCreatedFromDate() throws Exception {
+        mockMvc.perform(get("/api/v1/notes").param("createdFrom", "not-a-date"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(containsString("Date query parameters must use ISO date")))
+                .andExpect(jsonPath("$.path").value("/api/v1/notes"));
+    }
+
+    @Test
+    void findAllReturnsBadRequestForInvalidSortBy() throws Exception {
+        mockMvc.perform(get("/api/v1/notes").param("sortBy", "priority"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(containsString("sortBy must be one of")))
+                .andExpect(jsonPath("$.message").value(containsString("createdAt")))
+                .andExpect(jsonPath("$.path").value("/api/v1/notes"));
+    }
+
+    @Test
+    void findAllReturnsBadRequestForInvalidSortDirection() throws Exception {
+        mockMvc.perform(get("/api/v1/notes").param("sortDirection", "sideways"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("sortDirection must be one of: asc, desc"))
+                .andExpect(jsonPath("$.path").value("/api/v1/notes"));
+    }
+
     @Test
     void findAllSearchesNotesByTitleFragment() throws Exception {
         createNote("Sprint retro ideas", "Discuss team improvements", null);
