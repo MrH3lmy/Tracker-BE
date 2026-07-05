@@ -141,7 +141,7 @@ export function NotesPage() {
   const [searchParams] = useSearchParams();
   const linkedTaskId = searchParams.get("taskId")?.trim() ?? "";
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<NotesViewMode>("sticky");
+  const [viewMode, setViewMode] = useState<NotesViewMode>("list");
   const [sortBy, setSortBy] = useState<NoteSortBy>("updatedAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [contentTypeFilter, setContentTypeFilter] = useState<
