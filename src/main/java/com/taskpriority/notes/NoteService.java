@@ -39,6 +39,9 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -85,6 +88,8 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteResponse> findAll(Long taskId, Long collectionId, String query, NoteContentType contentType, List<String> tags,
+                                      Boolean hasAttachments, Boolean linkedTask, String createdFrom, String createdTo,
+                                      String updatedFrom, String updatedTo, Boolean untagged, String tagMode,
                                       String sortBy, String sortDirection, Integer page, Integer size) {
         if (taskId != null && !taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
@@ -95,7 +100,11 @@ public class NoteService {
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
-        return noteRepository.findAllMatching(taskId, collectionId, normalizedQuery, contentType, !normalizedTags.isEmpty(), normalizedTags, pageable)
+        boolean matchAllTags = "all".equalsIgnoreCase(tagMode);
+        long requiredTagCount = matchAllTags ? normalizedTags.size() : 0L;
+        return noteRepository.findAllMatching(taskId, collectionId, normalizedQuery, contentType, hasAttachments, linkedTask,
+                        parseStartDateTime(createdFrom), parseEndDateTime(createdTo), parseStartDateTime(updatedFrom),
+                        parseEndDateTime(updatedTo), untagged, !normalizedTags.isEmpty(), normalizedTags, requiredTagCount, pageable)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -382,6 +391,18 @@ public class NoteService {
             return null;
         }
         return query.trim();
+    }
+
+    private LocalDateTime parseStartDateTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        String trimmed = value.trim();
+        return trimmed.length() == 10 ? LocalDate.parse(trimmed).atStartOfDay() : LocalDateTime.parse(trimmed);
+    }
+
+    private LocalDateTime parseEndDateTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        String trimmed = value.trim();
+        return trimmed.length() == 10 ? LocalDate.parse(trimmed).atTime(LocalTime.MAX) : LocalDateTime.parse(trimmed);
     }
 
     private Integer defaultZero(Integer value) {
