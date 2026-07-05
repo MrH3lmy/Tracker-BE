@@ -24,12 +24,14 @@ public class NoteBlockService {
     private final NoteBlockRepository noteBlockRepository;
     private final com.taskpriority.repository.NoteTaskLinkRepository noteTaskLinkRepository;
     private final NoteTaskLinkMapper noteTaskLinkMapper;
+    private final NoteService noteService;
 
-    public NoteBlockService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository, com.taskpriority.repository.NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper) {
+    public NoteBlockService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository, com.taskpriority.repository.NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, NoteService noteService) {
         this.noteRepository = noteRepository;
         this.noteBlockRepository = noteBlockRepository;
         this.noteTaskLinkRepository = noteTaskLinkRepository;
         this.noteTaskLinkMapper = noteTaskLinkMapper;
+        this.noteService = noteService;
     }
 
     @Transactional(readOnly = true)
@@ -41,6 +43,7 @@ public class NoteBlockService {
     @Transactional
     public NoteBlockResponse create(Long noteId, CreateNoteBlockRequest request) {
         Note note = requireNote(noteId);
+        noteService.createVersionForNoteEdit(noteId, "block-create");
         NoteBlock block = new NoteBlock();
         block.setNote(note);
         block.setType(normalizeType(request.type()));
@@ -54,6 +57,7 @@ public class NoteBlockService {
     @Transactional
     public NoteBlockResponse update(Long noteId, Long blockId, UpdateNoteBlockRequest request) {
         requireNote(noteId);
+        noteService.createVersionForNoteEdit(noteId, "block-update");
         NoteBlock block = getBlock(noteId, blockId);
         if (request.type() != null) block.setType(normalizeType(request.type()));
         if (request.content() != null) block.setContent(request.content());
@@ -66,12 +70,14 @@ public class NoteBlockService {
     @Transactional
     public void delete(Long noteId, Long blockId) {
         requireNote(noteId);
+        noteService.createVersionForNoteEdit(noteId, "block-delete");
         noteBlockRepository.delete(getBlock(noteId, blockId));
     }
 
     @Transactional
     public List<NoteBlockResponse> reorder(Long noteId, ReorderNoteBlocksRequest request) {
         requireNote(noteId);
+        noteService.createVersionForNoteEdit(noteId, "block-reorder");
         List<NoteBlock> blocks = noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(noteId);
         Set<Long> ids = new HashSet<>(request.blockIds());
         if (ids.size() != request.blockIds().size() || !blocks.stream().map(NoteBlock::getId).collect(java.util.stream.Collectors.toSet()).equals(ids)) {

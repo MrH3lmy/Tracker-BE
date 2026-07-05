@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
-import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteBlockRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord } from '../components/notes/noteTypes';
+import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteBlockRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteVersionRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
@@ -38,6 +38,7 @@ export const queryKeys = {
   noteCollections: ['note-collections'] as const,
   noteSavedViews: ['note-saved-views'] as const,
   noteAiGenerations: (noteId: number) => ['notes', noteId, 'ai-generations'] as const,
+  noteVersions: (noteId: number) => ['notes', noteId, 'versions'] as const,
   notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.collectionId ?? '', filters?.hasAttachments ?? '', filters?.linkedTask ?? '', filters?.createdFrom ?? '', filters?.createdTo ?? '', filters?.updatedFrom ?? '', filters?.updatedTo ?? '', filters?.untagged ?? '', filters?.tagMode ?? 'any', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
@@ -83,6 +84,7 @@ export const useNoteTemplatesQuery = () => useQuery({ queryKey: queryKeys.noteTe
 export const useNoteCollectionsQuery = () => useQuery({ queryKey: queryKeys.noteCollections, queryFn: () => apiJson<NoteCollectionRecord[]>('GET', '/api/v1/note-collections') });
 export interface NoteSavedViewRecord { id: number; name: string; filters: Record<string, unknown>; sortField: string; sortDirection: 'asc' | 'desc'; viewType: string; createdAt?: string; updatedAt?: string; }
 export const useNoteSavedViewsQuery = () => useQuery({ queryKey: queryKeys.noteSavedViews, queryFn: () => apiJson<NoteSavedViewRecord[]>('GET', '/api/v1/note-saved-views') });
+export const useNoteVersionsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteVersions(noteId), queryFn: () => apiJson<NoteVersionRecord[]>('GET', `/api/v1/notes/${noteId}/versions`), enabled });
 export const useNoteAiGenerationsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteAiGenerations(noteId), queryFn: () => apiJson<NoteAiGenerationRecord[]>('GET', `/api/v1/notes/${noteId}/ai-generations`), enabled });
 export const useNoteBlocksQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteBlocks(noteId), queryFn: () => apiJson<NoteBlockRecord[]>('GET', `/api/v1/notes/${noteId}/blocks`), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
@@ -178,6 +180,7 @@ export function useNoteMutations() {
     convertNoteToTask: useMutation({ mutationFn: ({ noteId, blockId, body }: { noteId: number; blockId?: number; body: unknown }) => apiJson('POST', blockId ? `/api/v1/notes/${noteId}/blocks/${blockId}/convert-to-task` : `/api/v1/notes/${noteId}/convert-selection-to-task`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
     createTaskLink: useMutation({ mutationFn: ({ noteId, body }: { noteId: number; body: unknown }) => apiJson('POST', `/api/v1/notes/${noteId}/task-links`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
     deleteTaskLink: useMutation({ mutationFn: ({ noteId, linkId }: { noteId: number; linkId: number }) => apiJson('DELETE', `/api/v1/notes/${noteId}/task-links/${linkId}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
+    restoreNoteVersion: useMutation({ mutationFn: ({ noteId, versionId }: { noteId: number; versionId: number }) => apiJson<NoteRecord>('POST', `/api/v1/notes/${noteId}/versions/${versionId}/restore`), onSuccess: (_data, variables) => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: queryKeys.noteVersions(variables.noteId) }); } }),
     runNoteAiAction: useMutation({ mutationFn: ({ noteId, action }: { noteId: number; action: string }) => apiJson<NoteAiGenerationRecord>('POST', `/api/v1/notes/${noteId}/ai-actions`, { action }), onSuccess: (_data, variables) => { qc.invalidateQueries({ queryKey: queryKeys.noteAiGenerations(variables.noteId) }); qc.invalidateQueries({ queryKey: ['notes'] }); } }),
     createCollection: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/note-collections', body), onSuccess }),
     updateCollection: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PATCH', `/api/v1/note-collections/${id}`, body), onSuccess }),

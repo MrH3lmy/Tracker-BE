@@ -84,6 +84,21 @@ public class NoteController {
         return noteService.update(id, request);
     }
 
+    @GetMapping("/{id}/versions")
+    public List<NoteVersionResponse> versions(@PathVariable Long id) {
+        return noteService.findVersions(id);
+    }
+
+    @GetMapping("/{id}/versions/{versionId}")
+    public NoteVersionResponse version(@PathVariable Long id, @PathVariable Long versionId) {
+        return noteService.findVersion(id, versionId);
+    }
+
+    @PostMapping("/{id}/versions/{versionId}/restore")
+    public NoteResponse restoreVersion(@PathVariable Long id, @PathVariable Long versionId) {
+        return noteService.restoreVersion(id, versionId);
+    }
+
     @PatchMapping("/{id}/layout")
     public NoteResponse updateLayout(@PathVariable Long id, @Validated @RequestBody UpdateNoteLayoutRequest request) {
         return noteService.updateLayout(id, request);
