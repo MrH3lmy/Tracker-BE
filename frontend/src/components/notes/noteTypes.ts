@@ -14,12 +14,24 @@ export interface NoteAttachmentRecord {
   createdAt?: string;
 }
 
+export interface NoteCollectionRecord {
+  id: number;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface NoteRecord {
   id: number;
   title: string;
   body: string;
   contentType: NoteContentType;
   taskId?: number | null;
+  collectionId?: number | null;
+  collectionName?: string | null;
   displayOrder?: number | null;
   positionX?: number | null;
   positionY?: number | null;

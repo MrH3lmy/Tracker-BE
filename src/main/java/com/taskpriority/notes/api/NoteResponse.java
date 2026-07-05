@@ -11,6 +11,8 @@ public record NoteResponse(
         String body,
         NoteContentType contentType,
         Long taskId,
+        Long collectionId,
+        String collectionName,
         Integer displayOrder,
         Integer positionX,
         Integer positionY,
