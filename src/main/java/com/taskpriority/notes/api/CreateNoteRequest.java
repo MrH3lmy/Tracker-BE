@@ -20,6 +20,9 @@ public record CreateNoteRequest(
         @Positive(message = "taskId must be greater than 0")
         Long taskId,
 
+        @Positive(message = "collectionId must be greater than 0")
+        Long collectionId,
+
         Integer displayOrder,
 
         Integer positionX,

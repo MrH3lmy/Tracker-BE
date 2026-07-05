@@ -64,7 +64,7 @@ public class NoteTemplateService implements ApplicationRunner {
 
         String title = request.title() == null || request.title().isBlank() ? render(template.getName(), variables) : render(request.title(), variables);
         String body = render(template.getContent(), variables);
-        NoteResponse created = noteService.create(new CreateNoteRequest(title, body, NoteContentType.MARKDOWN, request.taskId(), null, null, null, null, null, null, null, request.tags()));
+        NoteResponse created = noteService.create(new CreateNoteRequest(title, body, NoteContentType.MARKDOWN, request.taskId(), null, null, null, null, null, null, null, null, request.tags()));
         createBlocks(created.id(), template.getBlocksJson(), variables);
         return noteService.findById(created.id());
     }

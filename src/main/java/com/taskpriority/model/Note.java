@@ -29,7 +29,8 @@ import java.util.Set;
 @Table(name = "notes", indexes = {
         @Index(name = "idx_notes_task_id", columnList = "task_id"),
         @Index(name = "idx_notes_content_type", columnList = "content_type"),
-        @Index(name = "idx_notes_created_at", columnList = "created_at")
+        @Index(name = "idx_notes_created_at", columnList = "created_at"),
+        @Index(name = "idx_notes_collection_id", columnList = "collection_id")
 })
 public class Note {
 
@@ -81,6 +82,11 @@ public class Note {
     @Column(name = "z_index", nullable = false)
     private Integer zIndex = 0;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "collection_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private NoteCollection collection;
+
     @ManyToMany
     @JoinTable(
             name = "note_tags",
@@ -123,6 +129,8 @@ public class Note {
     public void setColor(String color) { this.color = color; }
     public Integer getZIndex() { return zIndex; }
     public void setZIndex(Integer zIndex) { this.zIndex = zIndex; }
+    public NoteCollection getCollection() { return collection; }
+    public void setCollection(NoteCollection collection) { this.collection = collection; }
     public Set<Tag> getTags() { return tags; }
     public void setTags(Set<Tag> tags) { this.tags = tags; }
 

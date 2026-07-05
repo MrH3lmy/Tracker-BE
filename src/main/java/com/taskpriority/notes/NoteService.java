@@ -7,6 +7,7 @@ import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteAttachmentKind;
 import com.taskpriority.model.NoteContentType;
+import com.taskpriority.model.NoteCollection;
 import com.taskpriority.model.NoteBlock;
 import com.taskpriority.model.NoteTaskLink;
 import com.taskpriority.model.Task;
@@ -23,6 +24,7 @@ import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
+import com.taskpriority.repository.NoteCollectionRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
@@ -51,6 +53,7 @@ import java.util.stream.Collectors;
 @Service
 public class NoteService {
     private final NoteRepository noteRepository;
+    private final NoteCollectionRepository noteCollectionRepository;
     private static final Set<String> ALLOWED_SCREENSHOT_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/webp");
     private static final int MAX_ATTACHMENT_FILE_NAME_LENGTH = 255;
     private static final int MAX_ATTACHMENT_CAPTION_LENGTH = 500;
@@ -65,10 +68,11 @@ public class NoteService {
     private final ObjectMapper objectMapper;
     private final long maxScreenshotSizeBytes;
 
-    public NoteService(NoteRepository noteRepository, TaskRepository taskRepository, TagRepository tagRepository,
+    public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
+        this.noteCollectionRepository = noteCollectionRepository;
         this.taskRepository = taskRepository;
         this.tagRepository = tagRepository;
         this.noteAttachmentRepository = noteAttachmentRepository;
@@ -80,15 +84,18 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<NoteResponse> findAll(Long taskId, String query, NoteContentType contentType, List<String> tags,
+    public List<NoteResponse> findAll(Long taskId, Long collectionId, String query, NoteContentType contentType, List<String> tags,
                                       String sortBy, String sortDirection, Integer page, Integer size) {
         if (taskId != null && !taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
+        if (collectionId != null && !noteCollectionRepository.existsById(collectionId)) {
+            throw new ResourceNotFoundException("Note collection with id " + collectionId + " not found");
+        }
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
-        return noteRepository.findAllMatching(taskId, normalizedQuery, contentType, !normalizedTags.isEmpty(), normalizedTags, pageable)
+        return noteRepository.findAllMatching(taskId, collectionId, normalizedQuery, contentType, !normalizedTags.isEmpty(), normalizedTags, pageable)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -186,6 +193,7 @@ public class NoteService {
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
+        note.setCollection(resolveCollection(request.collectionId()));
         note.setDisplayOrder(defaultZero(request.displayOrder()));
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
@@ -206,6 +214,7 @@ public class NoteService {
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
+        note.setCollection(resolveCollection(request.collectionId()));
         note.setDisplayOrder(defaultZero(request.displayOrder()));
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
@@ -291,6 +300,14 @@ public class NoteService {
     private Note getNote(Long id) {
         return noteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Note with id " + id + " not found"));
+    }
+
+    private NoteCollection resolveCollection(Long collectionId) {
+        if (collectionId == null) {
+            return null;
+        }
+        return noteCollectionRepository.findById(collectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Note collection with id " + collectionId + " not found"));
     }
 
     private Task resolveTask(Long taskId) {
@@ -499,6 +516,8 @@ public class NoteService {
 
     private NoteResponse toResponse(Note note) {
         Long taskId = note.getTask() == null ? null : note.getTask().getId();
+        Long collectionId = note.getCollection() == null ? null : note.getCollection().getId();
+        String collectionName = note.getCollection() == null ? null : note.getCollection().getName();
         List<String> tags = note.getTags().stream()
                 .map(Tag::getName)
                 .sorted(Comparator.naturalOrder())
@@ -509,6 +528,8 @@ public class NoteService {
                 note.getBody(),
                 note.getContentType(),
                 taskId,
+                collectionId,
+                collectionName,
                 note.getDisplayOrder(),
                 note.getPositionX(),
                 note.getPositionY(),

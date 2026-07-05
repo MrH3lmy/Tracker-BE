@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
-import type { NoteAttachmentRecord, NoteBlockRecord, NoteContentType, NoteRecord, NoteTemplateRecord } from '../components/notes/noteTypes';
+import type { NoteAttachmentRecord, NoteBlockRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord } from '../components/notes/noteTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
@@ -11,6 +11,7 @@ export interface NotesQueryFilters {
   contentType?: NoteContentType | 'all';
   taskId?: number | string;
   tags?: string | string[];
+  collectionId?: number | string;
   sortBy?: 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
   sortDirection?: 'asc' | 'desc';
   page?: number;
@@ -26,7 +27,8 @@ export const queryKeys = {
   taskBlockers: ['tasks', 'blockers'] as const,
   noteBlocks: (noteId: number) => ['notes', noteId, 'blocks'] as const,
   noteTemplates: ['note-templates'] as const,
-  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
+  noteCollections: ['note-collections'] as const,
+  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.collectionId ?? '', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
@@ -48,6 +50,7 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     if (q) params.set('q', q);
     if (filters.contentType && filters.contentType !== 'all') params.set('contentType', filters.contentType);
     if (filters.taskId !== undefined && String(filters.taskId).trim() !== '') params.set('taskId', String(filters.taskId).trim());
+    if (filters.collectionId !== undefined && String(filters.collectionId).trim() !== '') params.set('collectionId', String(filters.collectionId).trim());
     const tags = Array.isArray(filters.tags) ? filters.tags : filters.tags?.split(',') ?? [];
     tags.map((tag) => tag.trim()).filter(Boolean).forEach((tag) => params.append('tag', tag));
     if (filters.sortBy) params.set('sortBy', filters.sortBy);
@@ -59,6 +62,7 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
   },
 });
 export const useNoteTemplatesQuery = () => useQuery({ queryKey: queryKeys.noteTemplates, queryFn: () => apiJson<NoteTemplateRecord[]>('GET', '/api/v1/note-templates') });
+export const useNoteCollectionsQuery = () => useQuery({ queryKey: queryKeys.noteCollections, queryFn: () => apiJson<NoteCollectionRecord[]>('GET', '/api/v1/note-collections') });
 export const useNoteBlocksQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteBlocks(noteId), queryFn: () => apiJson<NoteBlockRecord[]>('GET', `/api/v1/notes/${noteId}/blocks`), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
@@ -140,7 +144,7 @@ export function useTaskMutations() {
 }
 export function useNoteMutations() {
   const qc = useQueryClient();
-  const onSuccess = () => qc.invalidateQueries({ queryKey: ['notes'] });
+  const onSuccess = () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: queryKeys.noteCollections }); };
   return {
     createNote: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/notes', body), onSuccess }),
     createNoteFromTemplate: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/notes/from-template', body), onSuccess }),
@@ -153,6 +157,9 @@ export function useNoteMutations() {
     convertNoteToTask: useMutation({ mutationFn: ({ noteId, blockId, body }: { noteId: number; blockId?: number; body: unknown }) => apiJson('POST', blockId ? `/api/v1/notes/${noteId}/blocks/${blockId}/convert-to-task` : `/api/v1/notes/${noteId}/convert-selection-to-task`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
     createTaskLink: useMutation({ mutationFn: ({ noteId, body }: { noteId: number; body: unknown }) => apiJson('POST', `/api/v1/notes/${noteId}/task-links`, body), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
     deleteTaskLink: useMutation({ mutationFn: ({ noteId, linkId }: { noteId: number; linkId: number }) => apiJson('DELETE', `/api/v1/notes/${noteId}/task-links/${linkId}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); } }),
+    createCollection: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/note-collections', body), onSuccess }),
+    updateCollection: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PATCH', `/api/v1/note-collections/${id}`, body), onSuccess }),
+    deleteCollection: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/note-collections/${id}`), onSuccess }),
     uploadScreenshot: useMutation({
       mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
         const formData = new FormData();

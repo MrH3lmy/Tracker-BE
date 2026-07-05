@@ -12,6 +12,7 @@ import type {
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
   latestResult,
+  useNoteCollectionsQuery,
   useNoteMutations,
   useNoteTemplatesQuery,
   useNotesQuery,
@@ -29,6 +30,7 @@ const EMPTY_FORM: NoteFormState = {
   title: "",
   contentType: "PLAIN_TEXT",
   taskId: "",
+  collectionId: "",
   tags: "",
   body: "",
 };
@@ -75,6 +77,7 @@ interface NoteFormState {
   title: string;
   contentType: NoteContentType;
   taskId: string;
+  collectionId: string;
   tags: string;
   body: string;
 }
@@ -134,6 +137,7 @@ function noteToForm(note: NoteRecord): NoteFormState {
     title: note.title,
     contentType: note.contentType,
     taskId: note.taskId == null ? "" : String(note.taskId),
+    collectionId: note.collectionId == null ? "" : String(note.collectionId),
     tags: note.tags?.join(", ") ?? "",
     body: note.body,
   };
@@ -152,10 +156,12 @@ function parseTags(value: string): string[] {
 
 function buildPayload(form: NoteFormState) {
   const trimmedTaskId = form.taskId.trim();
+  const trimmedCollectionId = form.collectionId.trim();
   return {
     title: form.title.trim(),
     contentType: form.contentType,
     taskId: trimmedTaskId ? Number(trimmedTaskId) : null,
+    collectionId: trimmedCollectionId ? Number(trimmedCollectionId) : null,
     tags: parseTags(form.tags),
     body: form.body,
   };
@@ -172,6 +178,7 @@ export function NotesPage() {
     NoteContentType | "all"
   >("all");
   const [tagFilter, setTagFilter] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState("");
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -209,10 +216,12 @@ export function NotesPage() {
   const screenshotNoteHandlerRef = useRef<() => Promise<void>>(async () => undefined);
 
   const templatesQuery = useNoteTemplatesQuery();
+  const collectionsQuery = useNoteCollectionsQuery();
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
     taskId: linkedTaskId,
+    collectionId: collectionFilter,
     tags: tagFilter,
     sortBy,
     sortDirection,
@@ -239,6 +248,8 @@ export function NotesPage() {
     () => new Map(availableTasks.map((task) => [task.id, task.title])),
     [availableTasks],
   );
+  const collections = collectionsQuery.data?.data ?? [];
+
   const notes = useMemo(() => {
     const records = notesQuery.data?.data ?? [];
     if (!linkedTaskId) return records;
@@ -249,6 +260,9 @@ export function NotesPage() {
       return orderDelta === 0 ? first.id - second.id : orderDelta;
     });
   }, [linkedTaskId, notesQuery.data]);
+  const recentNotes = useMemo(() => [...notes].sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()).slice(0, 5), [notes]);
+  const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
+  const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
   const isBusy =
     createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending;
   const isUploadPending = uploadScreenshot.isPending;
@@ -1078,6 +1092,26 @@ export function NotesPage() {
         </div>
       </header>
 
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(14rem, 18rem) 1fr", gap: "var(--space-4)", alignItems: "start" }}>
+        <aside className="page-card" aria-label="Notes navigation" style={{ position: "sticky", top: "var(--space-4)" }}>
+          <p className="eyebrow">Notes navigation</p>
+          <h3>Collections</h3>
+          <button type="button" className={!collectionFilter ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter("")}>All notes</button>
+          <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
+            {collections.map((collection) => (
+              <button key={collection.id} type="button" className={collectionFilter === String(collection.id) ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter(String(collection.id))} style={{ justifyContent: "flex-start", borderLeft: `0.35rem solid ${collection.color ?? "#38bdf8"}` }}>
+                {collection.icon ?? "📁"} {collection.name}
+              </button>
+            ))}
+          </div>
+          <h4>Recent notes</h4>
+          {recentNotes.map((note) => <button key={note.id} type="button" className="link-button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>{note.title}</button>)}
+          <h4>Task-linked</h4>
+          {taskLinkedNotes.length ? taskLinkedNotes.map((note) => <p key={note.id} className="muted">{note.title}</p>) : <p className="muted">No task-linked notes.</p>}
+          <h4>Archived</h4>
+          {archivedNotes.length ? archivedNotes.map((note) => <p key={note.id} className="muted">{note.title}</p>) : <p className="muted">Tag notes with archived to show them here.</p>}
+        </aside>
+
       <section
         className="page-card main-content-card"
         aria-labelledby="notes-filters-title"
@@ -1132,6 +1166,13 @@ export function NotesPage() {
               placeholder="Filter by tag, e.g. backend"
               onChange={(event) => setTagFilter(event.target.value)}
             />
+          </label>
+          <label className="field-stack" htmlFor="noteCollectionFilter" style={{ flex: "0 1 16rem" }}>
+            <span>Collection</span>
+            <select id="noteCollectionFilter" value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)}>
+              <option value="">All collections</option>
+              {collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}
+            </select>
           </label>
           <label
             className="field-stack"
@@ -1220,7 +1261,7 @@ export function NotesPage() {
               <article key={note.id} className="panel" style={{ position: "absolute", left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, borderTop: `0.35rem solid ${note.color ?? "#facc15"}`, padding: "var(--space-4)" }}>
                 <p className="eyebrow">Sticky note #{getStickyNoteNumber(note)}</p>
                 <h3>{note.title}</h3>
-                <p className="muted">Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
+                <p className="muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
                 <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
                 <div className="row compact-row" style={{ marginTop: "var(--space-3)" }}>
                   <button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button>
@@ -1238,7 +1279,7 @@ export function NotesPage() {
                 <div className="section-header">
                   <div>
                     <h3>{note.title}</h3>
-                    <p className="muted">{humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
+                    <p className="muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
                     <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
                   <div className="row compact-row"><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button></div>
@@ -1278,6 +1319,7 @@ export function NotesPage() {
           </div>
         ) : null}
       </section>
+      </div>
 
       <section
         className="page-card main-content-card"
@@ -1421,6 +1463,13 @@ export function NotesPage() {
                     {task.title}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="field-stack" htmlFor="noteCollectionId" style={{ flex: "0 1 12rem" }}>
+              <span>Collection</span>
+              <select id="noteCollectionId" value={activeForm.collectionId} onChange={(event) => setForm((current) => ({ ...current, collectionId: event.target.value }))}>
+                <option value="">No collection</option>
+                {collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}
               </select>
             </label>
             <label
