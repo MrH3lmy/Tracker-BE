@@ -260,6 +260,13 @@ export function NotesPage() {
       return orderDelta === 0 ? first.id - second.id : orderDelta;
     });
   }, [linkedTaskId, notesQuery.data]);
+  const notesQueryErrorMessage =
+    notesQuery.data && !notesQuery.data.ok
+      ? notesQuery.data.error?.message ??
+        (notesQuery.data.status
+          ? `Request failed with status ${notesQuery.data.status}.`
+          : notesQuery.data.error?.details ?? "Request failed.")
+      : undefined;
   const recentNotes = useMemo(() => [...notes].sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()).slice(0, 5), [notes]);
   const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
   const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
@@ -1278,6 +1285,7 @@ export function NotesPage() {
           isLoading={notesQuery.isLoading}
           isError={Boolean(notesQuery.data && !notesQuery.data.ok)}
           isEmpty={!notesQuery.isLoading && notes.length === 0}
+          errorMessage={notesQueryErrorMessage}
           emptyMessage="No notes match the current filters."
         />
 
