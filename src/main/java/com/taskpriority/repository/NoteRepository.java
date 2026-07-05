@@ -21,7 +21,7 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     List<Note> findByContentTypeOrderByUpdatedAtDescIdDesc(NoteContentType contentType);
 
     default List<Note> findAllMatching(Long taskId, String query, NoteContentType contentType) {
-        return findAllMatching(taskId, null, query, contentType, null, null, null, null, null, null, null, false, List.of(), 0L, Pageable.unpaged()).getContent();
+        return findAllMatching(taskId, null, query, contentType, null, null, null, null, null, null, null, false, List.<String>of(), 0L, Pageable.unpaged()).getContent();
     }
 
     @EntityGraph(attributePaths = {"tags", "collection"})
