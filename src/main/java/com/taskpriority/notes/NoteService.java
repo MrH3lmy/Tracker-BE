@@ -10,11 +10,13 @@ import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.NoteCollection;
 import com.taskpriority.model.NoteBlock;
 import com.taskpriority.model.NoteTaskLink;
+import com.taskpriority.model.NoteVersion;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
 import com.taskpriority.notes.api.CreateNoteTaskLinkRequest;
 import com.taskpriority.notes.api.NoteTaskLinkResponse;
+import com.taskpriority.notes.api.NoteVersionResponse;
 import com.taskpriority.notes.api.CreateScreenshotRequest;
 import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
@@ -26,6 +28,7 @@ import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.NoteCollectionRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
+import com.taskpriority.repository.NoteVersionRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +45,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -67,12 +71,15 @@ public class NoteService {
     private final NoteAttachmentRepository noteAttachmentRepository;
     private final NoteBlockRepository noteBlockRepository;
     private final NoteTaskLinkRepository noteTaskLinkRepository;
+    private final NoteVersionRepository noteVersionRepository;
     private final NoteTaskLinkMapper noteTaskLinkMapper;
     private final ObjectMapper objectMapper;
     private final long maxScreenshotSizeBytes;
+    private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
+    private static final int MAJOR_EDIT_BODY_DELTA = 120;
 
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
-                       NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
+                       NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
@@ -81,6 +88,7 @@ public class NoteService {
         this.noteAttachmentRepository = noteAttachmentRepository;
         this.noteBlockRepository = noteBlockRepository;
         this.noteTaskLinkRepository = noteTaskLinkRepository;
+        this.noteVersionRepository = noteVersionRepository;
         this.noteTaskLinkMapper = noteTaskLinkMapper;
         this.objectMapper = objectMapper;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
@@ -219,6 +227,7 @@ public class NoteService {
         NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
 
         Note note = getNote(id);
+        createVersionBeforeEdit(note, request.title(), request.body(), request.contentType(), request.tags(), "note-update");
         note.setTitle(request.title().trim());
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
@@ -232,6 +241,33 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(request.tags()));
+        return toResponse(noteRepository.save(note));
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<NoteVersionResponse> findVersions(Long noteId) {
+        if (!noteRepository.existsById(noteId)) {
+            throw new ResourceNotFoundException("Note with id " + noteId + " not found");
+        }
+        return noteVersionRepository.findByNoteIdOrderByCreatedAtDescIdDesc(noteId).stream().map(this::toVersionResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public NoteVersionResponse findVersion(Long noteId, Long versionId) {
+        return toVersionResponse(getVersion(noteId, versionId));
+    }
+
+    @Transactional
+    public NoteResponse restoreVersion(Long noteId, Long versionId) {
+        Note note = getNote(noteId);
+        NoteVersion version = getVersion(noteId, versionId);
+        createSnapshot(note, "pre-restore");
+        note.setTitle(version.getTitle());
+        note.setBody(version.getBody());
+        note.setContentType(version.getContentType());
+        note.setTags(resolveTags(parseTags(version.getTags())));
+        restoreBlocks(note, version.getBlocksJson());
         return toResponse(noteRepository.save(note));
     }
 
@@ -304,6 +340,81 @@ public class NoteService {
     public void delete(Long id) {
         Note note = getNote(id);
         noteRepository.delete(note);
+    }
+
+    public void createVersionForNoteEdit(Long noteId, String reason) {
+        createSnapshot(getNote(noteId), reason);
+    }
+
+    private NoteVersion getVersion(Long noteId, Long versionId) {
+        return noteVersionRepository.findByIdAndNoteId(versionId, noteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Version with id " + versionId + " not found for note " + noteId));
+    }
+
+    private void createVersionBeforeEdit(Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, String reason) {
+        if (shouldCreateVersion(note, nextTitle, nextBody, nextContentType, nextTags)) {
+            createSnapshot(note, reason);
+        }
+    }
+
+    private boolean shouldCreateVersion(Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags) {
+        boolean major = !java.util.Objects.equals(note.getTitle(), nextTitle == null ? null : nextTitle.trim())
+                || !java.util.Objects.equals(note.getContentType(), nextContentType == null ? NoteContentType.PLAIN_TEXT : nextContentType)
+                || Math.abs((note.getBody() == null ? 0 : note.getBody().length()) - (nextBody == null ? 0 : nextBody.length())) >= MAJOR_EDIT_BODY_DELTA
+                || !normalizeTags(nextTags).equals(note.getTags().stream().map(Tag::getName).sorted().toList());
+        if (major) return true;
+        return noteVersionRepository.findTopByNoteIdOrderByCreatedAtDescIdDesc(note.getId())
+                .map(version -> Duration.between(version.getCreatedAt(), LocalDateTime.now()).compareTo(VERSION_DEBOUNCE) >= 0)
+                .orElse(true);
+    }
+
+    private void createSnapshot(Note note, String reason) {
+        NoteVersion version = new NoteVersion();
+        version.setNote(note);
+        version.setTitle(note.getTitle());
+        version.setBody(note.getBody());
+        version.setContentType(note.getContentType());
+        version.setBlocksJson(blocksJson(note.getId()));
+        version.setTags(tagsJson(note));
+        version.setEditorMetadata("{\"reason\":\"" + reason + "\"}");
+        noteVersionRepository.save(version);
+    }
+
+    private String blocksJson(Long noteId) {
+        try { return objectMapper.writeValueAsString(noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(noteId).stream().map(block -> Map.of(
+                "type", block.getType(), "content", block.getContent() == null ? "" : block.getContent(), "position", block.getPosition(), "checked", Boolean.TRUE.equals(block.getChecked()), "metadata", block.getMetadata() == null ? "" : block.getMetadata()
+        )).toList()); } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to snapshot note blocks", ex); }
+    }
+
+    private String tagsJson(Note note) {
+        try { return objectMapper.writeValueAsString(note.getTags().stream().map(Tag::getName).sorted().toList()); } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to snapshot note tags", ex); }
+    }
+
+    private List<String> parseTags(String tagsJson) {
+        if (tagsJson == null || tagsJson.isBlank()) return List.of();
+        try { return objectMapper.readValue(tagsJson, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}); } catch (JsonProcessingException ex) { return List.of(); }
+    }
+
+    private void restoreBlocks(Note note, String blocksJson) {
+        noteBlockRepository.deleteAll(noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(note.getId()));
+        if (blocksJson == null || blocksJson.isBlank()) return;
+        try {
+            List<Map<String, Object>> blocks = objectMapper.readValue(blocksJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+            for (Map<String, Object> item : blocks) {
+                NoteBlock block = new NoteBlock();
+                block.setNote(note);
+                block.setType(String.valueOf(item.getOrDefault("type", "paragraph")));
+                block.setContent((String) item.get("content"));
+                block.setPosition(((Number) item.getOrDefault("position", 0)).intValue());
+                block.setChecked(Boolean.TRUE.equals(item.get("checked")));
+                block.setMetadata((String) item.get("metadata"));
+                noteBlockRepository.save(block);
+            }
+        } catch (JsonProcessingException ex) { throw new IllegalArgumentException("Version blocks snapshot is invalid", ex); }
+    }
+
+    private NoteVersionResponse toVersionResponse(NoteVersion version) {
+        return new NoteVersionResponse(version.getId(), version.getNote().getId(), version.getTitle(), version.getBody(), version.getContentType(), version.getBlocksJson(), parseTags(version.getTags()), version.getEditorMetadata(), version.getCreatedBy(), version.getCreatedAt());
     }
 
     private Note getNote(Long id) {

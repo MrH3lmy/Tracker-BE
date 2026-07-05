@@ -102,3 +102,16 @@ export interface NoteAiGenerationRecord {
   auditMetadata: string;
   createdAt?: string;
 }
+
+export interface NoteVersionRecord {
+  id: number;
+  noteId: number;
+  title: string;
+  body: string;
+  contentType: NoteContentType;
+  blocksJson?: string | null;
+  tags?: string[];
+  editorMetadata?: string | null;
+  createdBy?: string | null;
+  createdAt?: string;
+}

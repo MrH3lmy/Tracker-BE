@@ -10,6 +10,7 @@ import type {
   NoteContentType,
   NoteRecord,
   NoteTemplateRecord,
+  NoteVersionRecord,
 } from "../components/notes/noteTypes";
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
@@ -17,6 +18,7 @@ import {
   useNoteCollectionsQuery,
   useNoteAiGenerationsQuery,
   useNoteMutations,
+  useNoteVersionsQuery,
   useNoteTemplatesQuery,
   useNoteSavedViewsQuery,
   useNotesQuery,
@@ -213,6 +215,8 @@ export function NotesPage() {
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
+  const [versionHistoryNoteId, setVersionHistoryNoteId] = useState<number | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [attachmentCaptions, setAttachmentCaptions] = useState<
     Record<number, string>
   >({});
@@ -251,6 +255,7 @@ export function NotesPage() {
   const savedViewsQuery = useNoteSavedViewsQuery();
   const settingsQuery = useSettingsQuery(true);
   const aiGenerationsQuery = useNoteAiGenerationsQuery(editingNoteId ?? 0, editingNoteId !== null);
+  const noteVersionsQuery = useNoteVersionsQuery(versionHistoryNoteId ?? 0, versionHistoryNoteId !== null);
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
@@ -270,7 +275,7 @@ export function NotesPage() {
     size: 100,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, runNoteAiAction, createSavedView, deleteSavedView } =
+  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
@@ -307,7 +312,7 @@ export function NotesPage() {
   const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
   const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
   const isBusy =
-    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending || runNoteAiAction.isPending;
+    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending || runNoteAiAction.isPending || restoreNoteVersion.isPending;
   const isUploadPending = uploadScreenshot.isPending;
   const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
@@ -320,6 +325,9 @@ export function NotesPage() {
   const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
   const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
   const aiGenerations = useMemo<NoteAiGenerationRecord[]>(() => aiGenerationsQuery.data?.data ?? [], [aiGenerationsQuery.data]);
+  const noteVersions = useMemo<NoteVersionRecord[]>(() => noteVersionsQuery.data?.data ?? [], [noteVersionsQuery.data]);
+  const selectedVersion = useMemo(() => noteVersions.find((version) => version.id === selectedVersionId) ?? noteVersions[0] ?? null, [noteVersions, selectedVersionId]);
+  const versionHistoryNote = useMemo(() => notes.find((note) => note.id === versionHistoryNoteId) ?? null, [notes, versionHistoryNoteId]);
   const templates = useMemo<NoteTemplateRecord[]>(() => templatesQuery.data?.data ?? [], [templatesQuery.data]);
   const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
   const renderedTemplatePreview = selectedTemplate ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content) : '';
@@ -1098,6 +1106,26 @@ export function NotesPage() {
     );
   };
 
+
+  const openVersionHistory = (note: NoteRecord) => {
+    setVersionHistoryNoteId(note.id);
+    setSelectedVersionId(null);
+  };
+
+  const restoreSelectedVersion = () => {
+    if (!versionHistoryNoteId || !selectedVersion) return;
+    const confirmed = window.confirm(`Restore “${selectedVersion.title}” from ${formatDate(selectedVersion.createdAt)}? This will save the current note as a version first.`);
+    if (!confirmed) return;
+    restoreNoteVersion.mutate({ noteId: versionHistoryNoteId, versionId: selectedVersion.id }, {
+      onSuccess: () => {
+        const restored = selectedVersion;
+        setForm({ ...noteToForm({ ...(versionHistoryNote ?? {} as NoteRecord), id: versionHistoryNoteId, title: restored.title, body: restored.body ?? "", contentType: restored.contentType, tags: restored.tags ?? [] }) });
+        setDraftBlocks(blocksFromBody(restored.body ?? ""));
+        setEditingNoteId(versionHistoryNoteId);
+      },
+    });
+  };
+
   const copyBody = (note: NoteRecord) => {
     if (!navigator.clipboard) return;
 
@@ -1408,6 +1436,44 @@ export function NotesPage() {
           emptyMessage="No notes match the current filters."
         />
 
+
+        {versionHistoryNoteId !== null ? (
+          <section className="panel" aria-label="Version history" style={{ marginTop: "var(--space-4)", padding: "var(--space-4)" }}>
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">Version history</p>
+                <h3>{versionHistoryNote?.title ?? `Note #${versionHistoryNoteId}`}</h3>
+              </div>
+              <button type="button" onClick={() => setVersionHistoryNoteId(null)}>Close</button>
+            </div>
+            <QueryState isLoading={noteVersionsQuery.isLoading} isError={Boolean(noteVersionsQuery.data && !noteVersionsQuery.data.ok)} isEmpty={!noteVersionsQuery.isLoading && noteVersions.length === 0} emptyMessage="No previous versions have been saved yet." />
+            {noteVersions.length ? (
+              <div className="row" style={{ alignItems: "stretch", gap: "var(--space-4)", flexWrap: "wrap" }}>
+                <label className="field-stack" style={{ flex: "1 1 16rem" }}>
+                  <span>Saved versions</span>
+                  <select value={selectedVersion?.id ?? ""} onChange={(event) => setSelectedVersionId(Number(event.target.value))}>
+                    {noteVersions.map((version) => <option key={version.id} value={version.id}>{formatDate(version.createdAt)} · {version.title}</option>)}
+                  </select>
+                </label>
+                <div className="row compact-row" style={{ alignSelf: "end" }}>
+                  <button type="button" className="button-primary" disabled={!selectedVersion || restoreNoteVersion.isPending} onClick={restoreSelectedVersion}>Restore this version</button>
+                </div>
+                <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}>
+                  <p className="eyebrow">Current</p>
+                  <h4>{versionHistoryNote?.title}</h4>
+                  <CodePreview body={(versionHistoryNote?.body ?? "").slice(0, 1200)} contentType={versionHistoryNote?.contentType ?? "PLAIN_TEXT"} />
+                </div>
+                <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}>
+                  <p className="eyebrow">Previous · {formatDate(selectedVersion?.createdAt)}</p>
+                  <h4>{selectedVersion?.title}</h4>
+                  <p className="muted">Tags: {selectedVersion?.tags?.join(", ") || "none"}</p>
+                  <CodePreview body={(selectedVersion?.body ?? "").slice(0, 1200)} contentType={selectedVersion?.contentType ?? "PLAIN_TEXT"} />
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         {viewMode === "sticky" ? (
           <div className="panel" aria-label="Sticky note board" style={{ position: "relative", minHeight: "34rem", overflow: "auto", marginTop: "var(--space-4)", background: "linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(14, 165, 233, 0.08))" }}>
             {notes.map((note, index) => (
@@ -1419,6 +1485,7 @@ export function NotesPage() {
                 <div className="row compact-row" style={{ marginTop: "var(--space-3)" }}>
                   <button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button>
                   <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button>
+                  <button type="button" onClick={() => openVersionHistory(note)}>Version history</button>
                 </div>
               </article>
             ))}
@@ -1435,7 +1502,7 @@ export function NotesPage() {
                     <p className="muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
                     <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
-                  <div className="row compact-row"><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button></div>
+                  <div className="row compact-row"><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button><button type="button" onClick={() => openVersionHistory(note)}>Version history</button></div>
                 </div>
                 <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
                 <form className="panel" onSubmit={(event) => handleScreenshotSubmit(event, note)} style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}>
