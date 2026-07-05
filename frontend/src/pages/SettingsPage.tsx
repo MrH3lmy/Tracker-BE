@@ -3,7 +3,7 @@ import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
 import { isAppTheme, THEME_OPTIONS, THEME_SETTING_KEY } from '../theme';
-import { DEFAULT_DAILY_CAPACITY_HOURS_KEY, EXCLUDED_WEEKDAYS_KEY, HOLIDAY_DATES_KEY, validateSettingsPayload } from '../validation/settings';
+import { AI_FEATURES_ENABLED_KEY, DEFAULT_DAILY_CAPACITY_HOURS_KEY, EXCLUDED_WEEKDAYS_KEY, HOLIDAY_DATES_KEY, validateSettingsPayload } from '../validation/settings';
 
 const WEEKDAY_OPTIONS = [
   { value: 'MONDAY', label: 'Mon' },
@@ -40,6 +40,7 @@ export function SettingsPage() {
   const excludedWeekdays = asStringArray(currentSettings[EXCLUDED_WEEKDAYS_KEY]).map((weekday) => weekday.toUpperCase());
   const holidayDates = asStringArray(currentSettings[HOLIDAY_DATES_KEY]);
   const dailyCapacityHours = asNumber(currentSettings[DEFAULT_DAILY_CAPACITY_HOURS_KEY], 6);
+  const aiFeaturesEnabled = currentSettings[AI_FEATURES_ENABLED_KEY] === true;
 
   const updateSettingBody = (updates: Record<string, unknown>) => {
     setBody(JSON.stringify({ ...currentSettings, ...updates }, null, 2));
@@ -129,6 +130,19 @@ export function SettingsPage() {
             </label>
           </div>
           <p className="muted">Saved as <code>{EXCLUDED_WEEKDAYS_KEY}</code>, <code>{HOLIDAY_DATES_KEY}</code>, and <code>{DEFAULT_DAILY_CAPACITY_HOURS_KEY}</code>.</p>
+        </div>
+
+        <div className="theme-selector-card">
+          <label className="checkbox-pill" htmlFor="aiFeaturesEnabled">
+            <input
+              id="aiFeaturesEnabled"
+              type="checkbox"
+              checked={aiFeaturesEnabled}
+              onChange={(event) => updateSettingBody({ [AI_FEATURES_ENABLED_KEY]: event.target.checked })}
+            />
+            <span>Enable AI-assisted note features</span>
+          </label>
+          <p className="muted">Saved as <code>{AI_FEATURES_ENABLED_KEY}</code>. Leave disabled for offline or privacy-sensitive environments; note AI suggestions require user review and never auto-create tasks.</p>
         </div>
 
         <div className="theme-selector-card">

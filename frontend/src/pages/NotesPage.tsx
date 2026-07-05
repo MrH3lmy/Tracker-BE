@@ -4,6 +4,8 @@ import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteBlockEditor, blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
 import type {
+  NoteAiAction,
+  NoteAiGenerationRecord,
   NoteAttachmentRecord,
   NoteContentType,
   NoteRecord,
@@ -13,10 +15,12 @@ import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
   latestResult,
   useNoteCollectionsQuery,
+  useNoteAiGenerationsQuery,
   useNoteMutations,
   useNoteTemplatesQuery,
   useNoteSavedViewsQuery,
   useNotesQuery,
+  useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
 
@@ -107,6 +111,14 @@ interface TemplateVariableState {
 }
 
 type NotesViewMode = 'sticky' | 'list' | 'table' | 'timeline';
+const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
+  { action: 'SUMMARIZE', label: 'Summarize' },
+  { action: 'EXTRACT_TASKS', label: 'Extract tasks' },
+  { action: 'EXTRACT_DECISIONS', label: 'Extract decisions' },
+  { action: 'REWRITE', label: 'Rewrite' },
+  { action: 'CREATE_TASK_PLAN', label: 'Create task plan' },
+];
+
 type NoteSortBy = 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
 
 interface ConvertTaskModalState {
@@ -221,6 +233,7 @@ export function NotesPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [templateVariables, setTemplateVariables] = useState<TemplateVariableState>({ taskTitle: '', date: new Date().toISOString().slice(0, 10), area: '', priority: '', dueDate: '' });
   const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
+  const [aiReviewSuggestion, setAiReviewSuggestion] = useState<NoteAiGenerationRecord | null>(null);
   const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
   const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
     useState(false);
@@ -236,6 +249,8 @@ export function NotesPage() {
   const templatesQuery = useNoteTemplatesQuery();
   const collectionsQuery = useNoteCollectionsQuery();
   const savedViewsQuery = useNoteSavedViewsQuery();
+  const settingsQuery = useSettingsQuery(true);
+  const aiGenerationsQuery = useNoteAiGenerationsQuery(editingNoteId ?? 0, editingNoteId !== null);
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
@@ -255,7 +270,7 @@ export function NotesPage() {
     size: 100,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, createSavedView, deleteSavedView } =
+  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, runNoteAiAction, createSavedView, deleteSavedView } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
@@ -292,7 +307,7 @@ export function NotesPage() {
   const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
   const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
   const isBusy =
-    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending;
+    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending || runNoteAiAction.isPending;
   const isUploadPending = uploadScreenshot.isPending;
   const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
@@ -302,6 +317,9 @@ export function NotesPage() {
       ? { ...form, taskId: linkedTaskId }
       : form;
   const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
+  const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
+  const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
+  const aiGenerations = useMemo<NoteAiGenerationRecord[]>(() => aiGenerationsQuery.data?.data ?? [], [aiGenerationsQuery.data]);
   const templates = useMemo<NoteTemplateRecord[]>(() => templatesQuery.data?.data ?? [], [templatesQuery.data]);
   const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
   const renderedTemplatePreview = selectedTemplate ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content) : '';
@@ -414,6 +432,30 @@ export function NotesPage() {
     setForm(emptyFormForTask(linkedTaskId));
     setDraftBlocks(blocksFromBody(""));
     setEditingNoteId(null);
+    setAiReviewSuggestion(null);
+  };
+
+  const runAiActionForNote = (action: NoteAiAction) => {
+    if (editingNoteId === null) {
+      setClipboardImageMessage({ kind: "error", text: "Save the note before running AI actions." });
+      return;
+    }
+    if (!aiFeaturesEnabled) {
+      setClipboardImageMessage({ kind: "error", text: "AI features are disabled in settings for offline or privacy-sensitive use." });
+      return;
+    }
+    runNoteAiAction.mutate({ noteId: editingNoteId, action }, {
+      onSuccess: (result) => { if (result.ok) setAiReviewSuggestion(result.data); },
+    });
+  };
+
+  const appendAiSuggestionToBody = () => {
+    if (!aiReviewSuggestion) return;
+    const addition = `\n\n---\nAI-generated ${aiReviewSuggestion.action.toLowerCase().replaceAll("_", " ")} (${formatDate(aiReviewSuggestion.createdAt)})\n${aiReviewSuggestion.generatedContent}`;
+    const nextBody = `${activeForm.body}${addition}`;
+    setForm((current) => ({ ...current, body: nextBody }));
+    setDraftBlocks(blocksFromBody(nextBody));
+    setAiReviewSuggestion(null);
   };
 
 
@@ -1617,6 +1659,37 @@ export function NotesPage() {
               Link @task mention
             </button>
             <span className="muted">Type @task or /task in the note, select text, then link it to the current or first loaded task.</span>
+          </div>
+          <div className="config-panel" aria-label="AI actions review" style={{ marginTop: "var(--space-3)", marginBottom: "var(--space-3)" }}>
+            <div className="section-header">
+              <div>
+                <h4>AI actions</h4>
+                <p className="muted">Generate summaries, task candidates, decisions, rewrites, or task plans for review. Suggestions are stored separately with audit metadata and tasks are never auto-created.</p>
+              </div>
+              <span className={aiFeaturesEnabled ? "status-badge status-done" : "status-badge status-other"}>{aiFeaturesEnabled ? "Enabled" : "Disabled in settings"}</span>
+            </div>
+            <div className="row compact-row" role="menu" aria-label="AI actions menu">
+              {AI_NOTE_ACTIONS.map((item) => (
+                <button key={item.action} type="button" role="menuitem" disabled={!aiFeaturesEnabled || editingNoteId === null || !activeForm.body.trim() || isBusy} onClick={() => runAiActionForNote(item.action)}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            {!aiFeaturesEnabled ? <p className="muted">Turn on <code>aiFeaturesEnabled</code> in Settings only when AI assistance is acceptable for your offline/privacy posture.</p> : null}
+            {aiReviewSuggestion ? (
+              <div className="panel" style={{ marginTop: "var(--space-3)" }}>
+                <p className="eyebrow">Review before applying · {aiReviewSuggestion.provider} {aiReviewSuggestion.model ? `(${aiReviewSuggestion.model})` : ""}</p>
+                <pre className="text-block" style={{ whiteSpace: "pre-wrap" }}>{aiReviewSuggestion.generatedContent}</pre>
+                <p className="muted">Audit: generated={String(aiReviewSuggestion.generated)} · action={aiReviewSuggestion.action} · source hash {aiReviewSuggestion.sourceHash.slice(0, 12)}…</p>
+                <div className="row compact-row">
+                  <button type="button" className="button-primary" onClick={appendAiSuggestionToBody}>Append to note body</button>
+                  <button type="button" onClick={() => setAiReviewSuggestion(null)}>Dismiss</button>
+                  {(aiReviewSuggestion.action === 'EXTRACT_TASKS' || aiReviewSuggestion.action === 'CREATE_TASK_PLAN') ? <span className="muted">Confirm tasks manually with the existing conversion flow.</span> : null}
+                </div>
+              </div>
+            ) : aiGenerations.length > 0 ? (
+              <p className="muted">Latest stored AI suggestion: {aiGenerations[0].action.toLowerCase().replaceAll('_', ' ')} generated {formatDate(aiGenerations[0].createdAt)}.</p>
+            ) : null}
           </div>
           <label className="field-stack" htmlFor="noteBody">
             <span>Fallback body / migration source</span>

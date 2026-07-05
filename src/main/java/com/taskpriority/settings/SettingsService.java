@@ -23,13 +23,15 @@ public class SettingsService {
     public static final String EXCLUDED_WEEKDAYS_KEY = "excludedWeekdays";
     public static final String HOLIDAY_DATES_KEY = "holidayDates";
     public static final String DEFAULT_DAILY_CAPACITY_HOURS_KEY = "defaultDailyCapacityHours";
+    public static final String AI_FEATURES_ENABLED_KEY = "aiFeaturesEnabled";
     public static final List<DayOfWeek> DEFAULT_EXCLUDED_WEEKDAYS = List.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
     public static final double DEFAULT_DAILY_CAPACITY_HOURS = 6.0;
 
     private static final Set<String> KNOWN_CALENDAR_KEYS = Set.of(
             EXCLUDED_WEEKDAYS_KEY,
             HOLIDAY_DATES_KEY,
-            DEFAULT_DAILY_CAPACITY_HOURS_KEY
+            DEFAULT_DAILY_CAPACITY_HOURS_KEY,
+            AI_FEATURES_ENABLED_KEY
     );
 
     private final AppSettingRepository appSettingRepository;
@@ -83,6 +85,7 @@ public class SettingsService {
         defaults.put(EXCLUDED_WEEKDAYS_KEY, DEFAULT_EXCLUDED_WEEKDAYS.stream().map(DayOfWeek::name).toList());
         defaults.put(HOLIDAY_DATES_KEY, List.of());
         defaults.put(DEFAULT_DAILY_CAPACITY_HOURS_KEY, DEFAULT_DAILY_CAPACITY_HOURS);
+        defaults.put(AI_FEATURES_ENABLED_KEY, false);
         return defaults;
     }
 
@@ -90,6 +93,7 @@ public class SettingsService {
         settings.put(EXCLUDED_WEEKDAYS_KEY, parseWeekdays(settings.get(EXCLUDED_WEEKDAYS_KEY), EXCLUDED_WEEKDAYS_KEY).stream().map(DayOfWeek::name).toList());
         settings.put(HOLIDAY_DATES_KEY, parseDates(settings.get(HOLIDAY_DATES_KEY), HOLIDAY_DATES_KEY).stream().map(LocalDate::toString).toList());
         settings.put(DEFAULT_DAILY_CAPACITY_HOURS_KEY, parseCapacityHours(settings.get(DEFAULT_DAILY_CAPACITY_HOURS_KEY), DEFAULT_DAILY_CAPACITY_HOURS_KEY));
+        settings.put(AI_FEATURES_ENABLED_KEY, parseBoolean(settings.get(AI_FEATURES_ENABLED_KEY), AI_FEATURES_ENABLED_KEY));
     }
 
     private Object parseSettingValue(String key, String value) {
@@ -102,6 +106,9 @@ public class SettingsService {
             }
             if (DEFAULT_DAILY_CAPACITY_HOURS_KEY.equals(key)) {
                 return objectMapper.readValue(value, Double.class);
+            }
+            if (AI_FEATURES_ENABLED_KEY.equals(key)) {
+                return objectMapper.readValue(value, Boolean.class);
             }
         } catch (JsonProcessingException | IllegalArgumentException ignored) {
             return value;
@@ -128,6 +135,7 @@ public class SettingsService {
             case EXCLUDED_WEEKDAYS_KEY -> parseWeekdays(value, key);
             case HOLIDAY_DATES_KEY -> parseDates(value, key);
             case DEFAULT_DAILY_CAPACITY_HOURS_KEY -> parseCapacityHours(value, key);
+            case AI_FEATURES_ENABLED_KEY -> parseBoolean(value, key);
             default -> { }
         }
     }
@@ -160,6 +168,19 @@ public class SettingsService {
             }
         }
         return dates.stream().sorted().toList();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isAiFeaturesEnabled() {
+        return parseBoolean(getAll().get(AI_FEATURES_ENABLED_KEY), AI_FEATURES_ENABLED_KEY);
+    }
+
+    private boolean parseBoolean(Object value, String key) {
+        if (value instanceof Boolean enabled) return enabled;
+        if (value instanceof String text && ("true".equalsIgnoreCase(text.trim()) || "false".equalsIgnoreCase(text.trim()))) {
+            return Boolean.parseBoolean(text.trim());
+        }
+        throw new IllegalArgumentException(key + " must be a boolean.");
     }
 
     private double parseCapacityHours(Object value, String key) {
