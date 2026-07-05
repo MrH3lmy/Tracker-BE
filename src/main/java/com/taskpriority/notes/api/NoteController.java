@@ -50,12 +50,20 @@ public class NoteController {
             @RequestParam(required = false, name = "q") String query,
             @RequestParam(required = false) NoteContentType contentType,
             @RequestParam(required = false, name = "tag") List<String> tags,
+            @RequestParam(required = false) Boolean hasAttachments,
+            @RequestParam(required = false) Boolean linkedTask,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) String updatedFrom,
+            @RequestParam(required = false) String updatedTo,
+            @RequestParam(required = false) Boolean untagged,
+            @RequestParam(required = false) String tagMode,
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDirection,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size
     ) {
-        return noteService.findAll(taskId, collectionId, query, contentType, tags, sortBy, sortDirection, page, size);
+        return noteService.findAll(taskId, collectionId, query, contentType, tags, hasAttachments, linkedTask, createdFrom, createdTo, updatedFrom, updatedTo, untagged, tagMode, sortBy, sortDirection, page, size);
     }
 
     @GetMapping("/{id}")

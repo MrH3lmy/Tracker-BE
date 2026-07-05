@@ -13,6 +13,14 @@ export interface NotesQueryFilters {
   tags?: string | string[];
   collectionId?: number | string;
   sortBy?: 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
+  hasAttachments?: boolean | '';
+  linkedTask?: boolean | '';
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
+  untagged?: boolean | '';
+  tagMode?: 'any' | 'all';
   sortDirection?: 'asc' | 'desc';
   page?: number;
   size?: number;
@@ -28,7 +36,8 @@ export const queryKeys = {
   noteBlocks: (noteId: number) => ['notes', noteId, 'blocks'] as const,
   noteTemplates: ['note-templates'] as const,
   noteCollections: ['note-collections'] as const,
-  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.collectionId ?? '', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
+  noteSavedViews: ['note-saved-views'] as const,
+  notes: (filters?: NotesQueryFilters) => ['notes', filters?.q ?? '', filters?.contentType ?? 'all', filters?.taskId ?? '', Array.isArray(filters?.tags) ? filters.tags.join(',') : filters?.tags ?? '', filters?.collectionId ?? '', filters?.hasAttachments ?? '', filters?.linkedTask ?? '', filters?.createdFrom ?? '', filters?.createdTo ?? '', filters?.updatedFrom ?? '', filters?.updatedTo ?? '', filters?.untagged ?? '', filters?.tagMode ?? 'any', filters?.sortBy ?? 'updatedAt', filters?.sortDirection ?? 'desc', filters?.page ?? '', filters?.size ?? ''] as const,
   planningToday: ['planning', 'today'] as const,
   planningWeekly: ['planning', 'weekly'] as const,
   planningRecommendations: ['planning', 'recommendations'] as const,
@@ -53,6 +62,14 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     if (filters.collectionId !== undefined && String(filters.collectionId).trim() !== '') params.set('collectionId', String(filters.collectionId).trim());
     const tags = Array.isArray(filters.tags) ? filters.tags : filters.tags?.split(',') ?? [];
     tags.map((tag) => tag.trim()).filter(Boolean).forEach((tag) => params.append('tag', tag));
+    if (filters.hasAttachments !== undefined && filters.hasAttachments !== '') params.set('hasAttachments', String(filters.hasAttachments));
+    if (filters.linkedTask !== undefined && filters.linkedTask !== '') params.set('linkedTask', String(filters.linkedTask));
+    if (filters.createdFrom?.trim()) params.set('createdFrom', filters.createdFrom.trim());
+    if (filters.createdTo?.trim()) params.set('createdTo', filters.createdTo.trim());
+    if (filters.updatedFrom?.trim()) params.set('updatedFrom', filters.updatedFrom.trim());
+    if (filters.updatedTo?.trim()) params.set('updatedTo', filters.updatedTo.trim());
+    if (filters.untagged !== undefined && filters.untagged !== '') params.set('untagged', String(filters.untagged));
+    if (filters.tagMode) params.set('tagMode', filters.tagMode);
     if (filters.sortBy) params.set('sortBy', filters.sortBy);
     if (filters.sortDirection) params.set('sortDirection', filters.sortDirection);
     if (filters.page !== undefined) params.set('page', String(filters.page));
@@ -63,6 +80,8 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
 });
 export const useNoteTemplatesQuery = () => useQuery({ queryKey: queryKeys.noteTemplates, queryFn: () => apiJson<NoteTemplateRecord[]>('GET', '/api/v1/note-templates') });
 export const useNoteCollectionsQuery = () => useQuery({ queryKey: queryKeys.noteCollections, queryFn: () => apiJson<NoteCollectionRecord[]>('GET', '/api/v1/note-collections') });
+export interface NoteSavedViewRecord { id: number; name: string; filters: Record<string, unknown>; sortField: string; sortDirection: 'asc' | 'desc'; viewType: string; createdAt?: string; updatedAt?: string; }
+export const useNoteSavedViewsQuery = () => useQuery({ queryKey: queryKeys.noteSavedViews, queryFn: () => apiJson<NoteSavedViewRecord[]>('GET', '/api/v1/note-saved-views') });
 export const useNoteBlocksQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteBlocks(noteId), queryFn: () => apiJson<NoteBlockRecord[]>('GET', `/api/v1/notes/${noteId}/blocks`), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
@@ -160,6 +179,9 @@ export function useNoteMutations() {
     createCollection: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/note-collections', body), onSuccess }),
     updateCollection: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PATCH', `/api/v1/note-collections/${id}`, body), onSuccess }),
     deleteCollection: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/note-collections/${id}`), onSuccess }),
+    createSavedView: useMutation({ mutationFn: (body: unknown) => apiJson('POST', '/api/v1/note-saved-views', body), onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.noteSavedViews }) }),
+    updateSavedView: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/note-saved-views/${id}`, body), onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.noteSavedViews }) }),
+    deleteSavedView: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/note-saved-views/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.noteSavedViews }) }),
     uploadScreenshot: useMutation({
       mutationFn: ({ noteId, file, caption, source, width, height }: UploadScreenshotVariables) => {
         const formData = new FormData();

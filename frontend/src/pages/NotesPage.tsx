@@ -15,6 +15,7 @@ import {
   useNoteCollectionsQuery,
   useNoteMutations,
   useNoteTemplatesQuery,
+  useNoteSavedViewsQuery,
   useNotesQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
@@ -50,6 +51,15 @@ const SCREENSHOT_NOTE_BODY =
 const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
 const PASTED_SCREENSHOT_PENDING_REFERENCE = "[Pasted screenshot pending upload]";
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
+const DEFAULT_NOTE_SAVED_VIEWS = [
+  { name: 'Recent', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
+  { name: 'Screenshots', filters: { hasAttachments: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
+  { name: 'Task notes', filters: { linkedTask: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
+  { name: 'Untagged', filters: { untagged: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'table' as NotesViewMode },
+  { name: 'Decisions', filters: { tags: 'decision', tagMode: 'all' }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
+  { name: 'Checklists', filters: { contentType: 'MARKDOWN', q: '- [ ]' }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
+];
+
 const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
 
 interface CropPoint {
@@ -179,6 +189,14 @@ export function NotesPage() {
   >("all");
   const [tagFilter, setTagFilter] = useState("");
   const [collectionFilter, setCollectionFilter] = useState("");
+  const [hasAttachmentsFilter, setHasAttachmentsFilter] = useState<"" | "true" | "false">("");
+  const [linkedTaskFilter, setLinkedTaskFilter] = useState<"" | "true" | "false">("");
+  const [untaggedFilter, setUntaggedFilter] = useState<"" | "true" | "false">("");
+  const [tagMode, setTagMode] = useState<"any" | "all">("any");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
+  const [updatedFrom, setUpdatedFrom] = useState("");
+  const [updatedTo, setUpdatedTo] = useState("");
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -217,18 +235,27 @@ export function NotesPage() {
 
   const templatesQuery = useNoteTemplatesQuery();
   const collectionsQuery = useNoteCollectionsQuery();
+  const savedViewsQuery = useNoteSavedViewsQuery();
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
     taskId: linkedTaskId,
     collectionId: collectionFilter,
     tags: tagFilter,
+    hasAttachments: hasAttachmentsFilter === "" ? "" : hasAttachmentsFilter === "true",
+    linkedTask: linkedTaskFilter === "" ? "" : linkedTaskFilter === "true",
+    untagged: untaggedFilter === "" ? "" : untaggedFilter === "true",
+    tagMode,
+    createdFrom,
+    createdTo,
+    updatedFrom,
+    updatedTo,
     sortBy,
     sortDirection,
     size: 100,
   });
   const tasksQuery = useTasksQuery("active");
-  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink } =
+  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, createSavedView, deleteSavedView } =
     useNoteMutations();
   const latestMutationResult = latestResult(
     createNote.data,
@@ -249,6 +276,7 @@ export function NotesPage() {
     [availableTasks],
   );
   const collections = collectionsQuery.data?.data ?? [];
+  const savedViews = savedViewsQuery.data?.data ?? [];
 
   const notes = useMemo(() => {
     const records = notesQuery.data?.data ?? [];
@@ -292,6 +320,38 @@ export function NotesPage() {
       return groups;
     }, {});
   }, [notes, sortBy]);
+
+
+  const applySavedView = (view: { filters: Record<string, unknown>; sortField: string; sortDirection: string; viewType: string }) => {
+    const filters = view.filters ?? {};
+    setSearch(typeof filters.q === "string" ? filters.q : "");
+    setContentTypeFilter(typeof filters.contentType === "string" ? filters.contentType as NoteContentType : "all");
+    setTagFilter(typeof filters.tags === "string" ? filters.tags : "");
+    setCollectionFilter(filters.collectionId == null ? "" : String(filters.collectionId));
+    setHasAttachmentsFilter(typeof filters.hasAttachments === "boolean" ? String(filters.hasAttachments) as "true" | "false" : "");
+    setLinkedTaskFilter(typeof filters.linkedTask === "boolean" ? String(filters.linkedTask) as "true" | "false" : "");
+    setUntaggedFilter(typeof filters.untagged === "boolean" ? String(filters.untagged) as "true" | "false" : "");
+    setTagMode(filters.tagMode === "all" ? "all" : "any");
+    setCreatedFrom(typeof filters.createdFrom === "string" ? filters.createdFrom : "");
+    setCreatedTo(typeof filters.createdTo === "string" ? filters.createdTo : "");
+    setUpdatedFrom(typeof filters.updatedFrom === "string" ? filters.updatedFrom : "");
+    setUpdatedTo(typeof filters.updatedTo === "string" ? filters.updatedTo : "");
+    setSortBy((view.sortField || "updatedAt") as NoteSortBy);
+    setSortDirection(view.sortDirection === "asc" ? "asc" : "desc");
+    setViewMode((view.viewType || "list") as NotesViewMode);
+  };
+
+  const saveCurrentView = () => {
+    const name = window.prompt("Saved view name");
+    if (!name?.trim()) return;
+    createSavedView.mutate({
+      name: name.trim(),
+      filters: { q: search, contentType: contentTypeFilter === "all" ? undefined : contentTypeFilter, tags: tagFilter, collectionId: collectionFilter || undefined, hasAttachments: hasAttachmentsFilter === "" ? undefined : hasAttachmentsFilter === "true", linkedTask: linkedTaskFilter === "" ? undefined : linkedTaskFilter === "true", untagged: untaggedFilter === "" ? undefined : untaggedFilter === "true", tagMode, createdFrom, createdTo, updatedFrom, updatedTo },
+      sortField: sortBy,
+      sortDirection,
+      viewType: viewMode,
+    });
+  };
 
   const noteStatus = (note: NoteRecord) => {
     if (editingNoteId === note.id) return "Editing";
@@ -1104,6 +1164,19 @@ export function NotesPage() {
               </button>
             ))}
           </div>
+          <h4>Saved views</h4>
+          <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
+            {DEFAULT_NOTE_SAVED_VIEWS.map((view) => (
+              <button key={view.name} type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start" }}>{view.name}</button>
+            ))}
+            {savedViews.map((view) => (
+              <span key={view.id} className="row compact-row" style={{ alignItems: "center" }}>
+                <button type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start", flex: 1 }}>{view.name}</button>
+                <button type="button" className="link-button" onClick={() => deleteSavedView.mutate(view.id)} aria-label={`Delete saved view ${view.name}`}>×</button>
+              </span>
+            ))}
+          </div>
+          <button type="button" className="secondary-action" onClick={saveCurrentView} disabled={createSavedView.isPending} style={{ marginTop: "var(--space-3)" }}>Save current view</button>
           <h4>Recent notes</h4>
           {recentNotes.map((note) => <button key={note.id} type="button" className="link-button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>{note.title}</button>)}
           <h4>Task-linked</h4>
@@ -1197,6 +1270,44 @@ export function NotesPage() {
               ))}
             </select>
           </label>
+        </div>
+
+        <div className="row" style={{ alignItems: "end", flexWrap: "wrap", marginTop: "var(--space-3)" }}>
+          <label className="field-stack" htmlFor="noteHasAttachmentsFilter" style={{ flex: "0 1 12rem" }}>
+            <span>Attachments</span>
+            <select id="noteHasAttachmentsFilter" value={hasAttachmentsFilter} onChange={(event) => setHasAttachmentsFilter(event.target.value as "" | "true" | "false")}>
+              <option value="">Any</option>
+              <option value="true">Has attachments</option>
+              <option value="false">No attachments</option>
+            </select>
+          </label>
+          <label className="field-stack" htmlFor="noteLinkedTaskFilter" style={{ flex: "0 1 12rem" }}>
+            <span>Linked task</span>
+            <select id="noteLinkedTaskFilter" value={linkedTaskFilter} onChange={(event) => setLinkedTaskFilter(event.target.value as "" | "true" | "false")}>
+              <option value="">Any</option>
+              <option value="true">Linked</option>
+              <option value="false">Unlinked</option>
+            </select>
+          </label>
+          <label className="field-stack" htmlFor="noteUntaggedFilter" style={{ flex: "0 1 12rem" }}>
+            <span>Tag status</span>
+            <select id="noteUntaggedFilter" value={untaggedFilter} onChange={(event) => setUntaggedFilter(event.target.value as "" | "true" | "false")}>
+              <option value="">Any</option>
+              <option value="true">Untagged</option>
+              <option value="false">Tagged</option>
+            </select>
+          </label>
+          <label className="field-stack" htmlFor="noteTagMode" style={{ flex: "0 1 10rem" }}>
+            <span>Tag match</span>
+            <select id="noteTagMode" value={tagMode} onChange={(event) => setTagMode(event.target.value as "any" | "all")}>
+              <option value="any">Any tag</option>
+              <option value="all">All tags</option>
+            </select>
+          </label>
+          <label className="field-stack" htmlFor="noteCreatedFrom" style={{ flex: "0 1 11rem" }}><span>Created from</span><input id="noteCreatedFrom" type="date" value={createdFrom} onChange={(event) => setCreatedFrom(event.target.value)} /></label>
+          <label className="field-stack" htmlFor="noteCreatedTo" style={{ flex: "0 1 11rem" }}><span>Created to</span><input id="noteCreatedTo" type="date" value={createdTo} onChange={(event) => setCreatedTo(event.target.value)} /></label>
+          <label className="field-stack" htmlFor="noteUpdatedFrom" style={{ flex: "0 1 11rem" }}><span>Updated from</span><input id="noteUpdatedFrom" type="date" value={updatedFrom} onChange={(event) => setUpdatedFrom(event.target.value)} /></label>
+          <label className="field-stack" htmlFor="noteUpdatedTo" style={{ flex: "0 1 11rem" }}><span>Updated to</span><input id="noteUpdatedTo" type="date" value={updatedTo} onChange={(event) => setUpdatedTo(event.target.value)} /></label>
         </div>
 
         <div className="row compact-row" role="tablist" aria-label="Note view modes" style={{ marginTop: "var(--space-4)" }}>
