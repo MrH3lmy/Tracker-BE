@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEve
 import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import { CodePreview } from "../components/notes/CodePreview";
+import { NoteFormPanel } from "../components/notes/NoteFormPanel";
+import { NotesFilters } from "../components/notes/NotesFilters";
+import { NotesResults } from "../components/notes/NotesResults";
+import { NotesSidebar } from "../components/notes/NotesSidebar";
+import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
+import { ScreenshotCropOverlay } from "../components/notes/ScreenshotCropOverlay";
 import { NoteBlockEditor, blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
 import type {
   NoteAiAction,
@@ -12,6 +18,23 @@ import type {
   NoteTemplateRecord,
   NoteVersionRecord,
 } from "../components/notes/noteTypes";
+import {
+  EMPTY_FORM,
+  NOTE_CONTENT_TYPES,
+  SCREENSHOT_MAX_FILE_SIZE_BYTES,
+  SUPPORTED_SCREENSHOT_TYPES,
+  formatBytes,
+  formatDate,
+  getStickyNoteNumber,
+  humanizeContentType,
+  noteToForm,
+  type CropOverlayState,
+  type CropPoint,
+  type CropSelection,
+  type NoteFormState,
+  type NoteSortBy,
+  type NotesViewMode,
+} from "../components/notes/notesPageHelpers";
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
   latestResult,
@@ -26,23 +49,6 @@ import {
   useTasksQuery,
 } from "../hooks/useApiQueries";
 
-const NOTE_CONTENT_TYPES: NoteContentType[] = [
-  "PLAIN_TEXT",
-  "MARKDOWN",
-  "SHELL_COMMANDS",
-  "XML",
-  "JSON",
-];
-const EMPTY_FORM: NoteFormState = {
-  title: "",
-  contentType: "PLAIN_TEXT",
-  taskId: "",
-  collectionId: "",
-  tags: "",
-  body: "",
-};
-const SCREENSHOT_MAX_FILE_SIZE_BYTES = 5_242_880;
-const SUPPORTED_SCREENSHOT_TYPES = "PNG, JPEG, or WebP";
 const SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -68,35 +74,9 @@ const DEFAULT_NOTE_SAVED_VIEWS = [
 
 const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
 
-interface CropPoint {
-  x: number;
-  y: number;
-}
 
-interface CropSelection {
-  start: CropPoint;
-  end: CropPoint;
-}
 
-interface CropOverlayState {
-  fileName: string;
-  imageSrc: string;
-  width: number;
-  height: number;
-  selection: CropSelection | null;
-  isDragging: boolean;
-  resolve: (value: { file: File; width: number; height: number }) => void;
-  reject: (reason?: unknown) => void;
-}
 
-interface NoteFormState {
-  title: string;
-  contentType: NoteContentType;
-  taskId: string;
-  collectionId: string;
-  tags: string;
-  body: string;
-}
 
 interface PendingClipboardImage {
   placeholder: string;
@@ -112,7 +92,6 @@ interface TemplateVariableState {
   dueDate: string;
 }
 
-type NotesViewMode = 'sticky' | 'list' | 'table' | 'timeline';
 const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
   { action: 'SUMMARIZE', label: 'Summarize' },
   { action: 'EXTRACT_TASKS', label: 'Extract tasks' },
@@ -121,7 +100,6 @@ const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
   { action: 'CREATE_TASK_PLAN', label: 'Create task plan' },
 ];
 
-type NoteSortBy = 'createdAt' | 'updatedAt' | 'displayOrder' | 'title' | 'task' | 'contentType';
 
 interface ConvertTaskModalState {
   noteId: number;
@@ -133,38 +111,6 @@ interface ConvertTaskModalState {
   area: string;
   effort: string;
   parentTaskId: string;
-}
-
-function humanizeContentType(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatDate(value?: string): string {
-  if (!value) return "Not available";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
-function formatBytes(value: number): string {
-  return `${value.toLocaleString()} bytes (${(value / 1024 / 1024).toFixed(1)} MiB)`;
-}
-
-function getStickyNoteNumber(note: NoteRecord): number {
-  return note.displayOrder ?? 0;
-}
-
-function noteToForm(note: NoteRecord): NoteFormState {
-  return {
-    title: note.title,
-    contentType: note.contentType,
-    taskId: note.taskId == null ? "" : String(note.taskId),
-    collectionId: note.collectionId == null ? "" : String(note.collectionId),
-    tags: note.tags?.join(", ") ?? "",
-    body: note.body,
-  };
 }
 
 function emptyFormForTask(taskId: string): NoteFormState {
@@ -1223,37 +1169,23 @@ export function NotesPage() {
       </header>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(14rem, 18rem) 1fr", gap: "var(--space-4)", alignItems: "start" }}>
-        <aside className="page-card" aria-label="Notes navigation" style={{ position: "sticky", top: "var(--space-4)" }}>
-          <p className="eyebrow">Notes navigation</p>
-          <h3>Collections</h3>
-          <button type="button" className={!collectionFilter ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter("")}>All notes</button>
-          <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
-            {collections.map((collection) => (
-              <button key={collection.id} type="button" className={collectionFilter === String(collection.id) ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter(String(collection.id))} style={{ justifyContent: "flex-start", borderLeft: `0.35rem solid ${collection.color ?? "#38bdf8"}` }}>
-                {collection.icon ?? "📁"} {collection.name}
-              </button>
-            ))}
-          </div>
-          <h4>Saved views</h4>
-          <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
-            {DEFAULT_NOTE_SAVED_VIEWS.map((view) => (
-              <button key={view.name} type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start" }}>{view.name}</button>
-            ))}
-            {savedViews.map((view) => (
-              <span key={view.id} className="row compact-row" style={{ alignItems: "center" }}>
-                <button type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start", flex: 1 }}>{view.name}</button>
-                <button type="button" className="link-button" onClick={() => deleteSavedView.mutate(view.id)} aria-label={`Delete saved view ${view.name}`}>×</button>
-              </span>
-            ))}
-          </div>
-          <button type="button" className="secondary-action" onClick={saveCurrentView} disabled={createSavedView.isPending} style={{ marginTop: "var(--space-3)" }}>Save current view</button>
-          <h4>Recent notes</h4>
-          {recentNotes.map((note) => <button key={note.id} type="button" className="link-button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>{note.title}</button>)}
-          <h4>Task-linked</h4>
-          {taskLinkedNotes.length ? taskLinkedNotes.map((note) => <p key={note.id} className="muted">{note.title}</p>) : <p className="muted">No task-linked notes.</p>}
-          <h4>Archived</h4>
-          {archivedNotes.length ? archivedNotes.map((note) => <p key={note.id} className="muted">{note.title}</p>) : <p className="muted">Tag notes with archived to show them here.</p>}
-        </aside>
+        <NotesSidebar
+          collectionFilter={collectionFilter}
+          setCollectionFilter={setCollectionFilter}
+          collections={collections}
+          savedViews={savedViews}
+          defaultSavedViews={DEFAULT_NOTE_SAVED_VIEWS}
+          applySavedView={applySavedView}
+          deleteSavedView={deleteSavedView}
+          saveCurrentView={saveCurrentView}
+          createSavedView={createSavedView}
+          recentNotes={recentNotes}
+          taskLinkedNotes={taskLinkedNotes}
+          archivedNotes={archivedNotes}
+          setEditingNoteId={setEditingNoteId}
+          setForm={setForm}
+          setDraftBlocks={setDraftBlocks}
+        />
 
       <section
         className="page-card main-content-card"
@@ -1282,141 +1214,39 @@ export function NotesPage() {
           </button>
         </div>
 
-        <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}>
-          <label
-            className="field-stack"
-            htmlFor="noteSearch"
-            style={{ flex: "1 1 18rem" }}
-          >
-            <span>Search</span>
-            <input
-              id="noteSearch"
-              type="search"
-              value={search}
-              placeholder="Search title or body"
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-          <label
-            className="field-stack"
-            htmlFor="noteTagFilter"
-            style={{ flex: "1 1 16rem" }}
-          >
-            <span>Tags</span>
-            <input
-              id="noteTagFilter"
-              value={tagFilter}
-              placeholder="Filter by tag, e.g. backend"
-              onChange={(event) => setTagFilter(event.target.value)}
-            />
-          </label>
-          <label className="field-stack" htmlFor="noteCollectionFilter" style={{ flex: "0 1 16rem" }}>
-            <span>Collection</span>
-            <select id="noteCollectionFilter" value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)}>
-              <option value="">All collections</option>
-              {collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}
-            </select>
-          </label>
-          <label
-            className="field-stack"
-            htmlFor="noteContentTypeFilter"
-            style={{ flex: "0 1 16rem" }}
-          >
-            <span>Content type</span>
-            <select
-              id="noteContentTypeFilter"
-              value={contentTypeFilter}
-              onChange={(event) =>
-                setContentTypeFilter(
-                  event.target.value as NoteContentType | "all",
-                )
-              }
-            >
-              <option value="all">All types</option>
-              {NOTE_CONTENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {humanizeContentType(type)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="row" style={{ alignItems: "end", flexWrap: "wrap", marginTop: "var(--space-3)" }}>
-          <label className="field-stack" htmlFor="noteHasAttachmentsFilter" style={{ flex: "0 1 12rem" }}>
-            <span>Attachments</span>
-            <select id="noteHasAttachmentsFilter" value={hasAttachmentsFilter} onChange={(event) => setHasAttachmentsFilter(event.target.value as "" | "true" | "false")}>
-              <option value="">Any</option>
-              <option value="true">Has attachments</option>
-              <option value="false">No attachments</option>
-            </select>
-          </label>
-          <label className="field-stack" htmlFor="noteLinkedTaskFilter" style={{ flex: "0 1 12rem" }}>
-            <span>Linked task</span>
-            <select id="noteLinkedTaskFilter" value={linkedTaskFilter} onChange={(event) => setLinkedTaskFilter(event.target.value as "" | "true" | "false")}>
-              <option value="">Any</option>
-              <option value="true">Linked</option>
-              <option value="false">Unlinked</option>
-            </select>
-          </label>
-          <label className="field-stack" htmlFor="noteUntaggedFilter" style={{ flex: "0 1 12rem" }}>
-            <span>Tag status</span>
-            <select id="noteUntaggedFilter" value={untaggedFilter} onChange={(event) => setUntaggedFilter(event.target.value as "" | "true" | "false")}>
-              <option value="">Any</option>
-              <option value="true">Untagged</option>
-              <option value="false">Tagged</option>
-            </select>
-          </label>
-          <label className="field-stack" htmlFor="noteTagMode" style={{ flex: "0 1 10rem" }}>
-            <span>Tag match</span>
-            <select id="noteTagMode" value={tagMode} onChange={(event) => setTagMode(event.target.value as "any" | "all")}>
-              <option value="any">Any tag</option>
-              <option value="all">All tags</option>
-            </select>
-          </label>
-          <label className="field-stack" htmlFor="noteCreatedFrom" style={{ flex: "0 1 11rem" }}><span>Created from</span><input id="noteCreatedFrom" type="date" value={createdFrom} onChange={(event) => setCreatedFrom(event.target.value)} /></label>
-          <label className="field-stack" htmlFor="noteCreatedTo" style={{ flex: "0 1 11rem" }}><span>Created to</span><input id="noteCreatedTo" type="date" value={createdTo} onChange={(event) => setCreatedTo(event.target.value)} /></label>
-          <label className="field-stack" htmlFor="noteUpdatedFrom" style={{ flex: "0 1 11rem" }}><span>Updated from</span><input id="noteUpdatedFrom" type="date" value={updatedFrom} onChange={(event) => setUpdatedFrom(event.target.value)} /></label>
-          <label className="field-stack" htmlFor="noteUpdatedTo" style={{ flex: "0 1 11rem" }}><span>Updated to</span><input id="noteUpdatedTo" type="date" value={updatedTo} onChange={(event) => setUpdatedTo(event.target.value)} /></label>
-        </div>
-
-        <div className="row compact-row" role="tablist" aria-label="Note view modes" style={{ marginTop: "var(--space-4)" }}>
-          {([
-            ["sticky", "Sticky board"],
-            ["list", "List"],
-            ["table", "Table"],
-            ["timeline", "Timeline"],
-          ] as const).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={viewMode === mode}
-              className={viewMode === mode ? "button-primary" : "secondary-action"}
-              onClick={() => setViewMode(mode)}
-            >
-              {label}
-            </button>
-          ))}
-          <label className="field-stack" htmlFor="noteSortBy" style={{ minWidth: "12rem" }}>
-            <span>Sort by</span>
-            <select id="noteSortBy" value={sortBy} onChange={(event) => setSortBy(event.target.value as NoteSortBy)}>
-              <option value="updatedAt">Updated date</option>
-              <option value="createdAt">Created date</option>
-              <option value="displayOrder">Sticky order</option>
-              <option value="title">Title</option>
-              <option value="task">Task</option>
-              <option value="contentType">Content type</option>
-            </select>
-          </label>
-          <label className="field-stack" htmlFor="noteSortDirection" style={{ minWidth: "10rem" }}>
-            <span>Direction</span>
-            <select id="noteSortDirection" value={sortDirection} onChange={(event) => setSortDirection(event.target.value as "asc" | "desc")}>
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </label>
-        </div>
+        <NotesFilters
+          search={search}
+          setSearch={setSearch}
+          tagFilter={tagFilter}
+          setTagFilter={setTagFilter}
+          collectionFilter={collectionFilter}
+          setCollectionFilter={setCollectionFilter}
+          collections={collections}
+          contentTypeFilter={contentTypeFilter}
+          setContentTypeFilter={setContentTypeFilter}
+          hasAttachmentsFilter={hasAttachmentsFilter}
+          setHasAttachmentsFilter={setHasAttachmentsFilter}
+          linkedTaskFilter={linkedTaskFilter}
+          setLinkedTaskFilter={setLinkedTaskFilter}
+          untaggedFilter={untaggedFilter}
+          setUntaggedFilter={setUntaggedFilter}
+          tagMode={tagMode}
+          setTagMode={setTagMode}
+          createdFrom={createdFrom}
+          setCreatedFrom={setCreatedFrom}
+          createdTo={createdTo}
+          setCreatedTo={setCreatedTo}
+          updatedFrom={updatedFrom}
+          setUpdatedFrom={setUpdatedFrom}
+          updatedTo={updatedTo}
+          setUpdatedTo={setUpdatedTo}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
+        />
 
         {screenshotNoteMessage ? (
           <p
@@ -1437,43 +1267,19 @@ export function NotesPage() {
         />
 
 
-        {versionHistoryNoteId !== null ? (
-          <section className="panel" aria-label="Version history" style={{ marginTop: "var(--space-4)", padding: "var(--space-4)" }}>
-            <div className="section-header">
-              <div>
-                <p className="eyebrow">Version history</p>
-                <h3>{versionHistoryNote?.title ?? `Note #${versionHistoryNoteId}`}</h3>
-              </div>
-              <button type="button" onClick={() => setVersionHistoryNoteId(null)}>Close</button>
-            </div>
-            <QueryState isLoading={noteVersionsQuery.isLoading} isError={Boolean(noteVersionsQuery.data && !noteVersionsQuery.data.ok)} isEmpty={!noteVersionsQuery.isLoading && noteVersions.length === 0} emptyMessage="No previous versions have been saved yet." />
-            {noteVersions.length ? (
-              <div className="row" style={{ alignItems: "stretch", gap: "var(--space-4)", flexWrap: "wrap" }}>
-                <label className="field-stack" style={{ flex: "1 1 16rem" }}>
-                  <span>Saved versions</span>
-                  <select value={selectedVersion?.id ?? ""} onChange={(event) => setSelectedVersionId(Number(event.target.value))}>
-                    {noteVersions.map((version) => <option key={version.id} value={version.id}>{formatDate(version.createdAt)} · {version.title}</option>)}
-                  </select>
-                </label>
-                <div className="row compact-row" style={{ alignSelf: "end" }}>
-                  <button type="button" className="button-primary" disabled={!selectedVersion || restoreNoteVersion.isPending} onClick={restoreSelectedVersion}>Restore this version</button>
-                </div>
-                <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}>
-                  <p className="eyebrow">Current</p>
-                  <h4>{versionHistoryNote?.title}</h4>
-                  <CodePreview body={(versionHistoryNote?.body ?? "").slice(0, 1200)} contentType={versionHistoryNote?.contentType ?? "PLAIN_TEXT"} />
-                </div>
-                <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}>
-                  <p className="eyebrow">Previous · {formatDate(selectedVersion?.createdAt)}</p>
-                  <h4>{selectedVersion?.title}</h4>
-                  <p className="muted">Tags: {selectedVersion?.tags?.join(", ") || "none"}</p>
-                  <CodePreview body={(selectedVersion?.body ?? "").slice(0, 1200)} contentType={selectedVersion?.contentType ?? "PLAIN_TEXT"} />
-                </div>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
+        <NoteVersionHistoryPanel
+          versionHistoryNoteId={versionHistoryNoteId}
+          versionHistoryNote={versionHistoryNote}
+          noteVersionsQuery={noteVersionsQuery}
+          noteVersions={noteVersions}
+          selectedVersion={selectedVersion}
+          setSelectedVersionId={setSelectedVersionId}
+          setVersionHistoryNoteId={setVersionHistoryNoteId}
+          restoreNoteVersion={restoreNoteVersion}
+          restoreSelectedVersion={restoreSelectedVersion}
+        />
 
+        <NotesResults viewMode={viewMode}>
         {viewMode === "sticky" ? (
           <div className="panel" aria-label="Sticky note board" style={{ position: "relative", minHeight: "34rem", overflow: "auto", marginTop: "var(--space-4)", background: "linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(14, 165, 233, 0.08))" }}>
             {notes.map((note, index) => (
@@ -1537,10 +1343,12 @@ export function NotesPage() {
               </section>
             ))}
           </div>
-        ) : null}
+        ) : null}        </NotesResults>
+
       </section>
       </div>
 
+      <NoteFormPanel>
       <section
         className="page-card main-content-card"
         aria-labelledby="note-form-title"
@@ -1856,6 +1664,7 @@ export function NotesPage() {
           }
         />
       </section>
+      </NoteFormPanel>
 
       {convertTaskModal ? (
         <div className="modal-backdrop" role="presentation">
@@ -1878,93 +1687,16 @@ export function NotesPage() {
         </div>
       ) : null}
 
-      {cropOverlay ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="crop-overlay-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-3)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "var(--space-4)",
-            background: "rgba(15, 23, 42, 0.88)",
-          }}
-        >
-          <div className="panel" style={{ maxWidth: "min(96vw, 72rem)" }}>
-            <div className="section-header" style={{ gap: "var(--space-3)" }}>
-              <div>
-                <h3 id="crop-overlay-title">Capture area screenshot</h3>
-                <p className="muted" role="status">
-                  Drag over the preview to select the area to upload. Press Escape or Cancel to stop.
-                </p>
-              </div>
-              <div className="row compact-row">
-                <button type="button" onClick={() => cancelCropOverlay()}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="button-primary"
-                  onClick={() => void confirmCropOverlay()}
-                  disabled={!getNormalizedSelection(cropOverlay.selection)}
-                >
-                  Confirm crop
-                </button>
-              </div>
-            </div>
-            <div
-              style={{
-                position: "relative",
-                display: "inline-block",
-                maxWidth: "100%",
-                lineHeight: 0,
-                cursor: "crosshair",
-              }}
-            >
-              <img
-                ref={cropImageRef}
-                src={cropOverlay.imageSrc}
-                alt="Captured screen preview for area selection"
-                draggable={false}
-                onPointerDown={handleCropPointerDown}
-                onPointerMove={handleCropPointerMove}
-                onPointerUp={handleCropPointerUp}
-                style={{
-                  display: "block",
-                  maxWidth: "min(92vw, 70rem)",
-                  maxHeight: "70vh",
-                  width: "auto",
-                  height: "auto",
-                  userSelect: "none",
-                  borderRadius: "var(--radius-md)",
-                }}
-              />
-              {getNormalizedSelection(cropOverlay.selection) ? (
-                <div
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    left: `${(getNormalizedSelection(cropOverlay.selection)!.left / cropOverlay.width) * 100}%`,
-                    top: `${(getNormalizedSelection(cropOverlay.selection)!.top / cropOverlay.height) * 100}%`,
-                    width: `${(getNormalizedSelection(cropOverlay.selection)!.width / cropOverlay.width) * 100}%`,
-                    height: `${(getNormalizedSelection(cropOverlay.selection)!.height / cropOverlay.height) * 100}%`,
-                    border: "2px solid #38bdf8",
-                    background: "rgba(56, 189, 248, 0.2)",
-                    boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.45)",
-                    pointerEvents: "none",
-                  }}
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ScreenshotCropOverlay
+        cropOverlay={cropOverlay}
+        cropImageRef={cropImageRef}
+        getNormalizedSelection={getNormalizedSelection}
+        cancelCropOverlay={cancelCropOverlay}
+        confirmCropOverlay={confirmCropOverlay}
+        handleCropPointerDown={handleCropPointerDown}
+        handleCropPointerMove={handleCropPointerMove}
+        handleCropPointerUp={handleCropPointerUp}
+      />
     </div>
   );
 }
