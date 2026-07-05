@@ -5,6 +5,7 @@ import com.taskpriority.model.NoteContentType;
 import com.taskpriority.notes.NoteService;
 import com.taskpriority.notes.NoteBlockService;
 import com.taskpriority.notes.NoteTaskConversionService;
+import com.taskpriority.notes.ai.NoteAiGenerationService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -36,11 +37,13 @@ public class NoteController {
     private final NoteService noteService;
     private final NoteBlockService noteBlockService;
     private final NoteTaskConversionService noteTaskConversionService;
+    private final NoteAiGenerationService noteAiGenerationService;
 
-    public NoteController(NoteService noteService, NoteBlockService noteBlockService, NoteTaskConversionService noteTaskConversionService) {
+    public NoteController(NoteService noteService, NoteBlockService noteBlockService, NoteTaskConversionService noteTaskConversionService, NoteAiGenerationService noteAiGenerationService) {
         this.noteService = noteService;
         this.noteBlockService = noteBlockService;
         this.noteTaskConversionService = noteTaskConversionService;
+        this.noteAiGenerationService = noteAiGenerationService;
     }
 
     @GetMapping
@@ -175,6 +178,16 @@ public class NoteController {
     public ResponseEntity<Void> deleteScreenshot(@PathVariable Long id, @PathVariable Long attachmentId) {
         noteService.deleteScreenshot(id, attachmentId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/ai-generations")
+    public List<NoteAiGenerationResponse> aiGenerations(@PathVariable Long id) {
+        return noteAiGenerationService.findByNote(id);
+    }
+
+    @PostMapping("/{id}/ai-actions")
+    public ResponseEntity<NoteAiGenerationResponse> runAiAction(@PathVariable Long id, @Validated @RequestBody RunNoteAiActionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(noteAiGenerationService.run(id, request));
     }
 
     @DeleteMapping("/{id}")

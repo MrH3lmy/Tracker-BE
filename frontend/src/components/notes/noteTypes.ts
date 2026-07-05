@@ -85,3 +85,20 @@ export interface NoteTemplateRecord {
   createdAt?: string;
   updatedAt?: string;
 }
+
+
+export type NoteAiAction = 'SUMMARIZE' | 'EXTRACT_TASKS' | 'EXTRACT_DECISIONS' | 'REWRITE' | 'CREATE_TASK_PLAN';
+
+export interface NoteAiGenerationRecord {
+  id: number;
+  noteId: number;
+  action: NoteAiAction;
+  provider: string;
+  model?: string | null;
+  generatedContent: string;
+  sourceHash: string;
+  generated: boolean;
+  applied: boolean;
+  auditMetadata: string;
+  createdAt?: string;
+}

@@ -3,6 +3,7 @@ import { parseJsonObject, type ValidationResult } from './json';
 export const EXCLUDED_WEEKDAYS_KEY = 'excludedWeekdays';
 export const HOLIDAY_DATES_KEY = 'holidayDates';
 export const DEFAULT_DAILY_CAPACITY_HOURS_KEY = 'defaultDailyCapacityHours';
+export const AI_FEATURES_ENABLED_KEY = 'aiFeaturesEnabled';
 
 const weekdays = new Set(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']);
 const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,6 +44,11 @@ export function validateSettingsPayload(text: string): ValidationResult<Record<s
         }
       });
     }
+  }
+
+  const aiFeaturesEnabled = result.parsed[AI_FEATURES_ENABLED_KEY];
+  if (aiFeaturesEnabled !== undefined && typeof aiFeaturesEnabled !== 'boolean') {
+    errors.push(`${AI_FEATURES_ENABLED_KEY} must be a boolean.`);
   }
 
   const dailyCapacity = result.parsed[DEFAULT_DAILY_CAPACITY_HOURS_KEY];
