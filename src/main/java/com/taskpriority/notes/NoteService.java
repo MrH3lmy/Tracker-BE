@@ -46,6 +46,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Duration;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -77,6 +78,10 @@ public class NoteService {
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
+    private static final List<String> SUPPORTED_NOTE_SORT_FIELDS = List.of(
+            "createdAt", "updatedAt", "displayOrder", "title", "task", "contentType"
+    );
+
 
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
@@ -479,9 +484,11 @@ public class NoteService {
     }
 
     private Pageable buildNotesPageable(String sortBy, String sortDirection, Integer page, Integer size, boolean taskScoped) {
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        String property = switch (sortBy == null ? "" : sortBy.trim()) {
+        Sort.Direction direction = parseSortDirection(sortDirection);
+        String normalizedSortBy = normalizeSortBy(sortBy);
+        String property = switch (normalizedSortBy == null ? "" : normalizedSortBy) {
             case "createdAt" -> "createdAt";
+            case "updatedAt" -> "updatedAt";
             case "displayOrder" -> "displayOrder";
             case "title" -> "title";
             case "task" -> "task.title";
@@ -497,6 +504,29 @@ public class NoteService {
         return PageRequest.of(safePage, safeSize, sort);
     }
 
+    private Sort.Direction parseSortDirection(String sortDirection) {
+        if (sortDirection == null || sortDirection.isBlank()) {
+            return Sort.Direction.DESC;
+        }
+        String normalized = sortDirection.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "asc" -> Sort.Direction.ASC;
+            case "desc" -> Sort.Direction.DESC;
+            default -> throw new IllegalArgumentException("sortDirection must be one of: asc, desc");
+        };
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return null;
+        }
+        String normalized = sortBy.trim();
+        if (!SUPPORTED_NOTE_SORT_FIELDS.contains(normalized)) {
+            throw new IllegalArgumentException("sortBy must be one of: " + String.join(", ", SUPPORTED_NOTE_SORT_FIELDS));
+        }
+        return normalized;
+    }
+
     private String normalizeQuery(String query) {
         if (query == null || query.isBlank()) {
             return null;
@@ -507,13 +537,21 @@ public class NoteService {
     private LocalDateTime parseStartDateTime(String value) {
         if (value == null || value.isBlank()) return null;
         String trimmed = value.trim();
-        return trimmed.length() == 10 ? LocalDate.parse(trimmed).atStartOfDay() : LocalDateTime.parse(trimmed);
+        try {
+            return trimmed.length() == 10 ? LocalDate.parse(trimmed).atStartOfDay() : LocalDateTime.parse(trimmed);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Date query parameters must use ISO date (yyyy-MM-dd) or ISO date-time format.", ex);
+        }
     }
 
     private LocalDateTime parseEndDateTime(String value) {
         if (value == null || value.isBlank()) return null;
         String trimmed = value.trim();
-        return trimmed.length() == 10 ? LocalDate.parse(trimmed).atTime(LocalTime.MAX) : LocalDateTime.parse(trimmed);
+        try {
+            return trimmed.length() == 10 ? LocalDate.parse(trimmed).atTime(LocalTime.MAX) : LocalDateTime.parse(trimmed);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Date query parameters must use ISO date (yyyy-MM-dd) or ISO date-time format.", ex);
+        }
     }
 
     private Integer defaultZero(Integer value) {
