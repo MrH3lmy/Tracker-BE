@@ -150,8 +150,7 @@ export function NoteBlockEditor({ blocks, onChange, onConvertToTask, disabled }:
   return <div className="panel" style={{ padding: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
     <div className="section-header">
       <div>
-        <strong>Block editor</strong>
-        <p className="muted">Body text is preserved as a fallback while blocks are introduced.</p>
+        <strong>Note content</strong>
       </div>
       <button type="button" disabled={disabled} onClick={() => onChange([...blocks, newBlock()])}>Add block</button>
     </div>
@@ -161,8 +160,8 @@ export function NoteBlockEditor({ blocks, onChange, onConvertToTask, disabled }:
           <select value={block.type} disabled={disabled} onChange={(event) => updateBlock(block.clientId, { type: event.target.value as NoteBlockType })}>
             {BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
-          <button type="button" disabled={disabled || index === 0} onClick={() => moveBlock(index, -1)}>Up</button>
-          <button type="button" disabled={disabled || index === blocks.length - 1} onClick={() => moveBlock(index, 1)}>Down</button>
+          <button type="button" disabled={disabled || index === 0} aria-label="Move block up" title="Move block up" onClick={() => moveBlock(index, -1)}>↑</button>
+          <button type="button" disabled={disabled || index === blocks.length - 1} aria-label="Move block down" title="Move block down" onClick={() => moveBlock(index, 1)}>↓</button>
           <button type="button" disabled={disabled || blocks.length === 1} onClick={() => removeBlock(block.clientId)}>Remove</button>
           {block.type === 'checklist' ? <button type="button" disabled={disabled || !onConvertToTask || !(block.content ?? '').trim()} onClick={() => onConvertToTask?.(block)}>Convert to task</button> : null}
         </div>
@@ -192,7 +191,16 @@ export function NoteBlockEditor({ blocks, onChange, onConvertToTask, disabled }:
             />
           ) : null}
         </div>}
-        <input value={block.metadata ?? ''} disabled={disabled} placeholder="Optional metadata JSON" onChange={(event) => updateBlock(block.clientId, { metadata: event.target.value })} />
+        <details>
+          <summary className="muted">Advanced block options</summary>
+          <input
+            value={block.metadata ?? ''}
+            disabled={disabled}
+            aria-label="Optional metadata JSON"
+            placeholder="Optional metadata JSON"
+            onChange={(event) => updateBlock(block.clientId, { metadata: event.target.value })}
+          />
+        </details>
       </div>)}
     </div>
   </div>;
