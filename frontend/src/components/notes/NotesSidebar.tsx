@@ -1,3 +1,4 @@
+import styles from "./NotesPage.module.css";
 import { blocksFromBody } from "./NoteBlockEditor";
 import type { NoteRecord } from "./noteTypes";
 import { noteToForm } from "./notesPageHelpers";
@@ -28,30 +29,30 @@ export function NotesSidebar({ collectionFilter, setCollectionFilter, collection
   };
 
   return (
-    <aside className="page-card" aria-label="Notes navigation" style={{ position: "sticky", top: "var(--space-4)" }}>
+    <aside className={`page-card ${styles.stickyPanel}`} aria-label="Notes navigation">
       <p className="eyebrow">Notes navigation</p>
       <h3>Collections</h3>
-      <button type="button" className={!collectionFilter ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter("")}>All notes</button>
-      <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
+      <button type="button" className={`${!collectionFilter ? "button-primary" : "secondary-action"} ${styles.sidebarButton}`} onClick={() => setCollectionFilter("")}>All notes</button>
+      <div className={`stacked-list ${styles.sidebarList}`}>
         {collections.map((collection) => (
-          <button key={collection.id} type="button" className={collectionFilter === String(collection.id) ? "button-primary" : "secondary-action"} onClick={() => setCollectionFilter(String(collection.id))} style={{ justifyContent: "flex-start", borderLeft: `0.35rem solid ${collection.color ?? "#38bdf8"}` }}>
+          <button key={collection.id} type="button" className={`${collectionFilter === String(collection.id) ? "button-primary" : "secondary-action"} ${styles.sidebarButton}`} onClick={() => setCollectionFilter(String(collection.id))} style={{ borderLeft: `0.35rem solid ${collection.color ?? "#38bdf8"}` }}>
             {collection.icon ?? "📁"} {collection.name}
           </button>
         ))}
       </div>
       <h4>Saved views</h4>
-      <div className="stacked-list" style={{ marginTop: "var(--space-3)" }}>
+      <div className={`stacked-list ${styles.sidebarList}`}>
         {defaultSavedViews.map((view) => (
-          <button key={view.name} type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start" }}>{view.name}</button>
+          <button key={view.name} type="button" className={`secondary-action ${styles.sidebarButton}`} onClick={() => applySavedView(view)}>{view.name}</button>
         ))}
         {savedViews.map((view) => (
-          <span key={view.id} className="row compact-row" style={{ alignItems: "center" }}>
-            <button type="button" className="secondary-action" onClick={() => applySavedView(view)} style={{ justifyContent: "flex-start", flex: 1 }}>{view.name}</button>
+          <span key={view.id} className={`row compact-row ${styles.centerRow}`}>
+            <button type="button" className={`secondary-action ${styles.sidebarButton} ${styles.sidebarButtonGrow}`} onClick={() => applySavedView(view)}>{view.name}</button>
             <button type="button" className="link-button" onClick={() => deleteSavedView.mutate(view.id)} aria-label={`Delete saved view ${view.name}`}>×</button>
           </span>
         ))}
       </div>
-      <button type="button" className="secondary-action" onClick={saveCurrentView} disabled={createSavedView.isPending} style={{ marginTop: "var(--space-3)" }}>Save current view</button>
+      <button type="button" className={`secondary-action ${styles.sidebarAction}`} onClick={saveCurrentView} disabled={createSavedView.isPending}>Save current view</button>
       <h4>Recent notes</h4>
       {recentNotes.map((note) => <button key={note.id} type="button" className="link-button" onClick={() => editNote(note)}>{note.title}</button>)}
       <h4>Task-linked</h4>
