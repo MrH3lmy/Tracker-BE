@@ -3768,3 +3768,49 @@ code {
 .slash-command-menu__empty {
   padding: var(--space-3);
 }
+
+.notes-workspace {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.notes-browse-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.85fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.notes-results-panel,
+.notes-editor-panel {
+  min-width: 0;
+}
+
+.notes-editor-panel {
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow: auto;
+}
+
+#note-form-title:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 1180px) {
+  .notes-workspace,
+  .notes-browse-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-workspace > aside,
+  .notes-editor-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
