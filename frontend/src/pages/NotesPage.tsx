@@ -160,6 +160,7 @@ export function NotesPage() {
   const [updatedTo, setUpdatedTo] = useState("");
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
+  const [showRawBody, setShowRawBody] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [versionHistoryNoteId, setVersionHistoryNoteId] = useState<number | null>(null);
@@ -416,6 +417,7 @@ export function NotesPage() {
   const resetForm = () => {
     setForm(emptyFormForTask(linkedTaskId));
     setDraftBlocks(blocksFromBody(""));
+    setShowRawBody(false);
     setEditingNoteId(null);
     setAiReviewSuggestion(null);
   };
@@ -429,6 +431,7 @@ export function NotesPage() {
     setEditingNoteId(note.id);
     setForm(noteToForm(note));
     setDraftBlocks(blocksFromBody(note.body ?? ""));
+    setShowRawBody(false);
     setAiReviewSuggestion(null);
     focusNoteEditor();
   };
@@ -1606,29 +1609,45 @@ export function NotesPage() {
               <p className="muted">Latest stored AI suggestion: {aiGenerations[0].action.toLowerCase().replaceAll('_', ' ')} generated {formatDate(aiGenerations[0].createdAt)}.</p>
             ) : null}
           </div>
-          <label className="field-stack" htmlFor="noteBody">
-            <span>Fallback body / migration source</span>
-            <textarea
-              id="noteBody"
-              className="text-block"
-              rows={8}
-              value={activeForm.body}
-              ref={noteBodyRef}
-              onPaste={(event) => void handleBodyPaste(event)}
-              onChange={(event) => {
-                const nextBody = event.target.value;
-                setForm((current) => ({ ...current, body: nextBody }));
-                setDraftBlocks(blocksFromBody(nextBody));
-                if (editingNoteId !== null && /(^|\s)(@task|\/task)\b/i.test(nextBody)) {
-                  const selectedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
-                  if (selectedTask && !notes.find((note) => note.id === editingNoteId)?.taskLinks?.some((link) => link.taskId === selectedTask.id)) {
-                    linkMentionedTask(editingNoteId, selectedTask.id, selectedTask.title);
-                  }
-                }
-              }}
-              required
-            />
-          </label>
+          <div className="row compact-row">
+            <button
+              type="button"
+              className="secondary-action"
+              aria-expanded={showRawBody}
+              aria-controls="raw-note-body-panel"
+              onClick={() => setShowRawBody((current) => !current)}
+            >
+              {showRawBody ? "Hide raw body" : "Show raw body"}
+            </button>
+            <span className="muted">Reveal the API payload body for paste uploads, migrations, or raw edits.</span>
+          </div>
+          {showRawBody ? (
+            <div id="raw-note-body-panel">
+              <label className="field-stack" htmlFor="noteBody">
+                <span>Raw note body</span>
+                <textarea
+                  id="noteBody"
+                  className="text-block"
+                  rows={8}
+                  value={activeForm.body}
+                  ref={noteBodyRef}
+                  onPaste={(event) => void handleBodyPaste(event)}
+                  onChange={(event) => {
+                    const nextBody = event.target.value;
+                    setForm((current) => ({ ...current, body: nextBody }));
+                    setDraftBlocks(blocksFromBody(nextBody));
+                    if (editingNoteId !== null && /(^|\s)(@task|\/task)\b/i.test(nextBody)) {
+                      const selectedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
+                      if (selectedTask && !notes.find((note) => note.id === editingNoteId)?.taskLinks?.some((link) => link.taskId === selectedTask.id)) {
+                        linkMentionedTask(editingNoteId, selectedTask.id, selectedTask.title);
+                      }
+                    }
+                  }}
+                  required
+                />
+              </label>
+            </div>
+          ) : null}
           {editingNoteId !== null && notes.find((note) => note.id === editingNoteId)?.taskLinks?.length ? (
             <div className="row compact-row" aria-label="Linked task chips">
               {notes.find((note) => note.id === editingNoteId)?.taskLinks?.map((link) => (
