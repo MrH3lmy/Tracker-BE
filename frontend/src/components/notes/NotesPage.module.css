@@ -196,3 +196,29 @@
     overflow: visible;
   }
 }
+
+.noteActionsShell {
+  min-width: 0;
+}
+
+.noteActions {
+  margin-top: var(--space-3);
+}
+
+.compactScreenshotBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.compactScreenshotDialog {
+  width: min(100%, 34rem);
+  max-height: calc(100vh - var(--space-8));
+  overflow: auto;
+  background: var(--color-surface, Canvas);
+  box-shadow: var(--shadow-lg, 0 1rem 3rem rgba(15, 23, 42, 0.28));
+}

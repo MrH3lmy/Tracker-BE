@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
+import { NoteActions } from "../components/notes/NoteActions";
 import { NoteFormPanel } from "../components/notes/NoteFormPanel";
 import { NotesFilters } from "../components/notes/NotesFilters";
 import { NotesResults } from "../components/notes/NotesResults";
@@ -22,9 +23,6 @@ import type {
 import {
   EMPTY_FORM,
   NOTE_CONTENT_TYPES,
-  SCREENSHOT_MAX_FILE_SIZE_BYTES,
-  SUPPORTED_SCREENSHOT_TYPES,
-  formatBytes,
   formatDate,
   getStickyNoteNumber,
   humanizeContentType,
@@ -1337,11 +1335,7 @@ export function NotesPage() {
                 <h3>{note.title}</h3>
                 <p className="muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
                 <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
-                <div className={`row compact-row ${styles.stickyCardActions}`}>
-                  <button type="button" onClick={() => editNote(note)}>Edit</button>
-                  <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button>
-                  <button type="button" onClick={() => openVersionHistory(note)}>Version history</button>
-                </div>
+                <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} />
               </article>
             ))}
           </div>
@@ -1357,17 +1351,10 @@ export function NotesPage() {
                     <p className="muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
                     <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
-                  <div className="row compact-row"><button type="button" onClick={() => editNote(note)}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button><button type="button" onClick={() => openVersionHistory(note)}>Version history</button></div>
+                  <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
                 </div>
                 <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
-                <form className={`panel ${styles.screenshotForm}`} onSubmit={(event) => handleScreenshotSubmit(event, note)}>
-                  <div className={`section-header ${styles.screenshotHeader}`}>
-                    <p className="muted" id={`screenshot-help-${note.id}`}>Attach {SUPPORTED_SCREENSHOT_TYPES}. Limit: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.</p>
-                    <div className="row compact-row"><button type="button" className="secondary-action" onClick={() => void handleTakeScreenshot(note)} disabled={isUploadPending || isCapturePending}>{capturingNoteId === note.id ? "Capturing..." : "Take area screenshot"}</button><button type="submit" className="secondary-action" disabled={isUploadPending || isCapturePending}>{isUploadPending ? "Uploading..." : "Attach image"}</button></div>
-                  </div>
-                  <div className={`row ${styles.endWrapRow}`}><label className={`field-stack ${styles.screenshotField}`} htmlFor={`screenshot-file-${note.id}`}><span>Image file</span><input id={`screenshot-file-${note.id}`} name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby={`screenshot-help-${note.id}`} disabled={isUploadPending} ref={(element) => { screenshotFileInputs.current[note.id] = element; }} /></label><label className={`field-stack ${styles.screenshotField}`} htmlFor={`screenshot-caption-${note.id}`}><span>Caption</span><input id={`screenshot-caption-${note.id}`} value={attachmentCaptions[note.id] ?? ""} placeholder={`Defaults to “${note.title}”`} onChange={(event) => setAttachmentCaptions((current) => ({ ...current, [note.id]: event.target.value }))} disabled={isUploadPending} /></label></div>
-                  {screenshotMessages[note.id] ? <p className={screenshotMessages[note.id].kind === "error" ? "error-text" : "muted"} role={screenshotMessages[note.id].kind === "error" ? "alert" : "status"}>{screenshotMessages[note.id].text}</p> : null}
-                </form>
+
                 {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => <figure key={attachment.id} className={`panel ${styles.attachmentFigure}`}><img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} className={styles.attachmentImage} /><figcaption className={`muted ${styles.attachmentCaption}`}>{attachment.caption ?? attachment.fileName} · <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a></figcaption></figure>)}
               </article>
             ))}
@@ -1378,7 +1365,7 @@ export function NotesPage() {
           <div className={`table-scroll ${styles.tableWrapper}`}>
             <table className={`data-table ${styles.fullWidthTable}`}>
               <thead><tr><th>Title</th><th>Task</th><th>Tags</th><th>Content type</th><th>Updated date</th><th>Attachments</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><button type="button" onClick={() => editNote(note)}>Edit</button></td></tr>)}</tbody>
+              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} /></td></tr>)}</tbody>
             </table>
           </div>
         ) : null}
@@ -1388,7 +1375,7 @@ export function NotesPage() {
             {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
               <section key={date} className={`panel ${styles.timelinePanel}`}>
                 <h3>{date}</h3>
-                {dateNotes.map((note) => <article key={note.id} className={`panel ${styles.timelineCard}`}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p></article>)}
+                {dateNotes.map((note) => <article key={note.id} className={`panel ${styles.timelineCard}`}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p><NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} /></article>)}
               </section>
             ))}
           </div>
