@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
+import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteFormPanel } from "../components/notes/NoteFormPanel";
 import { NotesFilters } from "../components/notes/NotesFilters";
@@ -1211,7 +1212,7 @@ export function NotesPage() {
         </div>
       </header>
 
-      <div className="notes-workspace">
+      <div className={styles.workspace}>
         <NotesSidebar
           collectionFilter={collectionFilter}
           setCollectionFilter={setCollectionFilter}
@@ -1230,9 +1231,9 @@ export function NotesPage() {
           setDraftBlocks={setDraftBlocks}
         />
 
-      <div className="notes-browse-edit-grid">
+      <div className={styles.browseEditGrid}>
       <section
-        className="page-card main-content-card notes-results-panel"
+        className={`page-card main-content-card ${styles.resultsPanel}`}
         aria-labelledby="notes-filters-title"
       >
         <div className="section-header">
@@ -1326,14 +1327,14 @@ export function NotesPage() {
 
         <NotesResults viewMode={viewMode}>
         {viewMode === "sticky" ? (
-          <div className="panel" aria-label="Sticky note board" style={{ position: "relative", minHeight: "34rem", overflow: "auto", marginTop: "var(--space-4)", background: "linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(14, 165, 233, 0.08))" }}>
+          <div className={`panel ${styles.stickyBoard}`} aria-label="Sticky note board">
             {notes.map((note, index) => (
-              <article key={note.id} className="panel" style={{ position: "absolute", left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, borderTop: `0.35rem solid ${note.color ?? "#facc15"}`, padding: "var(--space-4)" }}>
+              <article key={note.id} className={`panel ${styles.stickyCard}`} style={{ left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, borderTop: `0.35rem solid ${note.color ?? "#facc15"}` }}>
                 <p className="eyebrow">Sticky note #{getStickyNoteNumber(note)}</p>
                 <h3>{note.title}</h3>
                 <p className="muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
                 <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
-                <div className="row compact-row" style={{ marginTop: "var(--space-3)" }}>
+                <div className={`row compact-row ${styles.stickyCardActions}`}>
                   <button type="button" onClick={() => editNote(note)}>Edit</button>
                   <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button>
                   <button type="button" onClick={() => openVersionHistory(note)}>Version history</button>
@@ -1346,7 +1347,7 @@ export function NotesPage() {
         {viewMode === "list" ? (
           <div className="stacked-list" aria-label="Fast scanning notes list">
             {notes.map((note) => (
-              <article key={note.id} className="panel" style={{ padding: "var(--space-4)", marginTop: "var(--space-3)" }}>
+              <article key={note.id} className={`panel ${styles.listCard}`}>
                 <div className="section-header">
                   <div>
                     <h3>{note.title}</h3>
@@ -1356,23 +1357,23 @@ export function NotesPage() {
                   <div className="row compact-row"><button type="button" onClick={() => editNote(note)}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button><button type="button" onClick={() => openVersionHistory(note)}>Version history</button></div>
                 </div>
                 <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
-                <form className="panel" onSubmit={(event) => handleScreenshotSubmit(event, note)} style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}>
-                  <div className="section-header" style={{ alignItems: "end", gap: "var(--space-3)" }}>
+                <form className={`panel ${styles.screenshotForm}`} onSubmit={(event) => handleScreenshotSubmit(event, note)}>
+                  <div className={`section-header ${styles.screenshotHeader}`}>
                     <p className="muted" id={`screenshot-help-${note.id}`}>Attach {SUPPORTED_SCREENSHOT_TYPES}. Limit: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.</p>
                     <div className="row compact-row"><button type="button" className="secondary-action" onClick={() => void handleTakeScreenshot(note)} disabled={isUploadPending || isCapturePending}>{capturingNoteId === note.id ? "Capturing..." : "Take area screenshot"}</button><button type="submit" className="secondary-action" disabled={isUploadPending || isCapturePending}>{isUploadPending ? "Uploading..." : "Attach image"}</button></div>
                   </div>
-                  <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}><label className="field-stack" htmlFor={`screenshot-file-${note.id}`} style={{ flex: "1 1 16rem" }}><span>Image file</span><input id={`screenshot-file-${note.id}`} name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby={`screenshot-help-${note.id}`} disabled={isUploadPending} ref={(element) => { screenshotFileInputs.current[note.id] = element; }} /></label><label className="field-stack" htmlFor={`screenshot-caption-${note.id}`} style={{ flex: "1 1 16rem" }}><span>Caption</span><input id={`screenshot-caption-${note.id}`} value={attachmentCaptions[note.id] ?? ""} placeholder={`Defaults to “${note.title}”`} onChange={(event) => setAttachmentCaptions((current) => ({ ...current, [note.id]: event.target.value }))} disabled={isUploadPending} /></label></div>
+                  <div className={`row ${styles.endWrapRow}`}><label className={`field-stack ${styles.screenshotField}`} htmlFor={`screenshot-file-${note.id}`}><span>Image file</span><input id={`screenshot-file-${note.id}`} name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby={`screenshot-help-${note.id}`} disabled={isUploadPending} ref={(element) => { screenshotFileInputs.current[note.id] = element; }} /></label><label className={`field-stack ${styles.screenshotField}`} htmlFor={`screenshot-caption-${note.id}`}><span>Caption</span><input id={`screenshot-caption-${note.id}`} value={attachmentCaptions[note.id] ?? ""} placeholder={`Defaults to “${note.title}”`} onChange={(event) => setAttachmentCaptions((current) => ({ ...current, [note.id]: event.target.value }))} disabled={isUploadPending} /></label></div>
                   {screenshotMessages[note.id] ? <p className={screenshotMessages[note.id].kind === "error" ? "error-text" : "muted"} role={screenshotMessages[note.id].kind === "error" ? "alert" : "status"}>{screenshotMessages[note.id].text}</p> : null}
                 </form>
-                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => <figure key={attachment.id} className="panel" style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}><img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} style={{ display: "block", maxWidth: "100%", height: "auto", borderRadius: "var(--radius-md)" }} /><figcaption className="muted" style={{ marginTop: "var(--space-2)" }}>{attachment.caption ?? attachment.fileName} · <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a></figcaption></figure>)}
+                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => <figure key={attachment.id} className={`panel ${styles.attachmentFigure}`}><img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} className={styles.attachmentImage} /><figcaption className={`muted ${styles.attachmentCaption}`}>{attachment.caption ?? attachment.fileName} · <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a></figcaption></figure>)}
               </article>
             ))}
           </div>
         ) : null}
 
         {viewMode === "table" ? (
-          <div className="table-scroll" style={{ marginTop: "var(--space-4)", overflowX: "auto" }}>
-            <table className="data-table" style={{ width: "100%" }}>
+          <div className={`table-scroll ${styles.tableWrapper}`}>
+            <table className={`data-table ${styles.fullWidthTable}`}>
               <thead><tr><th>Title</th><th>Task</th><th>Tags</th><th>Content type</th><th>Updated date</th><th>Attachments</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><button type="button" onClick={() => editNote(note)}>Edit</button></td></tr>)}</tbody>
             </table>
@@ -1382,9 +1383,9 @@ export function NotesPage() {
         {viewMode === "timeline" ? (
           <div className="stacked-list" aria-label="Notes timeline">
             {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
-              <section key={date} className="panel" style={{ marginTop: "var(--space-4)", padding: "var(--space-4)" }}>
+              <section key={date} className={`panel ${styles.timelinePanel}`}>
                 <h3>{date}</h3>
-                {dateNotes.map((note) => <article key={note.id} className="panel" style={{ marginTop: "var(--space-3)", padding: "var(--space-3)" }}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p></article>)}
+                {dateNotes.map((note) => <article key={note.id} className={`panel ${styles.timelineCard}`}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p></article>)}
               </section>
             ))}
           </div>
@@ -1392,7 +1393,7 @@ export function NotesPage() {
 
       </section>
 
-      <NoteFormPanel className="notes-editor-panel">
+      <NoteFormPanel className={styles.editorPanel}>
       <section
         className="page-card main-content-card"
         aria-labelledby="note-form-title"
@@ -1407,13 +1408,13 @@ export function NotesPage() {
               to tasks while keeping task descriptions separate.
             </p>
           </div>
-          <div className="row compact-row" style={{ alignItems: "center" }}>
+          <div className={`row compact-row ${styles.centerRow}`}>
             {editingNoteId !== null && (
               <button type="button" onClick={resetForm} disabled={isBusy}>
                 Cancel edit
               </button>
             )}
-            <div className="field-stack" style={{ alignItems: "flex-end" }}>
+            <div className="field-stack align-end">
               <button
                 type="submit"
                 form="note-form"
@@ -1432,7 +1433,7 @@ export function NotesPage() {
         </div>
 
 
-        <div className="config-panel" style={{ marginBottom: "var(--space-4)" }}>
+        <div className={`config-panel ${styles.templatePanel}`}>
           <div className="section-header">
             <div>
               <h4>New from template</h4>
@@ -1442,8 +1443,8 @@ export function NotesPage() {
               {createNoteFromTemplate.isPending ? "Creating..." : "Create from template"}
             </button>
           </div>
-          <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}>
-            <label className="field-stack" style={{ flex: "1 1 16rem" }}>
+          <div className={`row ${styles.endWrapRow}`}>
+            <label className={`field-stack ${styles.templateSelectField}`}>
               <span>Template</span>
               <select value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={templatesQuery.isLoading}>
                 <option value="">Select a template</option>
@@ -1453,27 +1454,26 @@ export function NotesPage() {
               </select>
             </label>
             {TEMPLATE_VARIABLE_KEYS.map((key) => (
-              <label key={key} className="field-stack" style={{ flex: "1 1 10rem" }}>
+              <label key={key} className={`field-stack ${styles.templateVariableField}`}>
                 <span>{key.replace(/([A-Z])/g, " $1")}</span>
                 <input type={key.toLowerCase().includes("date") ? "date" : "text"} value={templateVariables[key]} onChange={(event) => setTemplateVariables((current) => ({ ...current, [key]: event.target.value }))} />
               </label>
             ))}
           </div>
           {selectedTemplate ? (
-            <div className="panel" style={{ marginTop: "var(--space-3)" }}>
+            <div className={`panel ${styles.templatePreviewPanel}`}>
               <strong>{selectedTemplate.name}</strong>
               <p className="muted">{selectedTemplate.description}</p>
-              <pre className="text-block" style={{ whiteSpace: "pre-wrap" }}>{renderedTemplatePreview}</pre>
+              <pre className={`text-block ${styles.templatePreviewContent}`}>{renderedTemplatePreview}</pre>
             </div>
           ) : null}
         </div>
 
         <form id="note-form" onSubmit={handleSubmit} className="config-panel">
-          <div className="row" style={{ alignItems: "end", flexWrap: "wrap" }}>
+          <div className={`row ${styles.endWrapRow}`}>
             <label
-              className="field-stack"
+              className={`field-stack ${styles.titleField}`}
               htmlFor="noteTitle"
-              style={{ flex: "1 1 18rem" }}
             >
               <span>Title</span>
               <input
@@ -1490,9 +1490,8 @@ export function NotesPage() {
               />
             </label>
             <label
-              className="field-stack"
+              className={`field-stack ${styles.contentTypeField}`}
               htmlFor="noteContentType"
-              style={{ flex: "0 1 16rem" }}
             >
               <span>Content type</span>
               <select
@@ -1513,9 +1512,8 @@ export function NotesPage() {
               </select>
             </label>
             <label
-              className="field-stack"
+              className={`field-stack ${styles.linkedTaskField}`}
               htmlFor="noteTaskId"
-              style={{ flex: "0 1 12rem" }}
             >
               <span>Linked task (optional)</span>
               <select
@@ -1536,7 +1534,7 @@ export function NotesPage() {
                 ))}
               </select>
             </label>
-            <label className="field-stack" htmlFor="noteCollectionId" style={{ flex: "0 1 12rem" }}>
+            <label className={`field-stack ${styles.collectionField}`} htmlFor="noteCollectionId">
               <span>Collection</span>
               <select id="noteCollectionId" value={activeForm.collectionId} onChange={(event) => setForm((current) => ({ ...current, collectionId: event.target.value }))}>
                 <option value="">No collection</option>
@@ -1544,9 +1542,8 @@ export function NotesPage() {
               </select>
             </label>
             <label
-              className="field-stack"
+              className={`field-stack ${styles.tagsField}`}
               htmlFor="noteTags"
-              style={{ flex: "1 1 16rem" }}
             >
               <span>Tags</span>
               <input
@@ -1578,7 +1575,7 @@ export function NotesPage() {
             </button>
             <span className="muted">Type @task or /task in the note, select text, then link it to the current or first loaded task.</span>
           </div>
-          <div className="config-panel" aria-label="AI actions review" style={{ marginTop: "var(--space-3)", marginBottom: "var(--space-3)" }}>
+          <div className={`config-panel ${styles.aiReviewPanel}`} aria-label="AI actions review">
             <div className="section-header">
               <div>
                 <h4>AI actions</h4>
@@ -1595,9 +1592,9 @@ export function NotesPage() {
             </div>
             {!aiFeaturesEnabled ? <p className="muted">Turn on <code>aiFeaturesEnabled</code> in Settings only when AI assistance is acceptable for your offline/privacy posture.</p> : null}
             {aiReviewSuggestion ? (
-              <div className="panel" style={{ marginTop: "var(--space-3)" }}>
+              <div className={`panel ${styles.aiReviewSuggestion}`}>
                 <p className="eyebrow">Review before applying · {aiReviewSuggestion.provider} {aiReviewSuggestion.model ? `(${aiReviewSuggestion.model})` : ""}</p>
-                <pre className="text-block" style={{ whiteSpace: "pre-wrap" }}>{aiReviewSuggestion.generatedContent}</pre>
+                <pre className={`text-block ${styles.aiReviewContent}`}>{aiReviewSuggestion.generatedContent}</pre>
                 <p className="muted">Audit: generated={String(aiReviewSuggestion.generated)} · action={aiReviewSuggestion.action} · source hash {aiReviewSuggestion.sourceHash.slice(0, 12)}…</p>
                 <div className="row compact-row">
                   <button type="button" className="button-primary" onClick={appendAiSuggestionToBody}>Append to note body</button>
@@ -1675,7 +1672,7 @@ export function NotesPage() {
             </div>
           ) : null}
 
-          <div className="save-bar">
+          <div className={`save-bar ${styles.saveBarSpacing}`}>
             <div>
               <strong>
                 {editingNoteId === null

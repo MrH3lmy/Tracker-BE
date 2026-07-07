@@ -1,0 +1,198 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.browseEditGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.85fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.resultsPanel,
+.editorPanel {
+  min-width: 0;
+}
+
+.stickyPanel,
+.editorPanel {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.editorPanel {
+  max-height: calc(100vh - var(--space-8));
+  overflow: auto;
+}
+
+.sidebarList,
+.sidebarAction,
+.stickyCardActions,
+.listCardTags,
+.formActions,
+.linkedTaskChips,
+.conversionActions,
+.aiActionsMenu {
+  margin-top: var(--space-3);
+}
+
+.sidebarButton {
+  justify-content: flex-start;
+}
+
+.sidebarButtonGrow {
+  flex: 1;
+}
+
+.centerRow {
+  align-items: center;
+}
+
+.endWrapRow {
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.filterPrimaryField {
+  flex: 1 1 18rem;
+}
+
+.filterSelectField,
+.screenshotField,
+.tagsField,
+.templateSelectField {
+  flex: 1 1 16rem;
+}
+
+.collectionField {
+  flex: 0 1 12rem;
+}
+
+.filterNarrowField,
+.linkedTaskField {
+  flex: 0 1 12rem;
+}
+
+.filterTagModeField {
+  flex: 0 1 10rem;
+}
+
+.filterDateField {
+  flex: 0 1 11rem;
+}
+
+.viewModeSortRow {
+  margin-top: var(--space-4);
+}
+
+.sortByField {
+  min-width: 12rem;
+}
+
+.sortDirectionField {
+  min-width: 10rem;
+}
+
+.stickyBoard {
+  position: relative;
+  min-height: 34rem;
+  overflow: auto;
+  margin-top: var(--space-4);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.14), rgba(14, 165, 233, 0.08));
+}
+
+.stickyCard {
+  position: absolute;
+  padding: var(--space-4);
+}
+
+.listCard {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+}
+
+.timelinePanel {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+}
+
+.timelineCard,
+.screenshotForm,
+.attachmentFigure,
+.templatePreviewPanel,
+.aiReviewSuggestion {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+}
+
+.screenshotHeader {
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.attachmentImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
+.attachmentCaption {
+  margin-top: var(--space-2);
+}
+
+.tableWrapper {
+  margin-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.fullWidthTable {
+  width: 100%;
+}
+
+.templatePanel {
+  margin-bottom: var(--space-4);
+}
+
+.templateVariableField {
+  flex: 1 1 10rem;
+}
+
+.templatePreviewContent,
+.aiReviewContent {
+  white-space: pre-wrap;
+}
+
+.titleField {
+  flex: 1 1 18rem;
+}
+
+.contentTypeField {
+  flex: 0 1 16rem;
+}
+
+.aiReviewPanel {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.saveBarSpacing {
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 1180px) {
+  .workspace,
+  .browseEditGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stickyPanel,
+  .editorPanel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
