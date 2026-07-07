@@ -191,6 +191,7 @@ export function NotesPage() {
     {},
   );
   const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteFormTitleRef = useRef<HTMLHeadingElement | null>(null);
   const cropImageRef = useRef<HTMLImageElement | null>(null);
   const [cropOverlay, setCropOverlay] = useState<CropOverlayState | null>(null);
   const cropOverlayRef = useRef<CropOverlayState | null>(null);
@@ -404,11 +405,31 @@ export function NotesPage() {
     linkMentionedTask(editingNoteId, firstTask.id, selected || `@task ${firstTask.title}`);
   };
 
+  const focusNoteEditor = () => {
+    window.setTimeout(() => {
+      noteFormTitleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      noteFormTitleRef.current?.focus({ preventScroll: true });
+    }, 0);
+  };
+
   const resetForm = () => {
     setForm(emptyFormForTask(linkedTaskId));
     setDraftBlocks(blocksFromBody(""));
     setEditingNoteId(null);
     setAiReviewSuggestion(null);
+  };
+
+  const openNewNoteEditor = () => {
+    resetForm();
+    focusNoteEditor();
+  };
+
+  const editNote = (note: NoteRecord) => {
+    setEditingNoteId(note.id);
+    setForm(noteToForm(note));
+    setDraftBlocks(blocksFromBody(note.body ?? ""));
+    setAiReviewSuggestion(null);
+    focusNoteEditor();
   };
 
   const runAiActionForNote = (action: NoteAiAction) => {
@@ -1182,15 +1203,15 @@ export function NotesPage() {
           <button
             type="button"
             className="button-primary"
-            onClick={resetForm}
-            disabled={isBusy || editingNoteId === null}
+            onClick={openNewNoteEditor}
+            disabled={isBusy}
           >
             New note
           </button>
         </div>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(14rem, 18rem) 1fr", gap: "var(--space-4)", alignItems: "start" }}>
+      <div className="notes-workspace">
         <NotesSidebar
           collectionFilter={collectionFilter}
           setCollectionFilter={setCollectionFilter}
@@ -1204,13 +1225,14 @@ export function NotesPage() {
           recentNotes={recentNotes}
           taskLinkedNotes={taskLinkedNotes}
           archivedNotes={archivedNotes}
-          setEditingNoteId={setEditingNoteId}
+          setEditingNoteId={(noteId) => { setEditingNoteId(noteId); focusNoteEditor(); }}
           setForm={setForm}
           setDraftBlocks={setDraftBlocks}
         />
 
+      <div className="notes-browse-edit-grid">
       <section
-        className="page-card main-content-card"
+        className="page-card main-content-card notes-results-panel"
         aria-labelledby="notes-filters-title"
       >
         <div className="section-header">
@@ -1312,7 +1334,7 @@ export function NotesPage() {
                 <p className="muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
                 <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
                 <div className="row compact-row" style={{ marginTop: "var(--space-3)" }}>
-                  <button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button>
+                  <button type="button" onClick={() => editNote(note)}>Edit</button>
                   <button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button>
                   <button type="button" onClick={() => openVersionHistory(note)}>Version history</button>
                 </div>
@@ -1331,7 +1353,7 @@ export function NotesPage() {
                     <p className="muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
                     <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
-                  <div className="row compact-row"><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button><button type="button" onClick={() => openVersionHistory(note)}>Version history</button></div>
+                  <div className="row compact-row"><button type="button" onClick={() => editNote(note)}>Edit</button><button type="button" onClick={() => copyBody(note)}>{copiedNoteId === note.id ? "Copied" : "Copy"}</button><button type="button" onClick={() => openVersionHistory(note)}>Version history</button></div>
                 </div>
                 <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
                 <form className="panel" onSubmit={(event) => handleScreenshotSubmit(event, note)} style={{ margin: "var(--space-3) 0 0", padding: "var(--space-3)" }}>
@@ -1352,7 +1374,7 @@ export function NotesPage() {
           <div className="table-scroll" style={{ marginTop: "var(--space-4)", overflowX: "auto" }}>
             <table className="data-table" style={{ width: "100%" }}>
               <thead><tr><th>Title</th><th>Task</th><th>Tags</th><th>Content type</th><th>Updated date</th><th>Attachments</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><button type="button" onClick={() => { setEditingNoteId(note.id); setForm(noteToForm(note)); setDraftBlocks(blocksFromBody(note.body ?? "")); }}>Edit</button></td></tr>)}</tbody>
+              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><button type="button" onClick={() => editNote(note)}>Edit</button></td></tr>)}</tbody>
             </table>
           </div>
         ) : null}
@@ -1369,17 +1391,15 @@ export function NotesPage() {
         ) : null}        </NotesResults>
 
       </section>
-      </div>
 
-      <NoteFormPanel>
+      <NoteFormPanel className="notes-editor-panel">
       <section
         className="page-card main-content-card"
         aria-labelledby="note-form-title"
-        style={{ marginTop: "var(--space-6)" }}
       >
         <div className="section-header">
           <div>
-            <h3 id="note-form-title">
+            <h3 id="note-form-title" ref={noteFormTitleRef} tabIndex={-1}>
               {editingNoteId === null ? "Create note" : "Edit note"}
             </h3>
             <p className="muted">
@@ -1688,6 +1708,8 @@ export function NotesPage() {
         />
       </section>
       </NoteFormPanel>
+      </div>
+      </div>
 
       {convertTaskModal ? (
         <div className="modal-backdrop" role="presentation">
