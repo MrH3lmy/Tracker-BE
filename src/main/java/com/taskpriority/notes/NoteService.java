@@ -114,10 +114,18 @@ public class NoteService {
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
-        return noteRepository.findAll(NoteSpecifications.matching(taskId, collectionId, normalizedQuery, contentType,
+        List<Long> noteIds = noteRepository.findIds(NoteSpecifications.matching(taskId, collectionId, normalizedQuery, contentType,
                         hasAttachments, linkedTask, parseStartDateTime(createdFrom), parseEndDateTime(createdTo),
-                        parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode), pageable)
-                .stream()
+                        parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode), pageable);
+        if (noteIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Note> notesById = noteRepository.findAllWithAssociationsByIdIn(noteIds).stream()
+                .collect(Collectors.toMap(Note::getId, Function.identity()));
+        return noteIds.stream()
+                .map(notesById::get)
+                .filter(java.util.Objects::nonNull)
                 .map(this::toResponse)
                 .toList();
     }

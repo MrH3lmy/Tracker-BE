@@ -9,9 +9,13 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificationExecutor<Note> {
+public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificationExecutor<Note>, NoteRepositoryCustom {
 
     List<Note> findByTaskIdOrderByDisplayOrderAscIdAsc(Long taskId);
 
@@ -20,9 +24,21 @@ public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificat
     List<Note> findByContentTypeOrderByUpdatedAtDescIdDesc(NoteContentType contentType);
 
     default List<Note> findAllMatching(Long taskId, String query, NoteContentType contentType) {
-        return findAll(NoteSpecifications.matching(taskId, null, query, contentType, null, null,
-                null, null, null, null, null, List.of(), null));
+        List<Long> noteIds = findIds(NoteSpecifications.matching(taskId, null, query, contentType, null, null,
+                null, null, null, null, null, List.of(), null), Pageable.unpaged());
+        if (noteIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Note> notesById = findAllWithAssociationsByIdIn(noteIds).stream()
+                .collect(Collectors.toMap(Note::getId, Function.identity()));
+        return noteIds.stream()
+                .map(notesById::get)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
+
+    @EntityGraph(attributePaths = {"tags", "collection", "task"})
+    List<Note> findAllWithAssociationsByIdIn(Collection<Long> ids);
 
     @Override
     @EntityGraph(attributePaths = {"tags", "collection"})

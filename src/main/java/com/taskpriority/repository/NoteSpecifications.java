@@ -117,7 +117,14 @@ public final class NoteSpecifications {
             return criteriaBuilder.equal(tagCount, (long) tags.size());
         }
 
-        Join<Note, Tag> tag = root.join("tags", JoinType.INNER);
-        return tag.get("name").in(tags);
+        Subquery<Long> matchingTag = criteriaQuery.subquery(Long.class);
+        Root<Note> subqueryNote = matchingTag.from(Note.class);
+        Join<Note, Tag> subqueryTag = subqueryNote.join("tags", JoinType.INNER);
+        matchingTag.select(subqueryNote.get("id"))
+                .where(criteriaBuilder.and(
+                        criteriaBuilder.equal(subqueryNote.get("id"), root.get("id")),
+                        subqueryTag.get("name").in(tags)
+                ));
+        return criteriaBuilder.exists(matchingTag);
     }
 }
