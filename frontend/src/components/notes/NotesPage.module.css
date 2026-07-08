@@ -222,3 +222,33 @@
   background: var(--color-surface, Canvas);
   box-shadow: var(--shadow-lg, 0 1rem 3rem rgba(15, 23, 42, 0.28));
 }
+
+.createNoteDrawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.createNoteDrawer {
+  width: min(100%, 28rem);
+  max-width: 30rem;
+  height: 100vh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--color-surface, Canvas);
+  box-shadow: var(--shadow-lg, -0.75rem 0 2rem rgba(15, 23, 42, 0.22));
+}
+
+.createNoteDrawer :global(.page-card) {
+  min-height: 100%;
+}
+
+@media (max-width: 640px) {
+  .createNoteDrawer {
+    width: 100%;
+    max-width: none;
+  }
+}
