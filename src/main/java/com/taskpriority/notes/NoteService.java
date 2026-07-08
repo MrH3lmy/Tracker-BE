@@ -26,6 +26,7 @@ import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
+import com.taskpriority.repository.NoteSpecifications;
 import com.taskpriority.repository.NoteCollectionRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.NoteVersionRepository;
@@ -113,11 +114,9 @@ public class NoteService {
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
-        boolean matchAllTags = "all".equalsIgnoreCase(tagMode);
-        long requiredTagCount = matchAllTags ? normalizedTags.size() : 0L;
-        return noteRepository.findAllMatching(taskId, collectionId, normalizedQuery, contentType, hasAttachments, linkedTask,
-                        parseStartDateTime(createdFrom), parseEndDateTime(createdTo), parseStartDateTime(updatedFrom),
-                        parseEndDateTime(updatedTo), untagged, !normalizedTags.isEmpty(), normalizedTags, requiredTagCount, pageable)
+        return noteRepository.findAll(NoteSpecifications.matching(taskId, collectionId, normalizedQuery, contentType,
+                        hasAttachments, linkedTask, parseStartDateTime(createdFrom), parseEndDateTime(createdTo),
+                        parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode), pageable)
                 .stream()
                 .map(this::toResponse)
                 .toList();
