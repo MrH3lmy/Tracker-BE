@@ -277,6 +277,20 @@ class NoteControllerApiTest {
     }
 
     @Test
+    void findAllTagModeAnyWithEmptyTagListDoesNotFilterResults() throws Exception {
+        createNote("Tagged runbook", "Deploy the API", null, "MARKDOWN", "backend");
+        createNote("Untagged note", "Capture general context", null, "PLAIN_TEXT");
+
+        mockMvc.perform(get("/api/v1/notes")
+                        .param("tagMode", "any")
+                        .param("tag", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].title", hasItem("Tagged runbook")))
+                .andExpect(jsonPath("$[*].title", hasItem("Untagged note")));
+    }
+
+    @Test
     void findByTaskIdAndQuerySearchesTaskLinkedNoteBodyFragment() throws Exception {
         Task selectedTask = saveTask("Task with searchable notes");
         Task otherTask = saveTask("Other searchable task");
