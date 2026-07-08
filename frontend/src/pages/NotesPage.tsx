@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { QueryState } from "../components/QueryState";
 import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
 import { NotesFilters } from "../components/notes/NotesFilters";
+import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesResults } from "../components/notes/NotesResults";
 import { NotesSidebar } from "../components/notes/NotesSidebar";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
@@ -1184,43 +1185,18 @@ export function NotesPage() {
 
   return (
     <div className="page-pattern notes-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Knowledge base</p>
-          <h2>Notes</h2>
-          <p>
-            Capture searchable notes, commands, JSON snippets, and reference
-            material without overloading task descriptions.
-          </p>
-        </div>
-        <div className="row compact-row">
-          {screenshotNoteTaskId ? (
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={() => void handleScreenshotNote()}
-              disabled={isBusy || isUploadPending || isCapturePending}
-            >
-              {isCreatingScreenshotNote
-                ? "Creating screenshot note..."
-                : "Capture area note"}
-            </button>
-          ) : null}
-          {linkedTaskId ? (
-            <Link className="secondary-action" to="/notes">
-              View all notes
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            className="button-primary"
-            onClick={openNewNoteEditor}
-            disabled={isBusy}
-          >
-            New note
-          </button>
-        </div>
-      </header>
+      <NotesHeader
+        canCaptureAreaNote={Boolean(screenshotNoteTaskId)}
+        isBusy={isBusy}
+        isUploadPending={isUploadPending}
+        isCapturePending={isCapturePending}
+        isCreatingScreenshotNote={isCreatingScreenshotNote}
+        isLinkedTaskView={Boolean(linkedTaskId)}
+        isReloading={notesQuery.isFetching}
+        onCaptureAreaNote={() => void handleScreenshotNote()}
+        onNewNote={openNewNoteEditor}
+        onReload={() => void notesQuery.refetch()}
+      />
 
       <div className={styles.workspace}>
         <NotesSidebar
@@ -1259,14 +1235,6 @@ export function NotesPage() {
                 : "Search note titles and bodies, then narrow by content type or tag."}
             </p>
           </div>
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={() => notesQuery.refetch()}
-            disabled={notesQuery.isFetching}
-          >
-            {notesQuery.isFetching ? "Loading..." : "Reload notes"}
-          </button>
         </div>
 
         <NotesFilters
