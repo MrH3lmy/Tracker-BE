@@ -1,3 +1,4 @@
+import { type RefObject } from "react";
 import { Link } from "react-router-dom";
 
 interface NotesHeaderProps {
@@ -11,6 +12,7 @@ interface NotesHeaderProps {
   onCaptureAreaNote: () => void;
   onNewNote: () => void;
   onReload: () => void;
+  newNoteButtonRef: RefObject<HTMLButtonElement | null>;
 }
 
 export function NotesHeader({
@@ -24,6 +26,7 @@ export function NotesHeader({
   onCaptureAreaNote,
   onNewNote,
   onReload,
+  newNoteButtonRef,
 }: NotesHeaderProps) {
   const hasContextualActions = canCaptureAreaNote || isLinkedTaskView;
 
@@ -50,6 +53,7 @@ export function NotesHeader({
           <button
             type="button"
             className="button-primary"
+            ref={newNoteButtonRef}
             onClick={onNewNote}
             disabled={isBusy}
           >

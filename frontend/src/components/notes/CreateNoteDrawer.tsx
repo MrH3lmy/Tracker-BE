@@ -1,4 +1,4 @@
-import { type ClipboardEvent, type Dispatch, type FormEvent, type RefObject, type SetStateAction } from "react";
+import { useEffect, type ClipboardEvent, type Dispatch, type FormEvent, type RefObject, type SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import { QueryState } from "../QueryState";
 import styles from "./NotesPage.module.css";
@@ -26,6 +26,7 @@ interface CreateNoteDrawerProps {
   isBusy: boolean;
   canSubmit: boolean;
   noteFormTitleRef: RefObject<HTMLHeadingElement | null>;
+  noteTitleInputRef: RefObject<HTMLInputElement | null>;
   canCreateFromTemplate: boolean;
   handleCreateFromTemplate: () => void;
   isCreateFromTemplatePending: boolean;
@@ -68,8 +69,21 @@ interface CreateNoteDrawerProps {
 }
 
 export function CreateNoteDrawer({
-  isOpen, onClose, editingNoteId, isBusy, canSubmit, noteFormTitleRef, canCreateFromTemplate, handleCreateFromTemplate, isCreateFromTemplatePending, templatesQueryIsLoading, templates, selectedTemplateId, setSelectedTemplateId, templateVariableKeys, templateVariables, setTemplateVariables, selectedTemplate, renderedTemplatePreview, handleSubmit, activeForm, noteDate, setForm, availableTasks, collections, draftBlocks, setDraftBlocks, handleTaskMentionShortcut, aiFeaturesEnabled, aiNoteActions, runAiActionForNote, aiReviewSuggestion, setAiReviewSuggestion, appendAiSuggestionToBody, aiGenerations, showRawBody, setShowRawBody, noteBodyRef, handleBodyPaste, notes, deleteTaskLink, clipboardImageMessage, pendingClipboardImages, latestMutationResult, onConvertToTask, linkMentionedTask,
+  isOpen, onClose, editingNoteId, isBusy, canSubmit, noteFormTitleRef, noteTitleInputRef, canCreateFromTemplate, handleCreateFromTemplate, isCreateFromTemplatePending, templatesQueryIsLoading, templates, selectedTemplateId, setSelectedTemplateId, templateVariableKeys, templateVariables, setTemplateVariables, selectedTemplate, renderedTemplatePreview, handleSubmit, activeForm, noteDate, setForm, availableTasks, collections, draftBlocks, setDraftBlocks, handleTaskMentionShortcut, aiFeaturesEnabled, aiNoteActions, runAiActionForNote, aiReviewSuggestion, setAiReviewSuggestion, appendAiSuggestionToBody, aiGenerations, showRawBody, setShowRawBody, noteBodyRef, handleBodyPaste, notes, deleteTaskLink, clipboardImageMessage, pendingClipboardImages, latestMutationResult, onConvertToTask, linkMentionedTask,
 }: CreateNoteDrawerProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -90,11 +104,9 @@ export function CreateNoteDrawer({
             </p>
           </div>
           <div className={`row compact-row ${styles.centerRow}`}>
-            {editingNoteId !== null && (
-              <button type="button" onClick={onClose} disabled={isBusy}>
-                Cancel
-              </button>
-            )}
+            <button type="button" aria-label="Close note drawer" onClick={onClose} disabled={isBusy}>
+              Close
+            </button>
             <div className="field-stack align-end">
               <button
                 type="submit"
@@ -159,6 +171,7 @@ export function CreateNoteDrawer({
               <span>Title</span>
               <input
                 id="noteTitle"
+                ref={noteTitleInputRef}
                 value={activeForm.title}
                 maxLength={255}
                 onChange={(event) =>
