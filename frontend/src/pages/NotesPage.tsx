@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
@@ -195,6 +195,9 @@ export function NotesPage() {
   );
   const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const noteFormTitleRef = useRef<HTMLHeadingElement | null>(null);
+  const noteTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const newNoteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasCreateDrawerOpenRef = useRef(false);
   const cropImageRef = useRef<HTMLImageElement | null>(null);
   const [cropOverlay, setCropOverlay] = useState<CropOverlayState | null>(null);
   const cropOverlayRef = useRef<CropOverlayState | null>(null);
@@ -422,11 +425,12 @@ export function NotesPage() {
     linkMentionedTask(editingNoteId, firstTask.id, selected || `@task ${firstTask.title}`);
   };
 
-  const focusNoteEditor = () => {
+  const focusNoteEditor = useCallback(() => {
     window.setTimeout(() => {
-      noteFormTitleRef.current?.focus({ preventScroll: true });
+      const target = noteTitleInputRef.current ?? noteFormTitleRef.current;
+      target?.focus({ preventScroll: true });
     }, 0);
-  };
+  }, []);
 
   const resetForm = () => {
     setForm(emptyFormForTask(linkedTaskId));
@@ -1174,6 +1178,18 @@ export function NotesPage() {
   });
 
   useEffect(() => {
+    if (isCreateDrawerOpen) {
+      focusNoteEditor();
+    } else if (wasCreateDrawerOpenRef.current) {
+      window.setTimeout(() => {
+        newNoteButtonRef.current?.focus({ preventScroll: true });
+      }, 0);
+    }
+
+    wasCreateDrawerOpenRef.current = isCreateDrawerOpen;
+  }, [focusNoteEditor, isCreateDrawerOpen]);
+
+  useEffect(() => {
     cropOverlayRef.current = cropOverlay;
   }, [cropOverlay]);
 
@@ -1220,6 +1236,7 @@ export function NotesPage() {
         onCaptureAreaNote={() => void handleScreenshotNote()}
         onNewNote={openNewNoteEditor}
         onReload={() => void notesQuery.refetch()}
+        newNoteButtonRef={newNoteButtonRef}
       />
 
       <div className={styles.workspace}>
@@ -1407,6 +1424,7 @@ export function NotesPage() {
         isBusy={isBusy}
         canSubmit={canSubmit}
         noteFormTitleRef={noteFormTitleRef}
+        noteTitleInputRef={noteTitleInputRef}
         canCreateFromTemplate={canCreateFromTemplate}
         handleCreateFromTemplate={handleCreateFromTemplate}
         isCreateFromTemplatePending={createNoteFromTemplate.isPending}
