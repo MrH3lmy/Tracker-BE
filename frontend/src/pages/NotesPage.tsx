@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { QueryState } from "../components/QueryState";
 import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
@@ -8,6 +7,7 @@ import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
 import { NotesToolbar } from "../components/notes/NotesToolbar";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesResults } from "../components/notes/NotesResults";
+import { NotesState } from "../components/notes/NotesState";
 import { NotesTable } from "../components/notes/NotesTable";
 import { NotesSidebar } from "../components/notes/NotesSidebar";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
@@ -271,6 +271,19 @@ export function NotesPage() {
           ? `Request failed with status ${notesQuery.data.status}.`
           : notesQuery.data.error?.details ?? "Request failed.")
       : undefined;
+  const hasActiveNoteFilters = Boolean(
+    search.trim() ||
+      contentTypeFilter !== "all" ||
+      tagFilter.trim() ||
+      collectionFilter ||
+      hasAttachmentsFilter ||
+      linkedTaskFilter ||
+      untaggedFilter ||
+      createdFrom ||
+      createdTo ||
+      updatedFrom ||
+      updatedTo,
+  );
   const recentNotes = useMemo(() => [...notes].sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()).slice(0, 5), [notes]);
   const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
   const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
@@ -428,6 +441,21 @@ export function NotesPage() {
     resetForm();
     setIsCreateDrawerOpen(true);
     focusNoteEditor();
+  };
+
+  const clearNoteFilters = () => {
+    setSearch("");
+    setContentTypeFilter("all");
+    setTagFilter("");
+    setCollectionFilter("");
+    setHasAttachmentsFilter("");
+    setLinkedTaskFilter("");
+    setUntaggedFilter("");
+    setTagMode("any");
+    setCreatedFrom("");
+    setCreatedTo("");
+    setUpdatedFrom("");
+    setUpdatedTo("");
   };
 
   const editNote = (note: NoteRecord) => {
@@ -1278,12 +1306,14 @@ export function NotesPage() {
           </p>
         ) : null}
 
-        <QueryState
+        <NotesState
           isLoading={notesQuery.isLoading}
           isError={Boolean(notesQuery.data && !notesQuery.data.ok)}
           isEmpty={!notesQuery.isLoading && notes.length === 0}
+          hasActiveFilters={hasActiveNoteFilters}
           errorMessage={notesQueryErrorMessage}
-          emptyMessage="No notes match the current filters."
+          onClearFilters={clearNoteFilters}
+          onNewNote={openNewNoteEditor}
         />
 
 
