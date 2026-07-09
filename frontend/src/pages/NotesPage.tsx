@@ -5,7 +5,7 @@ import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
-import { NotesFilters } from "../components/notes/NotesFilters";
+import { NotesToolbar } from "../components/notes/NotesToolbar";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesResults } from "../components/notes/NotesResults";
 import { NotesSidebar } from "../components/notes/NotesSidebar";
@@ -1238,7 +1238,7 @@ export function NotesPage() {
           </div>
         </div>
 
-        <NotesFilters
+        <NotesToolbar
           search={search}
           setSearch={setSearch}
           tagFilter={tagFilter}
