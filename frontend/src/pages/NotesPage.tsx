@@ -63,6 +63,7 @@ const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
 const PASTED_SCREENSHOT_PENDING_REFERENCE = "[Pasted screenshot pending upload]";
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
 const DEFAULT_NOTE_SAVED_VIEWS = [
+  { name: 'All notes', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
   { name: 'Recent', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
   { name: 'Screenshots', filters: { hasAttachments: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
   { name: 'Task notes', filters: { linkedTask: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
