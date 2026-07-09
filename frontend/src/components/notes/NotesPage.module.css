@@ -112,6 +112,46 @@
   flex-wrap: wrap;
 }
 
+
+.notesToolbar {
+  align-items: end;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.toolbarSearchField {
+  flex: 1 0 16rem;
+  min-width: 16rem;
+}
+
+.toolbarSelectField {
+  flex: 0 0 11rem;
+}
+
+.toolbarDirectionField {
+  flex: 0 0 9rem;
+}
+
+.toolbarViewToggle {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.viewModeActive {
+  border-color: var(--color-primary-strong);
+  background: var(--color-surface, Canvas);
+  box-shadow: var(--shadow-sm);
+}
+
+.advancedFiltersButton {
+  flex: 0 0 auto;
+}
+
 .filterPrimaryField {
   flex: 1 1 18rem;
 }

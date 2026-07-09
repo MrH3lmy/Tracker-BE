@@ -3,7 +3,7 @@ import styles from "./NotesPage.module.css";
 import type { NoteContentType } from "./noteTypes";
 import { humanizeContentType, NOTE_CONTENT_TYPES, type NoteSortBy, type NotesViewMode } from "./notesPageHelpers";
 
-interface NotesFiltersProps {
+interface NotesToolbarProps {
   search: string; setSearch: (value: string) => void;
   tagFilter: string; setTagFilter: (value: string) => void;
   collectionFilter: string; setCollectionFilter: (value: string) => void;
@@ -22,24 +22,28 @@ interface NotesFiltersProps {
   sortDirection: "asc" | "desc"; setSortDirection: (value: "asc" | "desc") => void;
 }
 
-export function NotesFilters(props: NotesFiltersProps) {
+export function NotesToolbar(props: NotesToolbarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   return (<>
-    <div className={`row ${styles.endWrapRow}`}>
-      <label className={`field-stack ${styles.filterPrimaryField}`} htmlFor="noteSearch"><span>Search</span><input id="noteSearch" type="search" value={props.search} placeholder="Search title or body" onChange={(event) => props.setSearch(event.target.value)} /></label>
-      <label className={`field-stack ${styles.filterSelectField}`} htmlFor="noteCollectionFilter"><span>Collection</span><select id="noteCollectionFilter" value={props.collectionFilter} onChange={(event) => props.setCollectionFilter(event.target.value)}><option value="">All collections</option>{props.collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}</select></label>
-      <label className={`field-stack ${styles.filterSelectField}`} htmlFor="noteContentTypeFilter"><span>Content type</span><select id="noteContentTypeFilter" value={props.contentTypeFilter} onChange={(event) => props.setContentTypeFilter(event.target.value as NoteContentType | "all")}><option value="all">All types</option>{NOTE_CONTENT_TYPES.map((type) => <option key={type} value={type}>{humanizeContentType(type)}</option>)}</select></label>
-    </div>
-    <div className={`row ${styles.sidebarAction}`}>
+    <div className={`row ${styles.notesToolbar}`} aria-label="Note filters and view options">
+      <label className={`field-stack ${styles.toolbarSearchField}`} htmlFor="noteSearch"><span>Search</span><input id="noteSearch" type="search" value={props.search} placeholder="Search title or body" onChange={(event) => props.setSearch(event.target.value)} /></label>
+      <label className={`field-stack ${styles.toolbarSelectField}`} htmlFor="noteCollectionFilter"><span>Collection</span><select id="noteCollectionFilter" value={props.collectionFilter} onChange={(event) => props.setCollectionFilter(event.target.value)}><option value="">All collections</option>{props.collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}</select></label>
+      <label className={`field-stack ${styles.toolbarSelectField}`} htmlFor="noteContentTypeFilter"><span>Content type</span><select id="noteContentTypeFilter" value={props.contentTypeFilter} onChange={(event) => props.setContentTypeFilter(event.target.value as NoteContentType | "all")}><option value="all">All types</option>{NOTE_CONTENT_TYPES.map((type) => <option key={type} value={type}>{humanizeContentType(type)}</option>)}</select></label>
+      <label className={`field-stack ${styles.toolbarSelectField}`} htmlFor="noteSortBy"><span>Sort by</span><select id="noteSortBy" value={props.sortBy} onChange={(event) => props.setSortBy(event.target.value as NoteSortBy)}><option value="updatedAt">Updated date</option><option value="createdAt">Created date</option><option value="displayOrder">Sticky order</option><option value="title">Title</option><option value="task">Task</option><option value="contentType">Content type</option></select></label>
+      <label className={`field-stack ${styles.toolbarDirectionField}`} htmlFor="noteSortDirection"><span>Direction</span><select id="noteSortDirection" value={props.sortDirection} onChange={(event) => props.setSortDirection(event.target.value as "asc" | "desc")}><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
+      <div className={styles.toolbarViewToggle} role="tablist" aria-label="Note view modes">
+        <span className="sr-only">View</span>
+        {([ ["sticky", "Sticky board"], ["list", "List"], ["table", "Table"], ["timeline", "Timeline"] ] as const).map(([mode, label]) => <button key={mode} type="button" role="tab" aria-selected={props.viewMode === mode} className={`secondary-action ${props.viewMode === mode ? styles.viewModeActive : ""}`} onClick={() => props.setViewMode(mode)}>{label}</button>)}
+      </div>
       <button
         type="button"
-        className="secondary-action"
+        className={`secondary-action ${styles.advancedFiltersButton}`}
         aria-expanded={showAdvancedFilters}
         aria-controls="noteAdvancedFilters"
         onClick={() => setShowAdvancedFilters((current) => !current)}
       >
-        {showAdvancedFilters ? "Hide advanced filters" : "Advanced filters"}
+        {showAdvancedFilters ? "Hide advanced" : "Advanced filters"}
       </button>
     </div>
     {showAdvancedFilters ? (
@@ -55,10 +59,5 @@ export function NotesFilters(props: NotesFiltersProps) {
         <label className={`field-stack ${styles.filterDateField}`} htmlFor="noteUpdatedTo"><span>Updated to</span><input id="noteUpdatedTo" type="date" value={props.updatedTo} onChange={(event) => props.setUpdatedTo(event.target.value)} /></label>
       </div>
     ) : null}
-    <div className={`row compact-row ${styles.viewModeSortRow}`} role="tablist" aria-label="Note view modes">
-      {([ ["sticky", "Sticky board"], ["list", "List"], ["table", "Table"], ["timeline", "Timeline"] ] as const).map(([mode, label]) => <button key={mode} type="button" role="tab" aria-selected={props.viewMode === mode} className={props.viewMode === mode ? "button-primary" : "secondary-action"} onClick={() => props.setViewMode(mode)}>{label}</button>)}
-      <label className={`field-stack ${styles.sortByField}`} htmlFor="noteSortBy"><span>Sort by</span><select id="noteSortBy" value={props.sortBy} onChange={(event) => props.setSortBy(event.target.value as NoteSortBy)}><option value="updatedAt">Updated date</option><option value="createdAt">Created date</option><option value="displayOrder">Sticky order</option><option value="title">Title</option><option value="task">Task</option><option value="contentType">Content type</option></select></label>
-      <label className={`field-stack ${styles.sortDirectionField}`} htmlFor="noteSortDirection"><span>Direction</span><select id="noteSortDirection" value={props.sortDirection} onChange={(event) => props.setSortDirection(event.target.value as "asc" | "desc")}><option value="desc">Descending</option><option value="asc">Ascending</option></select></label>
-    </div>
   </>);
 }
