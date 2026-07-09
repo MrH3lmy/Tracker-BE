@@ -24,6 +24,7 @@ interface NoteActionsProps {
   isUploadPending?: boolean;
   isCapturePending?: boolean;
   isCapturing?: boolean;
+  displayMode?: "buttons" | "menu";
 }
 
 export function NoteActions({
@@ -42,6 +43,7 @@ export function NoteActions({
   isUploadPending = false,
   isCapturePending = false,
   isCapturing = false,
+  displayMode = "buttons",
 }: NoteActionsProps) {
   const [isScreenshotOpen, setIsScreenshotOpen] = useState(false);
   const canAttachScreenshot = Boolean(onTakeScreenshot && onScreenshotSubmit);
@@ -49,19 +51,45 @@ export function NoteActions({
   const helpId = `${formId}-help`;
   const messageId = `${formId}-message`;
   const showScreenshotForm = canAttachScreenshot && (screenshotMode === "inline" || isScreenshotOpen);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const openScreenshotForm = () => {
+    setIsScreenshotOpen(true);
+    setIsMenuOpen(false);
+  };
+  const handleMenuAction = (action: () => void) => {
+    action();
+    setIsMenuOpen(false);
+  };
+  const actionButtons = (
+    <>
+      <button type="button" onClick={() => handleMenuAction(() => onEdit(note))}>Edit</button>
+      <button type="button" onClick={() => handleMenuAction(() => onCopy(note))}>{copied ? "Copied" : "Copy"}</button>
+      <button type="button" onClick={() => handleMenuAction(() => onVersionHistory(note))}>Version history</button>
+      {canAttachScreenshot && screenshotMode === "compact" ? (
+        <button type="button" className="secondary-action" onClick={openScreenshotForm}>Attach screenshot</button>
+      ) : null}
+    </>
+  );
 
   return (
     <div className={styles.noteActionsShell}>
-      <div className={`row compact-row ${styles.noteActions}`}>
-        <button type="button" onClick={() => onEdit(note)}>Edit</button>
-        <button type="button" onClick={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</button>
-        <button type="button" onClick={() => onVersionHistory(note)}>Version history</button>
-        {canAttachScreenshot ? (
-          screenshotMode === "compact" ? (
-            <button type="button" className="secondary-action" onClick={() => setIsScreenshotOpen(true)}>Attach screenshot</button>
-          ) : null
-        ) : null}
-      </div>
+      {displayMode === "menu" ? (
+        <div className={styles.noteActionsMenu}>
+          <button
+            type="button"
+            className={styles.noteActionsMenuTrigger}
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+            aria-label={`Open actions for ${note.title}`}
+            onClick={() => setIsMenuOpen((current) => !current)}
+          >
+            ⋯
+          </button>
+          {isMenuOpen ? <div className={styles.noteActionsMenuPanel} role="menu">{actionButtons}</div> : null}
+        </div>
+      ) : (
+        <div className={`row compact-row ${styles.noteActions}`}>{actionButtons}</div>
+      )}
 
       {showScreenshotForm ? (
         <div className={screenshotMode === "compact" ? styles.compactScreenshotBackdrop : undefined} role={screenshotMode === "compact" ? "presentation" : undefined}>

@@ -8,6 +8,7 @@ import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
 import { NotesToolbar } from "../components/notes/NotesToolbar";
 import { NotesHeader } from "../components/notes/NotesHeader";
 import { NotesResults } from "../components/notes/NotesResults";
+import { NotesTable } from "../components/notes/NotesTable";
 import { NotesSidebar } from "../components/notes/NotesSidebar";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
 import { ScreenshotCropOverlay } from "../components/notes/ScreenshotCropOverlay";
@@ -357,12 +358,6 @@ export function NotesPage() {
     });
   };
 
-  const noteStatus = (note: NoteRecord) => {
-    if (editingNoteId === note.id) return "Editing";
-    if ((note.attachments?.length ?? 0) > 0) return "Has attachments";
-    if ((note.taskLinks?.length ?? 0) > 0 || note.taskId) return "Linked";
-    return "Unlinked";
-  };
 
   const openConvertTaskModal = (sourceText: string, blockId?: number) => {
     if (editingNoteId === null) {
@@ -1340,12 +1335,23 @@ export function NotesPage() {
         ) : null}
 
         {viewMode === "table" ? (
-          <div className={`table-scroll ${styles.tableWrapper}`}>
-            <table className={`data-table ${styles.fullWidthTable}`}>
-              <thead><tr><th>Title</th><th>Task</th><th>Tags</th><th>Content type</th><th>Updated date</th><th>Attachments</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{notes.map((note) => <tr key={note.id}><td>{note.title}</td><td>{note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "—"}</td><td>{note.tags?.join(", ") || "—"}</td><td>{humanizeContentType(note.contentType)}</td><td>{formatDate(note.updatedAt)}</td><td>{note.attachments?.length ?? 0}</td><td>{noteStatus(note)}</td><td><NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} /></td></tr>)}</tbody>
-            </table>
-          </div>
+          <NotesTable
+            notes={notes}
+            taskTitleById={taskTitleById}
+            copiedNoteId={copiedNoteId}
+            onEdit={editNote}
+            onCopy={copyBody}
+            onVersionHistory={openVersionHistory}
+            onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)}
+            onScreenshotSubmit={handleScreenshotSubmit}
+            screenshotMessages={screenshotMessages}
+            attachmentCaptions={attachmentCaptions}
+            onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))}
+            screenshotInputRef={(noteId, element) => { screenshotFileInputs.current[noteId] = element; }}
+            isUploadPending={isUploadPending}
+            isCapturePending={isCapturePending}
+            capturingNoteId={capturingNoteId}
+          />
         ) : null}
 
         {viewMode === "timeline" ? (
