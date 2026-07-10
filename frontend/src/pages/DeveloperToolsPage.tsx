@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clearApiHistory, getApiHistory, subscribeToApiHistory } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
+import { PrimitivesGallery } from '../components/dev/PrimitivesGallery';
 
 export function DeveloperToolsPage() {
   const [history, setHistory] = useState(() => getApiHistory());
@@ -61,6 +62,8 @@ export function DeveloperToolsPage() {
         <p className="muted">Use this developer-only view to inspect request metadata, payloads, responses, and errors.</p>
         <RequestInspector result={latestResult} history={history} />
       </section>
+
+      <PrimitivesGallery />
     </div>
   );
 }

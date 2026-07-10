@@ -1,3 +1,7 @@
+/* Establish layer order before Tailwind declares its own: the legacy App.css
+   layer must sit above preflight (base) but below components/utilities. */
+@layer theme, base, legacy, components, utilities;
+
 @import "@fontsource-variable/inter";
 @import "tailwindcss";
 

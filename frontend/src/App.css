@@ -1,5 +1,10 @@
 @import "./styles/tokens.css";
 
+/* Legacy stylesheet, retired page by page during the redesign. It lives in
+   the `legacy` cascade layer (above Tailwind preflight, below utilities) so
+   redesigned components always win over these element-level rules. */
+@layer legacy {
+
 *,
 *::before,
 *::after {
@@ -3773,4 +3778,6 @@ code {
   outline: 3px solid var(--color-primary);
   outline-offset: 0.25rem;
   border-radius: var(--legacy-radius-sm);
+}
+
 }
