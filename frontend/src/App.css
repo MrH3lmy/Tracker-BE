@@ -663,48 +663,6 @@ th {
   color: var(--color-primary-strong);
 }
 
-.config-panel,
-.import-panel,
-.import-editor {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.validation-banner,
-.save-bar {
-  padding: var(--space-4);
-}
-
-.theme-selector-card {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.theme-selector-card select {
-  width: min(100%, 24rem);
-}
-
-.validation-banner {
-  align-items: center;
-}
-
-.validation-banner span,
-.save-bar p {
-  margin: 0;
-}
-
-.validation-banner.valid {
-  border-color: var(--color-success-border);
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-
-.validation-banner.invalid {
-  border-color: var(--color-danger-border);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-
 .save-bar {
   align-items: center;
   background: var(--color-bg-soft-panel);
@@ -715,43 +673,10 @@ th {
   justify-content: flex-end;
 }
 
-.import-mode-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.import-mode-card {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.import-mode-card.active {
-  border-color: var(--color-border-strong);
-  background: var(--gradient-primary-soft);
-}
-
 code {
   border-radius: var(--legacy-radius-sm);
   background: var(--color-surface-muted);
   padding: 0.08rem 0.28rem;
-}
-
-.weekday-checkbox-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.weekday-checkbox-grid legend {
-  width: 100%;
-  margin-bottom: var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .checkbox-pill {
@@ -763,24 +688,6 @@ code {
   padding: 0.45rem 0.7rem;
   background: var(--color-surface-panel);
   font-weight: 800;
-}
-
-.calendar-settings-grid {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.35fr) minmax(16rem, 1fr);
-  gap: var(--space-4);
-  align-items: start;
-}
-
-.calendar-settings-grid input,
-.calendar-settings-grid textarea {
-  width: 100%;
-}
-
-@media (max-width: 760px) {
-  .calendar-settings-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .slash-command-anchor {

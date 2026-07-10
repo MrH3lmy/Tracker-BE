@@ -3,5 +3,10 @@ interface PlaceholderPageProps {
 }
 
 export function PlaceholderPage({ title }: PlaceholderPageProps) {
-  return <div><h2>{title}</h2><p>Scaffolded page.</p></div>;
+  return (
+    <div className="flex flex-col gap-2">
+      <h2 className="text-xl font-semibold tracking-tight text-fg">{title}</h2>
+      <p className="text-sm text-fg-muted">Scaffolded page.</p>
+    </div>
+  );
 }
