@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { NoteBlockType } from './noteTypes';
+import { cn } from '../ui';
 
 export interface SlashCommand {
   id: string;
@@ -27,6 +28,14 @@ interface SlashCommandMenuProps {
   onSelect: (command: SlashCommand) => void;
 }
 
+// Note: this is a hand-styled listbox (matching the Menu primitive's visual
+// language) rather than the Radix-backed Menu/MenuContent/MenuItem
+// components. Those require a trigger element and manage their own open
+// state; this menu's open/close and keyboard navigation (ArrowUp/Down,
+// Enter, Escape) are driven entirely by the parent NoteBlockEditor's
+// textarea keydown handler based on cursor position, which isn't compatible
+// with Radix's trigger-driven model. Wiring it through Radix would require
+// changing that interaction logic, which is out of scope for a visual pass.
 export function SlashCommandMenu({
   commands,
   activeIndex,
@@ -35,27 +44,38 @@ export function SlashCommandMenu({
 }: SlashCommandMenuProps) {
   if (commands.length === 0) {
     return (
-      <div className="slash-command-menu" role="listbox" aria-label="Slash commands">
-        <div className="slash-command-menu__empty">No matching commands</div>
+      <div
+        role="listbox"
+        aria-label="Slash commands"
+        className="absolute top-full left-0 z-(--z-dropdown) mt-1.5 w-[min(26rem,100%)] overflow-hidden rounded-lg border border-line bg-raised p-1 shadow-md"
+      >
+        <div className="px-2.5 py-1.5 text-sm text-fg-subtle">No matching commands</div>
       </div>
     );
   }
 
   return (
-    <div className="slash-command-menu" role="listbox" aria-label="Slash commands">
+    <div
+      role="listbox"
+      aria-label="Slash commands"
+      className="absolute top-full left-0 z-(--z-dropdown) mt-1.5 max-h-72 w-[min(26rem,100%)] overflow-y-auto rounded-lg border border-line bg-raised p-1 shadow-md"
+    >
       {commands.map((command, index) => (
         <button
           key={command.id}
           type="button"
-          className={`slash-command-menu__item${index === activeIndex ? ' slash-command-menu__item--active' : ''}`}
           role="option"
           aria-selected={index === activeIndex}
           onMouseEnter={() => onActiveIndexChange(index)}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onSelect(command)}
+          className={cn(
+            'flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-1.5 text-left text-sm outline-none select-none',
+            index === activeIndex ? 'bg-inset text-fg' : 'text-fg',
+          )}
         >
-          <span className="slash-command-menu__label">{command.label}</span>
-          <span className="slash-command-menu__description">{command.description}</span>
+          <span className="font-medium text-fg">{command.label}</span>
+          <span className="text-xs text-fg-muted">{command.description}</span>
         </button>
       ))}
     </div>

@@ -7,6 +7,7 @@ export {
   ArrowRight,
   Calendar,
   CalendarDays,
+  Camera,
   Check,
   CheckCircle2,
   ChevronDown,

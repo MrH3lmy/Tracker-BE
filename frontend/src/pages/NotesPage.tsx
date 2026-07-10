@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import styles from "../components/notes/NotesPage.module.css";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
@@ -48,6 +47,7 @@ import {
   useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
+import { Badge, Button, Dialog, Field, Input, Select } from "../components/ui";
 
 const SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES = new Set([
   "image/png",
@@ -1224,7 +1224,7 @@ export function NotesPage() {
   }, []);
 
   return (
-    <div className="page-pattern notes-page">
+    <div className="flex flex-col gap-5" aria-busy={isBusy}>
       <NotesHeader
         canCaptureAreaNote={Boolean(screenshotNoteTaskId)}
         isBusy={isBusy}
@@ -1239,7 +1239,7 @@ export function NotesPage() {
         newNoteButtonRef={newNoteButtonRef}
       />
 
-      <div className={styles.workspace}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
         <NotesSidebar
           collectionFilter={collectionFilter}
           setCollectionFilter={setCollectionFilter}
@@ -1258,19 +1258,18 @@ export function NotesPage() {
           setDraftBlocks={setDraftBlocks}
         />
 
-      <div className={styles.browseEditGrid}>
       <section
-        className={`page-card main-content-card ${styles.resultsPanel}`}
+        className="min-w-0 overflow-hidden rounded-xl border border-line bg-card p-4 shadow-2xs sm:p-6"
         aria-labelledby="notes-filters-title"
       >
-        <div className="section-header">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 id="notes-filters-title">
+            <h3 id="notes-filters-title" className="text-sm font-semibold text-fg">
               {linkedTaskId
                 ? `Notes for task #${linkedTaskId}`
                 : "Browse notes"}
             </h3>
-            <p className="muted">
+            <p className="mt-0.5 text-sm text-fg-muted">
               {linkedTaskId
                 ? "Showing only notes linked to this task. Search and content-type filters still apply."
                 : "Search note titles and bodies, then narrow by content type or tag."}
@@ -1314,26 +1313,26 @@ export function NotesPage() {
 
         {screenshotNoteMessage ? (
           <p
-            className={
-              screenshotNoteMessage.kind === "error" ? "error-text" : "muted"
-            }
+            className={screenshotNoteMessage.kind === "error" ? "mt-3 text-sm text-critical" : "mt-3 text-sm text-fg-muted"}
             role={screenshotNoteMessage.kind === "error" ? "alert" : "status"}
           >
             {screenshotNoteMessage.text}
           </p>
         ) : null}
 
-        <NotesState
-          isLoading={notesQuery.isLoading}
-          isError={Boolean(notesQuery.data && !notesQuery.data.ok)}
-          isEmpty={!notesQuery.isLoading && notes.length === 0}
-          hasActiveFilters={hasActiveNoteFilters}
-          errorMessage={notesQueryErrorMessage}
-          onClearFilters={clearNoteFilters}
-          onNewNote={openNewNoteEditor}
-        />
+        <div className="mt-4">
+          <NotesState
+            isLoading={notesQuery.isLoading}
+            isError={Boolean(notesQuery.data && !notesQuery.data.ok)}
+            isEmpty={!notesQuery.isLoading && notes.length === 0}
+            hasActiveFilters={hasActiveNoteFilters}
+            errorMessage={notesQueryErrorMessage}
+            onClearFilters={clearNoteFilters}
+            onNewNote={openNewNoteEditor}
+          />
+        </div>
 
-
+        <div className="mt-4">
         <NoteVersionHistoryPanel
           versionHistoryNoteId={versionHistoryNoteId}
           versionHistoryNote={versionHistoryNote}
@@ -1345,15 +1344,39 @@ export function NotesPage() {
           restoreNoteVersion={restoreNoteVersion}
           restoreSelectedVersion={restoreSelectedVersion}
         />
+        </div>
 
+        <div className="mt-4">
         <NotesResults viewMode={viewMode}>
         {viewMode === "sticky" ? (
-          <div className={`panel ${styles.stickyBoard}`} aria-label="Sticky note board">
+          // Canvas geometry note: notes.positionX/positionY/width/height/zIndex
+          // and note.color are persisted, user-driven layout data rendered
+          // via the inline `style` below (unchanged). The container keeps the
+          // exact position/overflow/min-height/margin/padding values it had
+          // under the legacy .panel + .stickyBoard classes (mt-4 p-5 unit-for
+          // -unit match var(--space-4)/var(--space-5)), and no border or
+          // transform was added to it, so the absolute-positioning
+          // containing block is unchanged. Each card keeps the same padding
+          // (p-4 matches the old var(--space-4) that was already winning the
+          // cascade) and the same accidental panel margin-top (mt-4) so
+          // on-screen placement for existing saved layouts is pixel-for-pixel
+          // identical to before. Only decorative chrome changed: background,
+          // shadow, radius, and a thin side border (the top accent border
+          // stays driven by the inline borderTop so note.color still renders
+          // exactly as before).
+          <div
+            className="relative mt-4 min-h-[34rem] overflow-auto rounded-xl bg-[linear-gradient(135deg,var(--app-caution-soft),var(--app-brand-soft))] p-5"
+            aria-label="Sticky note board"
+          >
             {notes.map((note, index) => (
-              <article key={note.id} className={`panel ${styles.stickyCard}`} style={{ left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, borderTop: `0.35rem solid ${note.color ?? "#facc15"}` }}>
-                <p className="eyebrow">Sticky note #{getStickyNoteNumber(note)}</p>
-                <h3>{note.title}</h3>
-                <p className="muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
+              <article
+                key={note.id}
+                className="mt-4 flex flex-col gap-2 rounded-lg border border-line bg-card p-4 shadow-md"
+                style={{ left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, position: "absolute", borderTop: `0.35rem solid ${note.color ?? "#facc15"}` }}
+              >
+                <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Sticky note #{getStickyNoteNumber(note)}</p>
+                <h3 className="text-sm font-semibold text-fg">{note.title}</h3>
+                <p className="text-xs text-fg-muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
                 <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
                 <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} />
               </article>
@@ -1362,20 +1385,31 @@ export function NotesPage() {
         ) : null}
 
         {viewMode === "list" ? (
-          <div className="stacked-list" aria-label="Fast scanning notes list">
+          <div className="flex flex-col gap-3" aria-label="Fast scanning notes list">
             {notes.map((note) => (
-              <article key={note.id} className={`panel ${styles.listCard}`}>
-                <div className="section-header">
-                  <div>
-                    <h3>{note.title}</h3>
-                    <p className="muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
-                    <p>{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
+              <article key={note.id} className="rounded-xl border border-line bg-card p-4 shadow-2xs">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-fg">{note.title}</h3>
+                    <p className="mt-0.5 text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
+                    <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
                   <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
                 </div>
-                <div className="row compact-row">{note.tags?.map((tag) => <span key={tag} className="status-badge status-other">{tag}</span>)}</div>
+                {note.tags?.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {note.tags.map((tag) => <Badge key={tag} variant="neutral">{tag}</Badge>)}
+                  </div>
+                ) : null}
 
-                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => <figure key={attachment.id} className={`panel ${styles.attachmentFigure}`}><img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} className={styles.attachmentImage} /><figcaption className={`muted ${styles.attachmentCaption}`}>{attachment.caption ?? attachment.fileName} · <a href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a></figcaption></figure>)}
+                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => (
+                  <figure key={attachment.id} className="mt-3 rounded-lg border border-line bg-inset/30 p-3">
+                    <img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} className="block max-w-full rounded-md" />
+                    <figcaption className="mt-2 text-xs text-fg-muted">
+                      {attachment.caption ?? attachment.fileName} · <a className="text-brand hover:underline" href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a>
+                    </figcaption>
+                  </figure>
+                ))}
               </article>
             ))}
           </div>
@@ -1402,19 +1436,32 @@ export function NotesPage() {
         ) : null}
 
         {viewMode === "timeline" ? (
-          <div className="stacked-list" aria-label="Notes timeline">
+          <div className="flex flex-col gap-4" aria-label="Notes timeline">
             {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
-              <section key={date} className={`panel ${styles.timelinePanel}`}>
-                <h3>{date}</h3>
-                {dateNotes.map((note) => <article key={note.id} className={`panel ${styles.timelineCard}`}><p className="eyebrow">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p><h4>{note.title}</h4><p className="muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p><p>{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p><NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} /></article>)}
+              <section key={date} className="rounded-xl border border-line bg-card p-4 shadow-2xs">
+                <h3 className="text-sm font-semibold text-fg">{date}</h3>
+                <div className="mt-3 flex flex-col gap-3">
+                  {dateNotes.map((note) => (
+                    <article key={note.id} className="rounded-lg border border-line bg-inset/30 p-3">
+                      <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p>
+                      <h4 className="mt-0.5 text-sm font-semibold text-fg">{note.title}</h4>
+                      <p className="mt-0.5 text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>
+                      <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p>
+                      <div className="mt-3">
+                        <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </section>
             ))}
           </div>
-        ) : null}        </NotesResults>
+        ) : null}
+        </NotesResults>
+        </div>
 
       </section>
 
-      </div>
       </div>
 
       <CreateNoteDrawer
@@ -1466,26 +1513,60 @@ export function NotesPage() {
         linkMentionedTask={linkMentionedTask}
       />
 
-      {convertTaskModal ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="convert-task-title">
-            <div className="section-header">
-              <h3 id="convert-task-title">Convert to task</h3>
-              <button type="button" onClick={() => setConvertTaskModal(null)}>Close</button>
-            </div>
-            <div className="config-panel">
-              <label className="field-stack"><span>Title</span><input value={convertTaskModal.title} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, title: event.target.value } : current)} /></label>
-              <label className="field-stack"><span>Due date</span><input type="date" value={convertTaskModal.dueDate} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, dueDate: event.target.value } : current)} /></label>
-              <label className="field-stack"><span>Priority</span><select value={convertTaskModal.priority} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, priority: event.target.value } : current)}><option value="">Backlog</option><option value="NOT_STARTED">Not started</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="WAITING">Waiting</option></select></label>
-              <label className="field-stack"><span>Area</span><select value={convertTaskModal.area} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, area: event.target.value } : current)}><option value="PERSONAL">Personal</option><option value="WORK">Work</option><option value="STUDY">Study</option><option value="HEALTH">Health</option><option value="FAMILY">Family</option></select></label>
-              <label className="field-stack"><span>Effort</span><select value={convertTaskModal.effort} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, effort: event.target.value } : current)}><option value="QUICK">Quick</option><option value="MEDIUM">Medium</option><option value="DEEP_WORK">Deep work</option><option value="LARGE">Large</option></select></label>
-              <label className="field-stack"><span>Linked task parent</span><select value={convertTaskModal.parentTaskId} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, parentTaskId: event.target.value } : current)}><option value="">No parent</option>{availableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-              <p className="muted">Created from note text: {convertTaskModal.sourceText.slice(0, 160)}</p>
-              <button type="button" className="button-primary" disabled={!convertTaskModal.title.trim() || convertNoteToTask.isPending} onClick={submitConvertTask}>Create linked task</button>
-            </div>
+      <Dialog
+        open={Boolean(convertTaskModal)}
+        onOpenChange={(open) => { if (!open) setConvertTaskModal(null); }}
+        title="Convert to task"
+        footer={
+          <Button variant="primary" disabled={!convertTaskModal?.title.trim() || convertNoteToTask.isPending} onClick={submitConvertTask}>
+            Create linked task
+          </Button>
+        }
+      >
+        {convertTaskModal ? (
+          <div className="flex flex-col gap-3">
+            <Field label="Title" htmlFor="convertTaskTitle">
+              <Input id="convertTaskTitle" value={convertTaskModal.title} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, title: event.target.value } : current)} />
+            </Field>
+            <Field label="Due date" htmlFor="convertTaskDueDate">
+              <Input id="convertTaskDueDate" type="date" value={convertTaskModal.dueDate} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, dueDate: event.target.value } : current)} />
+            </Field>
+            <Field label="Priority" htmlFor="convertTaskPriority">
+              <Select id="convertTaskPriority" value={convertTaskModal.priority} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, priority: event.target.value } : current)}>
+                <option value="">Backlog</option>
+                <option value="NOT_STARTED">Not started</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="BLOCKED">Blocked</option>
+                <option value="WAITING">Waiting</option>
+              </Select>
+            </Field>
+            <Field label="Area" htmlFor="convertTaskArea">
+              <Select id="convertTaskArea" value={convertTaskModal.area} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, area: event.target.value } : current)}>
+                <option value="PERSONAL">Personal</option>
+                <option value="WORK">Work</option>
+                <option value="STUDY">Study</option>
+                <option value="HEALTH">Health</option>
+                <option value="FAMILY">Family</option>
+              </Select>
+            </Field>
+            <Field label="Effort" htmlFor="convertTaskEffort">
+              <Select id="convertTaskEffort" value={convertTaskModal.effort} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, effort: event.target.value } : current)}>
+                <option value="QUICK">Quick</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="DEEP_WORK">Deep work</option>
+                <option value="LARGE">Large</option>
+              </Select>
+            </Field>
+            <Field label="Linked task parent" htmlFor="convertTaskParentId">
+              <Select id="convertTaskParentId" value={convertTaskModal.parentTaskId} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, parentTaskId: event.target.value } : current)}>
+                <option value="">No parent</option>
+                {availableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
+              </Select>
+            </Field>
+            <p className="text-sm text-fg-muted">Created from note text: {convertTaskModal.sourceText.slice(0, 160)}</p>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </Dialog>
 
       <ScreenshotCropOverlay
         cropOverlay={cropOverlay}

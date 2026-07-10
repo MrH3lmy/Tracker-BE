@@ -1,7 +1,7 @@
-import styles from "./NotesPage.module.css";
 import { blocksFromBody } from "./NoteBlockEditor";
 import type { NoteRecord } from "./noteTypes";
 import { noteToForm } from "./notesPageHelpers";
+import { Button, cn } from "../ui";
 
 interface NotesSidebarProps {
   collectionFilter: string;
@@ -21,6 +21,27 @@ interface NotesSidebarProps {
   setDraftBlocks: (blocks: ReturnType<typeof blocksFromBody>) => void;
 }
 
+function NavItem({ active, onClick, className, style, children }: { active?: boolean; onClick: () => void; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={style}
+      className={cn(
+        'flex min-h-8 w-full items-center gap-2 rounded-md border-l-2 border-transparent px-2 py-1.5 text-left text-sm transition-colors duration-(--duration-fast)',
+        active ? 'border-l-brand bg-brand-soft font-medium text-fg' : 'text-fg-muted hover:bg-inset hover:text-fg',
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function NavSectionTitle({ children }: { children: React.ReactNode }) {
+  return <h4 className="mt-4 mb-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase first:mt-0">{children}</h4>;
+}
+
 export function NotesSidebar({ collectionFilter, setCollectionFilter, collections, savedViews, defaultSavedViews, applySavedView, deleteSavedView, saveCurrentView, createSavedView, recentNotes, archivedNotes, setEditingNoteId, setForm, setDraftBlocks }: NotesSidebarProps) {
   const editNote = (note: NoteRecord) => {
     setEditingNoteId(note.id);
@@ -29,38 +50,52 @@ export function NotesSidebar({ collectionFilter, setCollectionFilter, collection
   };
 
   return (
-    <aside className={`page-card ${styles.stickyPanel}`} aria-label="Notes navigation">
-      <p className="eyebrow">Notes navigation</p>
-      <h3 className={styles.navSectionTitle}>Collections</h3>
-      <div className={styles.navList}>
-        <button type="button" className={`${styles.navItem} ${!collectionFilter ? styles.navItemActive : ""}`} onClick={() => setCollectionFilter("")}>All collections</button>
+    <aside className="flex min-w-0 flex-col rounded-xl border border-line bg-card p-4 shadow-2xs lg:sticky lg:top-4" aria-label="Notes navigation">
+      <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Notes navigation</p>
+      <NavSectionTitle>Collections</NavSectionTitle>
+      <div className="flex flex-col gap-0.5">
+        <NavItem active={!collectionFilter} onClick={() => setCollectionFilter("")}>All collections</NavItem>
         {collections.map((collection) => (
-          <button key={collection.id} type="button" className={`${styles.navItem} ${collectionFilter === String(collection.id) ? styles.navItemActive : ""}`} onClick={() => setCollectionFilter(String(collection.id))} style={{ borderLeftColor: collection.color ?? "#38bdf8" }}>
+          <NavItem
+            key={collection.id}
+            active={collectionFilter === String(collection.id)}
+            onClick={() => setCollectionFilter(String(collection.id))}
+            style={{ borderLeftColor: collection.color ?? undefined }}
+          >
             <span aria-hidden="true">{collection.icon ?? "📁"}</span>
-            <span>{collection.name}</span>
-          </button>
+            <span className="truncate">{collection.name}</span>
+          </NavItem>
         ))}
       </div>
-      <h4 className={styles.navSectionTitle}>Saved views</h4>
-      <div className={styles.navList}>
+      <NavSectionTitle>Saved views</NavSectionTitle>
+      <div className="flex flex-col gap-0.5">
         {defaultSavedViews.map((view) => (
-          <button key={view.name} type="button" className={styles.navItem} onClick={() => applySavedView(view)}>{view.name}</button>
+          <NavItem key={view.name} onClick={() => applySavedView(view)}>{view.name}</NavItem>
         ))}
         {savedViews.map((view) => (
-          <span key={view.id} className={`${styles.navItemRow} ${styles.centerRow}`}>
-            <button type="button" className={`${styles.navItem} ${styles.sidebarButtonGrow}`} onClick={() => applySavedView(view)}>{view.name}</button>
-            <button type="button" className="link-button" onClick={() => deleteSavedView.mutate(view.id)} aria-label={`Delete saved view ${view.name}`}>×</button>
-          </span>
+          <div key={view.id} className="flex items-center gap-1">
+            <NavItem onClick={() => applySavedView(view)} className="flex-1">{view.name}</NavItem>
+            <button
+              type="button"
+              className="shrink-0 rounded-md px-1.5 py-1 text-fg-subtle hover:bg-inset hover:text-critical"
+              onClick={() => deleteSavedView.mutate(view.id)}
+              aria-label={`Delete saved view ${view.name}`}
+            >
+              ×
+            </button>
+          </div>
         ))}
       </div>
-      <button type="button" className={`secondary-action ${styles.sidebarAction}`} onClick={saveCurrentView} disabled={createSavedView.isPending}>Save current view</button>
-      <h4 className={styles.navSectionTitle}>Recent notes</h4>
-      <div className={styles.navList}>
-        {recentNotes.map((note) => <button key={note.id} type="button" className={styles.navItem} onClick={() => editNote(note)}>{note.title}</button>)}
+      <Button size="sm" className="mt-3" onClick={saveCurrentView} disabled={createSavedView.isPending}>Save current view</Button>
+      <NavSectionTitle>Recent notes</NavSectionTitle>
+      <div className="flex flex-col gap-0.5">
+        {recentNotes.map((note) => <NavItem key={note.id} onClick={() => editNote(note)}><span className="truncate">{note.title}</span></NavItem>)}
       </div>
-      <h4 className={styles.navSectionTitle}>Archived</h4>
-      <div className={styles.navList}>
-        {archivedNotes.length ? archivedNotes.map((note) => <button key={note.id} type="button" className={styles.navItem} onClick={() => editNote(note)}>{note.title}</button>) : <p className={styles.navEmpty}>Tag notes with archived to show them here.</p>}
+      <NavSectionTitle>Archived</NavSectionTitle>
+      <div className="flex flex-col gap-0.5">
+        {archivedNotes.length
+          ? archivedNotes.map((note) => <NavItem key={note.id} onClick={() => editNote(note)}><span className="truncate">{note.title}</span></NavItem>)
+          : <p className="px-2 py-1.5 text-sm text-fg-subtle">Tag notes with archived to show them here.</p>}
       </div>
     </aside>
   );

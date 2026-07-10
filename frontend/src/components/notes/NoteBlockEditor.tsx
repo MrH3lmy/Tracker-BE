@@ -2,6 +2,7 @@
 import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { SlashCommandMenu, SLASH_COMMANDS, type SlashCommand } from './SlashCommandMenu';
 import type { NoteBlockRecord, NoteBlockType } from './noteTypes';
+import { Button, Checkbox, Input, Select, Textarea } from '../ui';
 
 const BLOCK_TYPES: NoteBlockType[] = ['paragraph', 'heading', 'checklist', 'bullet', 'code', 'quote', 'divider', 'screenshot'];
 
@@ -147,61 +148,84 @@ export function NoteBlockEditor({ blocks, onChange, onConvertToTask, disabled }:
     }
   };
 
-  return <div className="panel" style={{ padding: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-    <div className="section-header">
-      <div>
-        <strong>Note content</strong>
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <strong className="text-sm font-semibold text-fg">Note content</strong>
+        <Button size="sm" disabled={disabled} onClick={() => onChange([...blocks, newBlock()])}>Add block</Button>
       </div>
-      <button type="button" disabled={disabled} onClick={() => onChange([...blocks, newBlock()])}>Add block</button>
+      <div className="flex flex-col gap-3">
+        {blocks.map((block, index) => (
+          <div key={block.clientId} className="flex flex-col gap-2 rounded-lg border border-line bg-inset/30 p-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Select
+                className="h-8 w-auto min-w-28"
+                value={block.type}
+                disabled={disabled}
+                onChange={(event) => updateBlock(block.clientId, { type: event.target.value as NoteBlockType })}
+              >
+                {BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+              </Select>
+              <Button size="sm" variant="ghost" iconOnly disabled={disabled || index === 0} aria-label="Move block up" title="Move block up" onClick={() => moveBlock(index, -1)}>↑</Button>
+              <Button size="sm" variant="ghost" iconOnly disabled={disabled || index === blocks.length - 1} aria-label="Move block down" title="Move block down" onClick={() => moveBlock(index, 1)}>↓</Button>
+              <Button size="sm" variant="ghost" disabled={disabled || blocks.length === 1} onClick={() => removeBlock(block.clientId)}>Remove</Button>
+              {block.type === 'checklist' ? (
+                <Button size="sm" variant="ghost" disabled={disabled || !onConvertToTask || !(block.content ?? '').trim()} onClick={() => onConvertToTask?.(block)}>
+                  Convert to task
+                </Button>
+              ) : null}
+            </div>
+            {block.type === 'checklist' ? (
+              <Checkbox
+                label="Checked"
+                checked={Boolean(block.checked)}
+                disabled={disabled}
+                onChange={(event) => updateBlock(block.clientId, { checked: event.target.checked })}
+              />
+            ) : null}
+            {block.type === 'divider' ? (
+              <p className="text-sm text-fg-subtle">Divider blocks do not need content.</p>
+            ) : (
+              <div className="relative">
+                <Textarea
+                  ref={(element) => { textAreaRefs.current[block.clientId] = element; }}
+                  className="font-mono text-xs"
+                  rows={block.type === 'code' ? 6 : 3}
+                  value={block.content ?? ''}
+                  disabled={disabled}
+                  placeholder={block.type === 'screenshot' ? 'Screenshot URL or attachment reference' : 'Type / for commands'}
+                  onChange={(event) => handleTextChange(block, event)}
+                  onKeyDown={(event) => handleTextKeyDown(block, event)}
+                  onSelect={(event) => {
+                    if (slashMenu?.clientId === block.clientId) {
+                      updateSlashMenuFromTextArea(block.clientId, event.currentTarget);
+                    }
+                  }}
+                />
+                {slashMenu?.clientId === block.clientId ? (
+                  <SlashCommandMenu
+                    commands={filteredSlashCommands}
+                    activeIndex={Math.min(slashMenu.activeIndex, Math.max(filteredSlashCommands.length - 1, 0))}
+                    onActiveIndexChange={(activeIndex) => setSlashMenu((current) => current ? { ...current, activeIndex } : current)}
+                    onSelect={(command) => applySlashCommand(block, command)}
+                  />
+                ) : null}
+              </div>
+            )}
+            <details className="text-sm">
+              <summary className="cursor-pointer text-fg-muted select-none">Advanced block options</summary>
+              <Input
+                className="mt-2"
+                value={block.metadata ?? ''}
+                disabled={disabled}
+                aria-label="Optional metadata JSON"
+                placeholder="Optional metadata JSON"
+                onChange={(event) => updateBlock(block.clientId, { metadata: event.target.value })}
+              />
+            </details>
+          </div>
+        ))}
+      </div>
     </div>
-    <div className="stacked-list">
-      {blocks.map((block, index) => <div key={block.clientId} className="panel" style={{ padding: 'var(--space-3)' }}>
-        <div className="row compact-row">
-          <select value={block.type} disabled={disabled} onChange={(event) => updateBlock(block.clientId, { type: event.target.value as NoteBlockType })}>
-            {BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-          <button type="button" disabled={disabled || index === 0} aria-label="Move block up" title="Move block up" onClick={() => moveBlock(index, -1)}>↑</button>
-          <button type="button" disabled={disabled || index === blocks.length - 1} aria-label="Move block down" title="Move block down" onClick={() => moveBlock(index, 1)}>↓</button>
-          <button type="button" disabled={disabled || blocks.length === 1} onClick={() => removeBlock(block.clientId)}>Remove</button>
-          {block.type === 'checklist' ? <button type="button" disabled={disabled || !onConvertToTask || !(block.content ?? '').trim()} onClick={() => onConvertToTask?.(block)}>Convert to task</button> : null}
-        </div>
-        {block.type === 'checklist' ? <label className="row compact-row"><input type="checkbox" checked={Boolean(block.checked)} disabled={disabled} onChange={(event) => updateBlock(block.clientId, { checked: event.target.checked })} /> Checked</label> : null}
-        {block.type === 'divider' ? <p className="muted">Divider blocks do not need content.</p> : <div className="slash-command-anchor">
-          <textarea
-            ref={(element) => { textAreaRefs.current[block.clientId] = element; }}
-            className="text-block"
-            rows={block.type === 'code' ? 6 : 3}
-            value={block.content ?? ''}
-            disabled={disabled}
-            placeholder={block.type === 'screenshot' ? 'Screenshot URL or attachment reference' : 'Type / for commands'}
-            onChange={(event) => handleTextChange(block, event)}
-            onKeyDown={(event) => handleTextKeyDown(block, event)}
-            onSelect={(event) => {
-              if (slashMenu?.clientId === block.clientId) {
-                updateSlashMenuFromTextArea(block.clientId, event.currentTarget);
-              }
-            }}
-          />
-          {slashMenu?.clientId === block.clientId ? (
-            <SlashCommandMenu
-              commands={filteredSlashCommands}
-              activeIndex={Math.min(slashMenu.activeIndex, Math.max(filteredSlashCommands.length - 1, 0))}
-              onActiveIndexChange={(activeIndex) => setSlashMenu((current) => current ? { ...current, activeIndex } : current)}
-              onSelect={(command) => applySlashCommand(block, command)}
-            />
-          ) : null}
-        </div>}
-        <details>
-          <summary className="muted">Advanced block options</summary>
-          <input
-            value={block.metadata ?? ''}
-            disabled={disabled}
-            aria-label="Optional metadata JSON"
-            placeholder="Optional metadata JSON"
-            onChange={(event) => updateBlock(block.clientId, { metadata: event.target.value })}
-          />
-        </details>
-      </div>)}
-    </div>
-  </div>;
+  );
 }
