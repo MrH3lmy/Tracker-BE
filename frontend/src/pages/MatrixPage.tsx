@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, type ComponentType } from 'react';
 import { QueryState } from '../components/QueryState';
 import { useMatrixQuery } from '../hooks/useApiQueries';
+import { Badge, Button, Card, PageHeader, cn, type BadgeVariant } from '../components/ui';
+import { ArrowRight, Calendar, Check, Clock, X } from '../components/ui/icons';
 
 interface MatrixTask {
   id?: number | string;
@@ -12,12 +14,16 @@ interface MatrixTask {
   priorityReason?: string | null;
 }
 
+type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+
 interface QuadrantConfig {
   key: string;
   title: string;
   subtitle: string;
   emptyLabel: string;
-  emptyIcon: string;
+  emptyIcon: IconComponent;
+  accent: string;
+  badgeVariant: BadgeVariant;
 }
 
 const quadrants: QuadrantConfig[] = [
@@ -26,36 +32,42 @@ const quadrants: QuadrantConfig[] = [
     title: 'Do now',
     subtitle: 'Important and urgent work.',
     emptyLabel: 'Clear for focus',
-    emptyIcon: '✓',
+    emptyIcon: Check,
+    accent: 'border-t-critical',
+    badgeVariant: 'critical',
   },
   {
     key: 'SCHEDULE',
     title: 'Schedule',
     subtitle: 'Important work that needs protected time.',
     emptyLabel: 'Nothing to reserve',
-    emptyIcon: '◷',
+    emptyIcon: Clock,
+    accent: 'border-t-brand',
+    badgeVariant: 'brand',
   },
   {
     key: 'DELEGATE',
     title: 'Delegate',
     subtitle: 'Urgent work that can move with help.',
     emptyLabel: 'No handoffs',
-    emptyIcon: '↗',
+    emptyIcon: ArrowRight,
+    accent: 'border-t-caution',
+    badgeVariant: 'caution',
   },
   {
     key: 'DELETE',
     title: 'Delete',
     subtitle: 'Low-value work to decline, defer, or remove.',
     emptyLabel: 'No clutter found',
-    emptyIcon: '−',
+    emptyIcon: X,
+    accent: 'border-t-line-strong',
+    badgeVariant: 'neutral',
   },
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const asMatrixTask = (value: unknown): MatrixTask | null => isRecord(value) ? value as MatrixTask : null;
 const taskKey = (task: MatrixTask, index: number) => task.id ?? `${task.title ?? 'task'}-${index}`;
-const quadrantClassName = (key: string) => `matrix-${key.toLowerCase().replace('_', '-')}`;
-const statusClassName = (status: string) => `matrix-task-pill--${status.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'status'}`;
 
 function getQuadrantTasks(data: unknown, key: string): MatrixTask[] | null {
   if (!isRecord(data) || !Array.isArray(data[key])) return null;
@@ -66,22 +78,29 @@ function supportsQuadrants(data: unknown): boolean {
   return quadrants.some((quadrant) => getQuadrantTasks(data, quadrant.key) !== null);
 }
 
-function MatrixTaskCard({ task, index }: { task: MatrixTask; index: number }) {
+function MatrixTaskCard({ task }: { task: MatrixTask }) {
   return (
-    <article key={taskKey(task, index)} className="task-preview-card compact matrix-task-card">
-      <div className="matrix-task-copy">
-        <h4>{task.title ?? 'Untitled task'}</h4>
-        {task.description && <p>{task.description}</p>}
+    <article className="flex flex-col gap-2 rounded-lg border border-line bg-card p-3">
+      <div>
+        <h4 className="text-sm font-medium text-fg">{task.title ?? 'Untitled task'}</h4>
+        {task.description && <p className="mt-0.5 text-sm text-fg-muted">{task.description}</p>}
       </div>
-      <div className="task-preview-meta matrix-task-meta" aria-label="Task metadata">
-        {task.dueDate && <span className="matrix-task-pill matrix-task-pill--due">Due {task.dueDate}</span>}
-        {task.status && <span className={`matrix-task-pill ${statusClassName(task.status)}`}>{task.status}</span>}
-        {typeof task.priorityScore === 'number' && <span className="matrix-task-score">Score {task.priorityScore}</span>}
+      <div className="flex flex-wrap gap-1.5" aria-label="Task metadata">
+        {task.dueDate && (
+          <Badge variant="outline">
+            <Calendar className="h-3 w-3" aria-hidden />
+            Due {task.dueDate}
+          </Badge>
+        )}
+        {task.status && <Badge variant="outline">{task.status}</Badge>}
+        {typeof task.priorityScore === 'number' && <Badge variant="brand">Score {task.priorityScore}</Badge>}
       </div>
       {task.priorityReason && (
-        <details className="matrix-task-diagnostics">
-          <summary>Priority details</summary>
-          <p>{task.priorityReason}</p>
+        <details className="group">
+          <summary className="cursor-pointer list-none text-xs font-medium text-fg-muted select-none hover:text-fg [&::-webkit-details-marker]:hidden">
+            Priority details
+          </summary>
+          <p className="mt-1 text-xs text-fg-muted">{task.priorityReason}</p>
         </details>
       )}
     </article>
@@ -96,47 +115,51 @@ function MatrixQuadrants({ data }: { data: unknown }) {
   const totalTasks = quadrantSummaries.reduce((total, quadrant) => total + quadrant.tasks.length, 0);
 
   return (
-    <>
-      <section className="matrix-summary-band" aria-label="Matrix task summary">
-        <div className="matrix-summary-total">
-          <span>Total tasks</span>
-          <strong>{totalTasks}</strong>
+    <div className="flex flex-col gap-4">
+      <section className="flex flex-wrap items-center gap-4 rounded-lg border border-line bg-inset/30 px-4 py-3" aria-label="Matrix task summary">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm text-fg-muted">Total tasks</span>
+          <strong className="text-lg font-semibold text-fg tabular-nums">{totalTasks}</strong>
         </div>
-        <div className="matrix-summary-counts">
+        <div className="flex flex-wrap gap-1.5">
           {quadrantSummaries.map((quadrant) => (
-            <span key={quadrant.key} className={`matrix-summary-pill ${quadrantClassName(quadrant.key)}`}>
-              {quadrant.title}
-              <strong>{quadrant.tasks.length}</strong>
-            </span>
+            <Badge key={quadrant.key} variant={quadrant.badgeVariant}>
+              {quadrant.title} <strong className="font-semibold tabular-nums">{quadrant.tasks.length}</strong>
+            </Badge>
           ))}
         </div>
       </section>
 
-      <div className="matrix-grid">
-        {quadrantSummaries.map((quadrant) => (
-          <section key={quadrant.key} className={`matrix-quadrant ${quadrantClassName(quadrant.key)}`}>
-            <div className="section-card-header">
-              <div>
-                <p className="eyebrow">{quadrant.key.replace('_', ' ')}</p>
-                <h3>{quadrant.title}</h3>
-                <p>{quadrant.subtitle}</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        {quadrantSummaries.map((quadrant) => {
+          const EmptyIcon = quadrant.emptyIcon;
+          return (
+            <section key={quadrant.key} className={cn('flex flex-col gap-3 rounded-xl border border-line border-t-2 bg-card p-4 shadow-2xs', quadrant.accent)}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">{quadrant.key.replace('_', ' ')}</p>
+                  <h3 className="mt-0.5 text-sm font-semibold text-fg">{quadrant.title}</h3>
+                  <p className="mt-0.5 text-sm text-fg-muted">{quadrant.subtitle}</p>
+                </div>
+                <Badge variant={quadrant.badgeVariant}>{quadrant.tasks.length}</Badge>
               </div>
-              <span className="status-badge status-other">{quadrant.tasks.length}</span>
-            </div>
-            {quadrant.tasks.length > 0 ? (
-              <div className="mini-card-list">
-                {quadrant.tasks.map((task, index) => <MatrixTaskCard key={taskKey(task, index)} task={task} index={index} />)}
-              </div>
-            ) : (
-              <div className="matrix-empty-state" role="status">
-                <span aria-hidden="true">{quadrant.emptyIcon}</span>
-                <strong>{quadrant.emptyLabel}</strong>
-              </div>
-            )}
-          </section>
-        ))}
+              {quadrant.tasks.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {quadrant.tasks.map((task, index) => <MatrixTaskCard key={taskKey(task, index)} task={task} />)}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-line px-4 py-6 text-center" role="status">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-inset text-fg-muted">
+                    <EmptyIcon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <strong className="text-sm font-medium text-fg-muted">{quadrant.emptyLabel}</strong>
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -147,29 +170,26 @@ export function MatrixPage() {
   const canRenderQuadrants = supportsQuadrants(query.data?.data);
 
   return (
-    <div className="page-pattern matrix-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Priority matrix</p>
-          <h2>Matrix</h2>
-          <p>See tasks organized by Eisenhower-style priority categories, with diagnostics separated below.</p>
-        </div>
-        <button type="button" className="button-primary" onClick={() => setEnabled(true)} disabled={query.isFetching}>
-          {query.isFetching ? 'Loading...' : enabled ? 'Refresh matrix' : 'Load matrix'}
-        </button>
-      </header>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Matrix"
+        description="See tasks organized by Eisenhower-style priority categories."
+        actions={
+          <Button variant="primary" onClick={() => setEnabled(true)} disabled={query.isFetching}>
+            {query.isFetching ? 'Loading...' : enabled ? 'Refresh matrix' : 'Load matrix'}
+          </Button>
+        }
+        className="mb-0"
+      />
 
-      <section className="page-card main-content-card" aria-labelledby="matrix-content-title">
-        <div className="section-header">
-          <div>
-            <h3 id="matrix-content-title">Quadrants</h3>
-            <p className="muted">Supported matrix responses render as action-oriented cards; unknown shapes keep a JSON fallback.</p>
-          </div>
+      <Card aria-labelledby="matrix-content-title">
+        <div className="mb-4">
+          <h3 id="matrix-content-title" className="text-base font-semibold text-fg">Quadrants</h3>
+          <p className="mt-0.5 text-sm text-fg-muted">Supported matrix responses render as action-oriented cards; unknown shapes keep a JSON fallback.</p>
         </div>
         <QueryState isLoading={query.isLoading || query.isFetching} isError={Boolean(query.data && !query.data.ok)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} />
-        {hasData && (canRenderQuadrants ? <MatrixQuadrants data={query.data?.data} /> : <pre>{JSON.stringify(query.data?.data, null, 2)}</pre>)}
-      </section>
-
+        {hasData && (canRenderQuadrants ? <MatrixQuadrants data={query.data?.data} /> : <pre className="overflow-x-auto rounded-lg bg-inset p-3 font-mono text-xs text-fg-muted">{JSON.stringify(query.data?.data, null, 2)}</pre>)}
+      </Card>
     </div>
   );
 }

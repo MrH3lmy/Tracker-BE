@@ -2,7 +2,6 @@ import type { TaskStatus } from '../../validation/taskStatus';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type FilterValue = 'all' | string;
-export type ViewMode = 'board' | 'list';
 export type TaskSortValue = 'position' | 'priorityScore' | 'dueDate' | 'createdDate' | 'effort' | 'title';
 
 export interface TaskRecord {
@@ -65,11 +64,6 @@ export interface BlockerWarning {
 export interface BlockerAnalysis {
   warnings: BlockerWarning[];
   dependencyCount: number;
-}
-
-export interface BoardColumnData {
-  status: TaskStatus;
-  tasks: TaskTreeNode[];
 }
 
 export interface CreateTaskPayload {

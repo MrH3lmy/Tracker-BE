@@ -1,4 +1,5 @@
-import styles from "./NotesPage.module.css";
+import { Button, EmptyState } from "../ui";
+import { Filter, StickyNote } from "../ui/icons";
 
 interface NotesStateProps {
   isLoading: boolean;
@@ -21,18 +22,17 @@ export function NotesState({
 }: NotesStateProps) {
   if (isLoading) {
     return (
-      <div className={styles.notesState} role="status" aria-live="polite">
-        <p className={styles.notesStateTitle}>Loading notes...</p>
-      </div>
+      <p className="text-sm text-fg-muted" role="status" aria-live="polite">
+        Loading notes...
+      </p>
     );
   }
 
   if (isError) {
     return (
-      <div className={styles.notesState} role="status" aria-live="assertive">
-        <p className={styles.notesStateTitle}>Failed to load notes.</p>
-        <p className="error">{errorMessage ?? "Request failed."}</p>
-      </div>
+      <p className="text-sm font-medium text-critical" role="status" aria-live="assertive">
+        Failed to load notes. {errorMessage ?? "Request failed."}
+      </p>
     );
   }
 
@@ -40,23 +40,21 @@ export function NotesState({
 
   if (hasActiveFilters) {
     return (
-      <div className={styles.notesState} role="status" aria-live="polite">
-        <p className={styles.notesStateTitle}>No matching notes.</p>
-        <p className="muted">Try a different search or clear your filters.</p>
-        <button type="button" className="button-secondary" onClick={onClearFilters}>
-          Clear filters
-        </button>
-      </div>
+      <EmptyState
+        icon={Filter}
+        title="No matching notes."
+        description="Try a different search or clear your filters."
+        action={<Button size="sm" onClick={onClearFilters}>Clear filters</Button>}
+      />
     );
   }
 
   return (
-    <div className={styles.notesState} role="status" aria-live="polite">
-      <p className={styles.notesStateTitle}>No notes yet.</p>
-      <p className="muted">Capture your first note to start building your library.</p>
-      <button type="button" className="button-primary" onClick={onNewNote}>
-        New note
-      </button>
-    </div>
+    <EmptyState
+      icon={StickyNote}
+      title="No notes yet."
+      description="Capture your first note to start building your library."
+      action={<Button variant="primary" size="sm" onClick={onNewNote}>New note</Button>}
+    />
   );
 }

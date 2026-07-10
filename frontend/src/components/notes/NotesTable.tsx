@@ -1,8 +1,8 @@
 import type { FormEvent } from "react";
 import { NoteActions } from "./NoteActions";
-import styles from "./NotesPage.module.css";
 import type { NoteRecord } from "./noteTypes";
 import { formatDate, humanizeContentType } from "./notesPageHelpers";
+import { Badge, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../ui";
 
 interface ScreenshotMessage {
   kind: "success" | "error";
@@ -51,50 +51,48 @@ export function NotesTable({
   capturingNoteId,
 }: NotesTableProps) {
   return (
-    <div className={`table-scroll ${styles.tableWrapper}`}>
-      <table className={`data-table ${styles.fullWidthTable} ${styles.notesTable}`}>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Linked task</th>
-            <th>Type</th>
-            <th>Collection</th>
-            <th>Updated</th>
-            <th className={styles.notesTableActionsHeader}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {notes.map((note) => (
-            <tr key={note.id}>
-              <td className={styles.notesTableTitleCell} title={note.title}>{note.title}</td>
-              <td>{linkedTaskLabel(note, taskTitleById)}</td>
-              <td><span className={styles.notesTableBadge}>{humanizeContentType(note.contentType)}</span></td>
-              <td><span className={styles.notesTableBadge}>{note.collectionName ?? "No collection"}</span></td>
-              <td className={styles.notesTableUpdatedCell}>{formatDate(note.updatedAt)}</td>
-              <td className={styles.notesTableActionsCell}>
-                <NoteActions
-                  note={note}
-                  copied={copiedNoteId === note.id}
-                  onEdit={onEdit}
-                  onCopy={onCopy}
-                  onVersionHistory={onVersionHistory}
-                  screenshotMode="compact"
-                  onTakeScreenshot={onTakeScreenshot}
-                  onScreenshotSubmit={onScreenshotSubmit}
-                  screenshotMessage={screenshotMessages[note.id]}
-                  attachmentCaption={attachmentCaptions[note.id] ?? ""}
-                  onAttachmentCaptionChange={onAttachmentCaptionChange}
-                  screenshotInputRef={(element) => screenshotInputRef(note.id, element)}
-                  isUploadPending={isUploadPending}
-                  isCapturePending={isCapturePending}
-                  isCapturing={capturingNoteId === note.id}
-                  displayMode="menu"
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table aria-label="Notes table">
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell>Title</TableHeaderCell>
+          <TableHeaderCell>Linked task</TableHeaderCell>
+          <TableHeaderCell>Type</TableHeaderCell>
+          <TableHeaderCell>Collection</TableHeaderCell>
+          <TableHeaderCell>Updated</TableHeaderCell>
+          <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {notes.map((note) => (
+          <TableRow key={note.id}>
+            <TableCell className="max-w-[22rem] truncate font-medium" title={note.title}>{note.title}</TableCell>
+            <TableCell className="text-fg-muted">{linkedTaskLabel(note, taskTitleById)}</TableCell>
+            <TableCell><Badge variant="neutral">{humanizeContentType(note.contentType)}</Badge></TableCell>
+            <TableCell><Badge variant="neutral">{note.collectionName ?? "No collection"}</Badge></TableCell>
+            <TableCell className="whitespace-nowrap text-fg-muted">{formatDate(note.updatedAt)}</TableCell>
+            <TableCell className="text-right">
+              <NoteActions
+                note={note}
+                copied={copiedNoteId === note.id}
+                onEdit={onEdit}
+                onCopy={onCopy}
+                onVersionHistory={onVersionHistory}
+                screenshotMode="compact"
+                onTakeScreenshot={onTakeScreenshot}
+                onScreenshotSubmit={onScreenshotSubmit}
+                screenshotMessage={screenshotMessages[note.id]}
+                attachmentCaption={attachmentCaptions[note.id] ?? ""}
+                onAttachmentCaptionChange={onAttachmentCaptionChange}
+                screenshotInputRef={(element) => screenshotInputRef(note.id, element)}
+                isUploadPending={isUploadPending}
+                isCapturePending={isCapturePending}
+                isCapturing={capturingNoteId === note.id}
+                displayMode="menu"
+              />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

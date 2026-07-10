@@ -1,5 +1,7 @@
 import { type RefObject } from "react";
 import { Link } from "react-router-dom";
+import { Button, PageHeader } from "../ui";
+import { Camera, Plus, RefreshCw } from "../ui/icons";
 
 interface NotesHeaderProps {
   canCaptureAreaNote: boolean;
@@ -31,58 +33,40 @@ export function NotesHeader({
   const hasContextualActions = canCaptureAreaNote || isLinkedTaskView;
 
   return (
-    <>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Knowledge base</p>
-          <h2>Notes</h2>
-          <p>
-            Capture searchable notes, commands, JSON snippets, screenshots, and
-            reference material.
-          </p>
-        </div>
-        <div className="row compact-row">
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={onReload}
-            disabled={isReloading}
-          >
-            Reload
-          </button>
-          <button
-            type="button"
-            className="button-primary"
-            ref={newNoteButtonRef}
-            onClick={onNewNote}
-            disabled={isBusy}
-          >
-            New note
-          </button>
-        </div>
-      </header>
+    <div className="flex flex-col gap-3">
+      <PageHeader
+        title="Notes"
+        description="Capture searchable notes, commands, JSON snippets, screenshots, and reference material."
+        actions={
+          <>
+            <Button onClick={onReload} disabled={isReloading}>
+              <RefreshCw className="h-4 w-4" aria-hidden />
+              Reload
+            </Button>
+            <Button variant="primary" ref={newNoteButtonRef} onClick={onNewNote} disabled={isBusy}>
+              <Plus className="h-4 w-4" aria-hidden />
+              New note
+            </Button>
+          </>
+        }
+        className="mb-0"
+      />
 
       {hasContextualActions ? (
-        <div className="row compact-row" aria-label="Notes contextual actions">
+        <div className="flex flex-wrap items-center gap-2" aria-label="Notes contextual actions">
           {canCaptureAreaNote ? (
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={onCaptureAreaNote}
-              disabled={isBusy || isUploadPending || isCapturePending}
-            >
-              {isCreatingScreenshotNote
-                ? "Creating screenshot note..."
-                : "Capture area note"}
-            </button>
+            <Button onClick={onCaptureAreaNote} disabled={isBusy || isUploadPending || isCapturePending}>
+              <Camera className="h-4 w-4" aria-hidden />
+              {isCreatingScreenshotNote ? "Creating screenshot note..." : "Capture area note"}
+            </Button>
           ) : null}
           {isLinkedTaskView ? (
-            <Link className="secondary-action" to="/notes">
+            <Link className="text-sm font-medium text-brand hover:underline" to="/notes">
               View all notes
             </Link>
           ) : null}
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

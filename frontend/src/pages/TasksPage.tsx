@@ -11,6 +11,8 @@ import { TaskListView } from '../components/tasks/TaskListView';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import { latestResult, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import { Badge, Button, Drawer, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '../components/ui';
+import { Filter, Plus, Search } from '../components/ui/icons';
 
 const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
@@ -251,82 +253,79 @@ export function TasksPage() {
   };
 
   return (
-    <div className="tasks-page tasks-page-simple" aria-busy={busy}>
-      <header className="tasks-planner-shell" aria-label="Task controls">
-        <div className="tasks-planner-topbar">
-          <div className="tasks-planner-heading">
-            <div className="tasks-planner-title">
-              <h2>Tasks</h2>
-              <p>Manage, prioritize, and complete your work.</p>
-            </div>
-            <button ref={createButtonRef} className="button-primary planner-new-task" type="button" onClick={showCreatePanel} disabled={busy}>
-              Add task
-            </button>
-          </div>
-
-          <div className="tasks-planner-actions">
-            <div className="planner-toolbar" aria-label="Task search and filters">
-              <label className="planner-search" htmlFor="plannerTaskSearch">
-                <span className="sr-only">Search tasks</span>
-                <input id="plannerTaskSearch" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
-              </label>
-              <button className="planner-icon-button planner-filter-button" type="button" onClick={() => setFiltersOpen((open) => !open)} aria-expanded={filtersOpen} aria-controls="task-filter-panel">
-                <span>Filters</span>
-                {activeFilterCount > 0 && <span className="planner-filter-badge" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</span>}
-              </button>
-            </div>
-
-            <div className="task-view-toggle task-view-tabs-row" role="group" aria-label="Task status views">
-              <button className={tab === 'active' ? 'active' : ''} type="button" onClick={() => setTab('active')}>Active <span>{activeWorkTasks.length}</span></button>
-              <button className={tab === 'done' ? 'active' : ''} type="button" onClick={() => setTab('done')}>Done <span>{doneTasks.length}</span></button>
-              <button className={tab === 'archive' ? 'active' : ''} type="button" onClick={() => setTab('archive')}>Archived <span>{archiveTasks.length}</span></button>
-            </div>
-          </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6" aria-busy={busy}>
+      <header className="flex flex-wrap items-start justify-between gap-3" aria-label="Task controls">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight text-fg">Tasks</h2>
+          <p className="mt-1 text-sm text-fg-muted">Manage, prioritize, and complete your work.</p>
         </div>
+        <Button ref={createButtonRef} variant="primary" onClick={showCreatePanel} disabled={busy}>
+          <Plus className="h-4 w-4" aria-hidden />
+          Add task
+        </Button>
       </header>
 
-      {filtersOpen && (
-        <aside id="task-filter-panel" className="task-filter-popover" role="region" aria-labelledby="task-filter-panel-title">
-          <div className="task-filter-popover-header">
-            <div>
-              <p className="eyebrow">Advanced filters</p>
-              <h3 id="task-filter-panel-title">Refine task list</h3>
-            </div>
-            <button className="planner-icon-button" type="button" onClick={() => setFiltersOpen(false)}>Close</button>
-          </div>
-          <TaskFilters
-            search={search}
-            statusFilter={statusFilter}
-            areaFilter={areaFilter}
-            effortFilter={effortFilter}
-            dueFrom={dueFrom}
-            dueTo={dueTo}
-            overdueOnly={overdueOnly}
-            sort={sort}
-            activeFilterCount={activeFilterCount}
-            areaOptions={areaOptions}
-            effortOptions={effortOptions}
-            disabled={false}
-            serializedFilters={serializedFilters}
-            showSearch={false}
-            onSearchChange={(value) => setFilterParam('q', value, '')}
-            onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
-            onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
-            onEffortFilterChange={(value) => setFilterParam('effort', value, 'all')}
-            onDueFromChange={(value) => setFilterParam('dueFrom', value, '')}
-            onDueToChange={(value) => setFilterParam('dueTo', value, '')}
-            onOverdueOnlyChange={(value) => setFilterParam('overdue', value, false)}
-            onSortChange={(value) => setFilterParam('sort', value, DEFAULT_SORT)}
-            onClearAll={clearFilters}
-            onApplySavedView={applySavedView}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Task search and filters">
+        <label className="relative min-w-0 flex-1 sm:max-w-xs" htmlFor="plannerTaskSearch">
+          <span className="sr-only">Search tasks</span>
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
+          <Input id="plannerTaskSearch" className="pl-9" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
+        </label>
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <PopoverTrigger asChild>
+            <Button aria-expanded={filtersOpen}>
+              <Filter className="h-4 w-4" aria-hidden />
+              Filters
+              {activeFilterCount > 0 && <Badge variant="brand" aria-label={`${activeFilterCount} active filters`}>{activeFilterCount}</Badge>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[min(38rem,calc(100vw-2rem))]" aria-label="Refine task list">
+            <TaskFilters
+              search={search}
+              statusFilter={statusFilter}
+              areaFilter={areaFilter}
+              effortFilter={effortFilter}
+              dueFrom={dueFrom}
+              dueTo={dueTo}
+              overdueOnly={overdueOnly}
+              sort={sort}
+              activeFilterCount={activeFilterCount}
+              areaOptions={areaOptions}
+              effortOptions={effortOptions}
+              disabled={false}
+              serializedFilters={serializedFilters}
+              showSearch={false}
+              onSearchChange={(value) => setFilterParam('q', value, '')}
+              onStatusFilterChange={(value) => setFilterParam('status', value, 'all')}
+              onAreaFilterChange={(value) => setFilterParam('area', value, 'all')}
+              onEffortFilterChange={(value) => setFilterParam('effort', value, 'all')}
+              onDueFromChange={(value) => setFilterParam('dueFrom', value, '')}
+              onDueToChange={(value) => setFilterParam('dueTo', value, '')}
+              onOverdueOnlyChange={(value) => setFilterParam('overdue', value, false)}
+              onSortChange={(value) => setFilterParam('sort', value, DEFAULT_SORT)}
+              onClearAll={clearFilters}
+              onApplySavedView={applySavedView}
+            />
+          </PopoverContent>
+        </Popover>
+        <div className="ms-auto">
+          <SegmentedControl
+            aria-label="Task status views"
+            value={tab}
+            onValueChange={setTab}
+            options={[
+              { value: 'active', label: <>Active <span className="text-fg-subtle tabular-nums">{activeWorkTasks.length}</span></> },
+              { value: 'done', label: <>Done <span className="text-fg-subtle tabular-nums">{doneTasks.length}</span></> },
+              { value: 'archive', label: <>Archived <span className="text-fg-subtle tabular-nums">{archiveTasks.length}</span></> },
+            ]}
           />
-        </aside>
-      )}
+        </div>
+      </div>
 
-      <section className="task-workspace" aria-labelledby="task-list-heading">
+      <section className="flex flex-col gap-3" aria-labelledby="task-list-heading">
         <h3 id="task-list-heading" className="sr-only">{taskListLabel}</h3>
         {activeFilterCount > 0 && (
-          <p className="task-filter-summary">{`${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.`}</p>
+          <p className="text-sm text-fg-muted">{`${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} / sort applied.`}</p>
         )}
 
         <QueryState
@@ -367,22 +366,25 @@ export function TasksPage() {
         />
       )}
 
-      {createOpen && (
-        <div className="task-create-drawer-backdrop" role="presentation">
-          <aside className="task-create-drawer" role="dialog" aria-modal="true" aria-labelledby="create-task-title">
-            <TaskCreateForm
-              ref={createFormRef}
-              activeTasks={activeTasks}
-              busy={busy}
-              isCreating={createTask.isPending}
-              onCancel={closeCreatePanel}
-              onCreate={submitCreate}
-              onInvalidTitle={() => setCreateOpen(true)}
-            />
-          </aside>
-        </div>
-      )}
-
+      <Drawer
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!open) closeCreatePanel();
+        }}
+        title="Create task"
+        description="Quick capture for new work."
+        wide
+      >
+        <TaskCreateForm
+          ref={createFormRef}
+          activeTasks={activeTasks}
+          busy={busy}
+          isCreating={createTask.isPending}
+          onCancel={closeCreatePanel}
+          onCreate={submitCreate}
+          onInvalidTitle={() => setCreateOpen(true)}
+        />
+      </Drawer>
     </div>
   );
 }

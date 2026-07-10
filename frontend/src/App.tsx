@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
 import { useSettingsQuery } from './hooks/useApiQueries';
@@ -12,8 +12,23 @@ import {
   readStoredTheme,
   readThemeFromSettings,
 } from './theme';
-import './App.css';
-
+import { Button, cn } from './components/ui';
+import {
+  AlertTriangle,
+  Calendar,
+  CalendarDays,
+  ChevronsLeft,
+  Grid2x2,
+  Import,
+  LayoutDashboard,
+  ListTodo,
+  MenuIcon,
+  Plus,
+  Settings,
+  StickyNote,
+  Wrench,
+  X,
+} from './components/ui/icons';
 
 const isDevMode = import.meta.env.DEV;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'tracker.sidebar.collapsed';
@@ -30,46 +45,57 @@ const pathMatchesRoute = (pathname: string, routePath: string) => pathname === r
 
 const routeIsDeveloperRoute = ({ path }: AppRoute) => developerTabs.some((tab) => pathMatchesRoute(path, tab.path));
 
-const navLinkClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'tab active' : 'tab');
+type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
-const navIcons: Record<string, ReactNode> = {
-  Dashboard: <path d="M3 10.8 12 3l9 7.8v8.7a1.5 1.5 0 0 1-1.5 1.5h-5v-6h-5v6h-5A1.5 1.5 0 0 1 3 19.5v-8.7Z" />,
-  Tasks: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
-  Planning: <path d="M7 3v3M17 3v3M4 8h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm3 8 2 2 4-4" />,
-  Matrix: <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" />,
-  Calendar: <path d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />,
-  Settings: <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.2 4.8c.1-.4.1-.8.1-1.3s0-.9-.1-1.3l2-1.5-2-3.4-2.4 1a8.7 8.7 0 0 0-2.2-1.3L15.3 3h-4l-.4 2.5a8.7 8.7 0 0 0-2.2 1.3l-2.4-1-2 3.4 2 1.5c-.1.4-.1.8-.1 1.3s0 .9.1 1.3l-2 1.5 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.5h4l.4-2.5a8.7 8.7 0 0 0 2.2-1.3l2.4 1 2-3.4-2.1-1.5Z" />,
-  Import: <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />,
-  'Error Playground': <path d="M12 8v5m0 4h.01M10.3 3.9 2.6 17.2A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0Z" />,
-  'Developer Tools': <path d="M8 9 4 12l4 3m8-6 4 3-4 3M14 5l-4 14" />,
+const navIcons: Record<string, IconComponent> = {
+  Dashboard: LayoutDashboard,
+  Tasks: ListTodo,
+  Notes: StickyNote,
+  Planning: CalendarDays,
+  Matrix: Grid2x2,
+  Calendar: Calendar,
+  Settings: Settings,
+  Import: Import,
+  'Error Playground': AlertTriangle,
+  'Developer Tools': Wrench,
 };
 
-function SidebarIcon({ label }: { label: string }) {
+function SidebarItem({ label, path, collapsed = false, onClick }: { label: string; path: string; collapsed?: boolean; onClick?: () => void }) {
+  const Icon = navIcons[label] ?? LayoutDashboard;
   return (
-    <svg className="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
-      {navIcons[label] ?? navIcons.Dashboard}
-    </svg>
-  );
-}
-
-function SidebarItem({ label, path, onClick }: { label: string; path: string; onClick?: () => void }) {
-  return (
-    <NavLink key={path} to={path} className={navLinkClass} onClick={onClick}>
-      <SidebarIcon label={label} />
-      <span>{label}</span>
+    <NavLink
+      to={path}
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-(--duration-fast)',
+          collapsed && 'justify-center px-0',
+          isActive ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:bg-inset hover:text-fg',
+        )
+      }
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+      <span className={cn(collapsed && 'sr-only')}>{label}</span>
     </NavLink>
   );
 }
 
-function DeveloperNavSection({ isActive, tabs }: { isActive: boolean; tabs: typeof developerTabs }) {
+function DeveloperNavSection({ isActive, collapsed, tabs }: { isActive: boolean; collapsed: boolean; tabs: typeof developerTabs }) {
   if (tabs.length === 0) return null;
 
   return (
-    <details className="developer-nav" open={isActive}>
-      <summary>Developer/Admin</summary>
-      <nav className="tabs sidebar-tabs developer-tabs" aria-label="Developer and admin navigation">
+    <details className="group" open={isActive}>
+      <summary className={cn(
+        'flex cursor-pointer list-none items-center gap-1 rounded-md px-2.5 py-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase select-none hover:text-fg-muted [&::-webkit-details-marker]:hidden',
+        collapsed && 'justify-center px-0',
+      )}>
+        <span className={cn(collapsed && 'sr-only')}>Developer</span>
+        {collapsed && <Wrench className="h-4 w-4" aria-hidden />}
+      </summary>
+      <nav className="mt-1 flex flex-col gap-0.5" aria-label="Developer and admin navigation">
         {tabs.map(({ label, path }) => (
-          <SidebarItem key={path} label={label} path={path} />
+          <SidebarItem key={path} label={label} path={path} collapsed={collapsed} />
         ))}
       </nav>
     </details>
@@ -119,94 +145,108 @@ export default function App() {
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
+  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
-        <a className="skip-link" href="#task-tracker-main">Skip to content</a>
-        <div className={`app-shell${isSidebarCollapsed ? ' app-shell--sidebar-collapsed' : ''}`} data-theme={theme}>
-          <aside className="sidebar" aria-label="Primary navigation">
-            <div className="brand-lockup">
-              <span className="brand-mark" aria-hidden="true">T</span>
-              <div className="brand-copy">
-                <p className="eyebrow">Tracker BE</p>
-                <h1>Task Tracker</h1>
-              </div>
-              <button
-                type="button"
-                className="sidebar-collapse-toggle"
+        <a
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
+          href="#task-tracker-main"
+        >
+          Skip to content
+        </a>
+        <div className="flex min-h-screen bg-canvas text-fg">
+          <aside
+            className={cn(
+              'sticky top-0 z-(--z-sticky) hidden h-screen shrink-0 flex-col border-r border-line bg-card px-3 py-4 lg:flex',
+              isSidebarCollapsed ? 'w-16' : 'w-60',
+            )}
+            aria-label="Primary navigation"
+          >
+            <div className={cn('mb-6 flex items-center gap-2.5 px-1.5', isSidebarCollapsed && 'flex-col gap-2 px-0')}>
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-sm font-semibold text-brand-fg"
+                aria-hidden="true"
+              >
+                T
+              </span>
+              {!isSidebarCollapsed && <h1 className="truncate text-[15px] font-semibold tracking-tight">Tracker</h1>}
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                className={cn('text-fg-subtle', !isSidebarCollapsed && 'ml-auto')}
                 aria-expanded={!isSidebarCollapsed}
                 aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
               >
-                <span aria-hidden="true">{isSidebarCollapsed ? '›' : '‹'}</span>
-                <span className="sr-only">{isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}</span>
-              </button>
+                <ChevronsLeft className={cn('h-4 w-4 transition-transform duration-(--duration-base)', isSidebarCollapsed && 'rotate-180')} aria-hidden />
+              </Button>
             </div>
-            <p className="sidebar-tagline">Plan work, organize priorities, and keep execution moving.</p>
-            <nav className="tabs sidebar-tabs" aria-label="Primary app navigation">
+            <nav className="flex flex-col gap-0.5" aria-label="Primary app navigation">
               {appTabs.map(({ label, path }) => (
-                <SidebarItem key={path} label={label} path={path} />
+                <SidebarItem key={path} label={label} path={path} collapsed={isSidebarCollapsed} />
               ))}
             </nav>
-            <div className="sidebar-bottom">
-              <DeveloperNavSection isActive={isDeveloperRouteActive} tabs={visibleDeveloperTabs} />
-              <div className="sidebar-profile" aria-label="Signed in user">
-                <span className="profile-avatar" aria-hidden="true">JD</span>
-                <div className="profile-copy">
-                  <strong>John Doe</strong>
-                  <span>john.doe@trackerbe.com</span>
-                </div>
-                <span className="profile-chevron" aria-hidden="true">⌄</span>
-              </div>
+            <div className="mt-auto pt-4">
+              <DeveloperNavSection isActive={isDeveloperRouteActive} collapsed={isSidebarCollapsed} tabs={visibleDeveloperTabs} />
             </div>
           </aside>
 
-          <div className="app-main">
-            <header className={`topbar${routeOwnsPageLayout ? ' topbar--route-owned' : ''}`}>
-              {!routeOwnsPageLayout && (
-                <div className="topbar-copy">
-                  <p className="eyebrow">Productivity workspace</p>
-                  <h2>Task Tracker</h2>
-                  <p>Coordinate tasks, planning, calendar exports, imports, and settings from one responsive shell.</p>
-                </div>
-              )}
-              <div className="topbar-actions">
-                {!routeOwnsPageLayout && <NavLink to="/tasks" className="button-primary">Quick add</NavLink>}
-                <button
-                  type="button"
-                  className="menu-toggle"
-                  aria-controls="mobile-navigation"
-                  aria-expanded={isMobileMenuOpen}
-                  onClick={() => setIsMobileMenuOpen((open) => !open)}
-                >
-                  <span aria-hidden="true">☰</span>
-                  Menu
-                </button>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-(--z-sticky) flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-4 sm:px-6">
+              <Button
+                variant="ghost"
+                iconOnly
+                className="lg:hidden"
+                aria-controls="mobile-navigation"
+                aria-expanded={isMobileMenuOpen}
+                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+                onClick={() => setIsMobileMenuOpen((open) => !open)}
+              >
+                {isMobileMenuOpen ? <X className="h-5 w-5" aria-hidden /> : <MenuIcon className="h-5 w-5" aria-hidden />}
+              </Button>
+              <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
+              <div className="ml-auto flex items-center gap-2">
+                {!routeOwnsPageLayout && (
+                  <NavLink
+                    to="/tasks"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Quick add
+                  </NavLink>
+                )}
               </div>
             </header>
 
             <nav
               id="mobile-navigation"
-              className={`tabs mobile-tabs${isMobileMenuOpen ? ' open' : ''}`}
+              className={cn('flex-col gap-0.5 border-b border-line bg-card p-3 lg:hidden', isMobileMenuOpen ? 'flex' : 'hidden')}
               aria-label="Mobile navigation"
             >
               {appTabs.map(({ label, path }) => (
                 <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
               ))}
+              {visibleDeveloperTabs.map(({ label, path }) => (
+                <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
+              ))}
             </nav>
 
-            <main id="task-tracker-main" className={`content-area${routeOwnsPageLayout ? ' content-area--route-owned' : ''}`} tabIndex={-1}>
-              <div className={`content-card route-card${routeOwnsPageLayout ? ' route-card--flat' : ''}`}>
-                <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
-                  {!isDevMode && developerTabs.map(({ path }) => (
-                    <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
-                  ))}
-                </Routes>
-              </div>
+            <main
+              id="task-tracker-main"
+              className={cn('min-w-0 flex-1 focus:outline-none', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
+              tabIndex={-1}
+            >
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {!isDevMode && developerTabs.map(({ path }) => (
+                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
+                ))}
+              </Routes>
             </main>
             <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
           </div>

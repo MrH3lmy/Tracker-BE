@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
-import styles from "./NotesPage.module.css";
 import type { NoteRecord } from "./noteTypes";
 import { formatBytes, SCREENSHOT_MAX_FILE_SIZE_BYTES, SUPPORTED_SCREENSHOT_TYPES } from "./notesPageHelpers";
+import { Button, Field, Input, Menu, MenuContent, MenuItem, MenuTrigger } from "../ui";
+import { MoreHorizontal, X } from "../ui/icons";
 
 interface ScreenshotMessage {
   kind: "success" | "error";
@@ -27,6 +28,84 @@ interface NoteActionsProps {
   displayMode?: "buttons" | "menu";
 }
 
+function ScreenshotFormFields({
+  note,
+  formId,
+  helpId,
+  messageId,
+  attachmentCaption,
+  onAttachmentCaptionChange,
+  screenshotInputRef,
+  isUploadPending,
+  isCapturePending,
+  isCapturing,
+  onTakeScreenshot,
+  screenshotMessage,
+}: {
+  note: NoteRecord;
+  formId: string;
+  helpId: string;
+  messageId: string;
+  attachmentCaption: string;
+  onAttachmentCaptionChange?: (noteId: number, caption: string) => void;
+  screenshotInputRef?: (element: HTMLInputElement | null) => void;
+  isUploadPending: boolean;
+  isCapturePending: boolean;
+  isCapturing: boolean;
+  onTakeScreenshot?: (note: NoteRecord) => void;
+  screenshotMessage?: ScreenshotMessage;
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <p className="text-sm text-fg-muted" id={helpId}>
+          Attach {SUPPORTED_SCREENSHOT_TYPES}. Limit: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          <Button type="button" size="sm" onClick={() => onTakeScreenshot?.(note)} disabled={isUploadPending || isCapturePending}>
+            {isCapturing ? "Capturing..." : "Take area screenshot"}
+          </Button>
+          <Button type="submit" size="sm" variant="primary" disabled={isUploadPending || isCapturePending}>
+            {isUploadPending ? "Uploading..." : "Attach image"}
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Field label="Image file" htmlFor={`${formId}-file`} className="min-w-48 flex-1">
+          <Input
+            id={`${formId}-file`}
+            name="screenshot"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-describedby={helpId}
+            disabled={isUploadPending}
+            ref={screenshotInputRef}
+            className="h-auto py-1.5"
+          />
+        </Field>
+        <Field label="Caption" htmlFor={`${formId}-caption`} className="min-w-48 flex-1">
+          <Input
+            id={`${formId}-caption`}
+            value={attachmentCaption}
+            placeholder={`Defaults to "${note.title}"`}
+            onChange={(event) => onAttachmentCaptionChange?.(note.id, event.target.value)}
+            disabled={isUploadPending}
+          />
+        </Field>
+      </div>
+      {screenshotMessage ? (
+        <p
+          id={messageId}
+          className={screenshotMessage.kind === "error" ? "text-sm text-critical" : "text-sm text-fg-muted"}
+          role={screenshotMessage.kind === "error" ? "alert" : "status"}
+        >
+          {screenshotMessage.text}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export function NoteActions({
   note,
   copied,
@@ -50,75 +129,80 @@ export function NoteActions({
   const formId = `note-actions-screenshot-${note.id}`;
   const helpId = `${formId}-help`;
   const messageId = `${formId}-message`;
-  const showScreenshotForm = canAttachScreenshot && (screenshotMode === "inline" || isScreenshotOpen);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const openScreenshotForm = () => {
-    setIsScreenshotOpen(true);
-    setIsMenuOpen(false);
+  const showInlineScreenshotForm = canAttachScreenshot && screenshotMode === "inline";
+  const showCompactScreenshotForm = canAttachScreenshot && screenshotMode === "compact" && isScreenshotOpen;
+
+  const commonFieldsProps = {
+    note,
+    formId,
+    helpId,
+    messageId,
+    attachmentCaption,
+    onAttachmentCaptionChange,
+    screenshotInputRef,
+    isUploadPending,
+    isCapturePending,
+    isCapturing,
+    onTakeScreenshot,
+    screenshotMessage,
   };
-  const handleMenuAction = (action: () => void) => {
-    action();
-    setIsMenuOpen(false);
-  };
-  const actionButtons = (
-    <>
-      <button type="button" onClick={() => handleMenuAction(() => onEdit(note))}>Edit</button>
-      <button type="button" onClick={() => handleMenuAction(() => onCopy(note))}>{copied ? "Copied" : "Copy"}</button>
-      <button type="button" onClick={() => handleMenuAction(() => onVersionHistory(note))}>Version history</button>
-      {canAttachScreenshot && screenshotMode === "compact" ? (
-        <button type="button" className="secondary-action" onClick={openScreenshotForm}>Attach screenshot</button>
-      ) : null}
-    </>
-  );
 
   return (
-    <div className={styles.noteActionsShell}>
+    <div className="min-w-0">
       {displayMode === "menu" ? (
-        <div className={styles.noteActionsMenu}>
-          <button
-            type="button"
-            className={styles.noteActionsMenuTrigger}
-            aria-haspopup="menu"
-            aria-expanded={isMenuOpen}
-            aria-label={`Open actions for ${note.title}`}
-            onClick={() => setIsMenuOpen((current) => !current)}
-          >
-            ⋯
-          </button>
-          {isMenuOpen ? <div className={styles.noteActionsMenuPanel} role="menu">{actionButtons}</div> : null}
-        </div>
+        <Menu>
+          <MenuTrigger asChild>
+            <Button variant="ghost" size="sm" iconOnly aria-label={`Open actions for ${note.title}`}>
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
+            </Button>
+          </MenuTrigger>
+          <MenuContent aria-label={`Actions for ${note.title}`}>
+            <MenuItem onSelect={() => onEdit(note)}>Edit</MenuItem>
+            <MenuItem onSelect={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</MenuItem>
+            <MenuItem onSelect={() => onVersionHistory(note)}>Version history</MenuItem>
+            {canAttachScreenshot && screenshotMode === "compact" ? (
+              <MenuItem onSelect={() => setIsScreenshotOpen(true)}>Attach screenshot</MenuItem>
+            ) : null}
+          </MenuContent>
+        </Menu>
       ) : (
-        <div className={`row compact-row ${styles.noteActions}`}>{actionButtons}</div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" onClick={() => onEdit(note)}>Edit</Button>
+          <Button size="sm" onClick={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</Button>
+          <Button size="sm" onClick={() => onVersionHistory(note)}>Version history</Button>
+          {canAttachScreenshot && screenshotMode === "compact" ? (
+            <Button size="sm" variant="ghost" onClick={() => setIsScreenshotOpen(true)}>Attach screenshot</Button>
+          ) : null}
+        </div>
       )}
 
-      {showScreenshotForm ? (
-        <div className={screenshotMode === "compact" ? styles.compactScreenshotBackdrop : undefined} role={screenshotMode === "compact" ? "presentation" : undefined}>
+      {showInlineScreenshotForm ? (
+        <form
+          className="mt-3 flex flex-col gap-3 rounded-lg border border-line bg-inset/30 p-3"
+          onSubmit={(event) => onScreenshotSubmit?.(event, note)}
+          aria-describedby={`${helpId}${screenshotMessage ? ` ${messageId}` : ""}`}
+        >
+          <ScreenshotFormFields {...commonFieldsProps} />
+        </form>
+      ) : null}
+
+      {showCompactScreenshotForm ? (
+        <div className="fixed inset-0 z-(--z-overlay) grid place-items-center bg-scrim p-4" role="presentation">
           <form
-            className={`panel ${styles.screenshotForm} ${screenshotMode === "compact" ? styles.compactScreenshotDialog : ""}`}
+            className="flex w-full max-w-lg flex-col gap-3 rounded-xl border border-line bg-card p-4 shadow-lg"
             onSubmit={(event) => onScreenshotSubmit?.(event, note)}
             aria-describedby={`${helpId}${screenshotMessage ? ` ${messageId}` : ""}`}
           >
-            {screenshotMode === "compact" ? (
-              <div className="section-header">
-                <div>
-                  <p className="eyebrow">Attach screenshot</p>
-                  <h4>{note.title}</h4>
-                </div>
-                <button type="button" onClick={() => setIsScreenshotOpen(false)}>Close</button>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Attach screenshot</p>
+                <h4 className="text-base font-semibold text-fg">{note.title}</h4>
               </div>
-            ) : null}
-            <div className={`section-header ${styles.screenshotHeader}`}>
-              <p className="muted" id={helpId}>Attach {SUPPORTED_SCREENSHOT_TYPES}. Limit: {formatBytes(SCREENSHOT_MAX_FILE_SIZE_BYTES)}.</p>
-              <div className="row compact-row">
-                <button type="button" className="secondary-action" onClick={() => onTakeScreenshot?.(note)} disabled={isUploadPending || isCapturePending}>{isCapturing ? "Capturing..." : "Take area screenshot"}</button>
-                <button type="submit" className="secondary-action" disabled={isUploadPending || isCapturePending}>{isUploadPending ? "Uploading..." : "Attach image"}</button>
-              </div>
+              <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Close" onClick={() => setIsScreenshotOpen(false)}>
+                <X className="h-4 w-4" aria-hidden />
+              </Button>
             </div>
-            <div className={`row ${styles.endWrapRow}`}>
-              <label className={`field-stack ${styles.screenshotField}`} htmlFor={`${formId}-file`}><span>Image file</span><input id={`${formId}-file`} name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby={helpId} disabled={isUploadPending} ref={screenshotInputRef} /></label>
-              <label className={`field-stack ${styles.screenshotField}`} htmlFor={`${formId}-caption`}><span>Caption</span><input id={`${formId}-caption`} value={attachmentCaption} placeholder={`Defaults to “${note.title}”`} onChange={(event) => onAttachmentCaptionChange?.(note.id, event.target.value)} disabled={isUploadPending} /></label>
-            </div>
-            {screenshotMessage ? <p id={messageId} className={screenshotMessage.kind === "error" ? "error-text" : "muted"} role={screenshotMessage.kind === "error" ? "alert" : "status"}>{screenshotMessage.text}</p> : null}
+            <ScreenshotFormFields {...commonFieldsProps} />
           </form>
         </div>
       ) : null}

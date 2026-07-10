@@ -2,6 +2,7 @@ import { QueryState } from "../QueryState";
 import { CodePreview } from "./CodePreview";
 import type { NoteRecord, NoteVersionRecord } from "./noteTypes";
 import { formatDate } from "./notesPageHelpers";
+import { Button, Card, CardHeader, Field, Select } from "../ui";
 
 interface NoteVersionHistoryPanelProps {
   versionHistoryNoteId: number | null;
@@ -19,17 +20,36 @@ export function NoteVersionHistoryPanel({ versionHistoryNoteId, versionHistoryNo
   if (versionHistoryNoteId === null) return null;
 
   return (
-    <section className="panel" aria-label="Version history" style={{ marginTop: "var(--space-4)", padding: "var(--space-4)" }}>
-      <div className="section-header"><div><p className="eyebrow">Version history</p><h3>{versionHistoryNote?.title ?? `Note #${versionHistoryNoteId}`}</h3></div><button type="button" onClick={() => setVersionHistoryNoteId(null)}>Close</button></div>
+    <Card aria-label="Version history">
+      <CardHeader
+        title={versionHistoryNote?.title ?? `Note #${versionHistoryNoteId}`}
+        description="Version history"
+        actions={<Button size="sm" onClick={() => setVersionHistoryNoteId(null)}>Close</Button>}
+      />
       <QueryState isLoading={noteVersionsQuery.isLoading} isError={Boolean(noteVersionsQuery.data && !noteVersionsQuery.data.ok)} isEmpty={!noteVersionsQuery.isLoading && noteVersions.length === 0} emptyMessage="No previous versions have been saved yet." />
       {noteVersions.length ? (
-        <div className="row" style={{ alignItems: "stretch", gap: "var(--space-4)", flexWrap: "wrap" }}>
-          <label className="field-stack" style={{ flex: "1 1 16rem" }}><span>Saved versions</span><select value={selectedVersion?.id ?? ""} onChange={(event) => setSelectedVersionId(Number(event.target.value))}>{noteVersions.map((version) => <option key={version.id} value={version.id}>{formatDate(version.createdAt)} · {version.title}</option>)}</select></label>
-          <div className="row compact-row" style={{ alignSelf: "end" }}><button type="button" className="button-primary" disabled={!selectedVersion || restoreNoteVersion.isPending} onClick={restoreSelectedVersion}>Restore this version</button></div>
-          <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}><p className="eyebrow">Current</p><h4>{versionHistoryNote?.title}</h4><CodePreview body={(versionHistoryNote?.body ?? "").slice(0, 1200)} contentType={versionHistoryNote?.contentType ?? "PLAIN_TEXT"} /></div>
-          <div className="panel" style={{ flex: "1 1 22rem", padding: "var(--space-3)" }}><p className="eyebrow">Previous · {formatDate(selectedVersion?.createdAt)}</p><h4>{selectedVersion?.title}</h4><p className="muted">Tags: {selectedVersion?.tags?.join(", ") || "none"}</p><CodePreview body={(selectedVersion?.body ?? "").slice(0, 1200)} contentType={selectedVersion?.contentType ?? "PLAIN_TEXT"} /></div>
+        <div className="flex flex-wrap items-stretch gap-4">
+          <Field label="Saved versions" htmlFor="noteVersionSelect" className="min-w-64 flex-1">
+            <Select id="noteVersionSelect" value={selectedVersion?.id ?? ""} onChange={(event) => setSelectedVersionId(Number(event.target.value))}>
+              {noteVersions.map((version) => <option key={version.id} value={version.id}>{formatDate(version.createdAt)} · {version.title}</option>)}
+            </Select>
+          </Field>
+          <div className="flex items-end">
+            <Button variant="primary" disabled={!selectedVersion || restoreNoteVersion.isPending} onClick={restoreSelectedVersion}>Restore this version</Button>
+          </div>
+          <div className="min-w-72 flex-1 rounded-lg border border-line bg-inset/30 p-3">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Current</p>
+            <h4 className="mt-0.5 text-sm font-semibold text-fg">{versionHistoryNote?.title}</h4>
+            <CodePreview body={(versionHistoryNote?.body ?? "").slice(0, 1200)} contentType={versionHistoryNote?.contentType ?? "PLAIN_TEXT"} />
+          </div>
+          <div className="min-w-72 flex-1 rounded-lg border border-line bg-inset/30 p-3">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Previous · {formatDate(selectedVersion?.createdAt)}</p>
+            <h4 className="mt-0.5 text-sm font-semibold text-fg">{selectedVersion?.title}</h4>
+            <p className="mt-1 text-sm text-fg-muted">Tags: {selectedVersion?.tags?.join(", ") || "none"}</p>
+            <CodePreview body={(selectedVersion?.body ?? "").slice(0, 1200)} contentType={selectedVersion?.contentType ?? "PLAIN_TEXT"} />
+          </div>
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { FilterValue, TaskSortValue } from './taskTypes';
-import styles from './TaskFilters.module.css';
+import { Button, Checkbox, Collapsible, Field, Input, Select } from '../ui';
 
 const SAVED_VIEWS_KEY = 'tracker.task.savedViews';
 
@@ -92,84 +92,82 @@ export function TaskFilters({ search, statusFilter, areaFilter, effortFilter, du
   };
 
   return (
-    <div className={`task-filter-panel ${styles.panel}`} aria-label="Task filters">
-      <div className={styles.summary}><strong>{activeFilterCount}</strong> active filter{activeFilterCount === 1 ? '' : 's'} / sort</div>
-      <div className={styles.toolbar}>
+    <div className="flex flex-col gap-4" aria-label="Task filters">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-fg-muted">
+          <strong className="font-semibold text-fg">{activeFilterCount}</strong> active filter{activeFilterCount === 1 ? '' : 's'} / sort
+        </p>
+        <Button size="sm" variant="ghost" onClick={onClearAll} disabled={activeFilterCount === 0}>Clear all</Button>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {showSearch && (
-          <label className={styles.search} htmlFor="taskSearch">
-            <span>Search</span>
-            <input id="taskSearch" placeholder="Title, description, or area" value={search} onChange={(e) => onSearchChange(e.target.value)} disabled={disabled} />
-          </label>
+          <Field label="Search" htmlFor="taskSearch" className="sm:col-span-2">
+            <Input id="taskSearch" placeholder="Title, description, or area" value={search} onChange={(e) => onSearchChange(e.target.value)} disabled={disabled} />
+          </Field>
         )}
-        <label htmlFor="statusFilter">
-          <span>Status</span>
-          <select id="statusFilter" value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} disabled={disabled}>
+        <Field label="Status" htmlFor="statusFilter">
+          <Select id="statusFilter" value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} disabled={disabled}>
             <option value="all">All statuses</option>
             {TASK_STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label htmlFor="areaFilter">
-          <span>Area</span>
-          <select id="areaFilter" value={areaFilter} onChange={(e) => onAreaFilterChange(e.target.value)} disabled={disabled}>
-            <option value="all">All areas</option>
-            {areaOptions.map((area) => <option key={area} value={area}>{area}</option>)}
-          </select>
-        </label>
-        <label htmlFor="effortFilter">
-          <span>Effort</span>
-          <select id="effortFilter" value={effortFilter} onChange={(e) => onEffortFilterChange(e.target.value)} disabled={disabled}>
-            <option value="all">All effort</option>
-            {effortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
-          </select>
-        </label>
-        <label htmlFor="dueFromFilter">
-          <span>Due from</span>
-          <input id="dueFromFilter" type="date" value={dueFrom} max={dueTo || undefined} onChange={(e) => onDueFromChange(e.target.value)} disabled={disabled} />
-        </label>
-        <label htmlFor="dueToFilter">
-          <span>Due to</span>
-          <input id="dueToFilter" type="date" value={dueTo} min={dueFrom || undefined} onChange={(e) => onDueToChange(e.target.value)} disabled={disabled} />
-        </label>
-        <label htmlFor="sortFilter">
-          <span>Sort by</span>
-          <select id="sortFilter" value={sort} onChange={(e) => onSortChange(e.target.value as TaskSortValue)} disabled={disabled}>
+          </Select>
+        </Field>
+        <Field label="Sort by" htmlFor="sortFilter">
+          <Select id="sortFilter" value={sort} onChange={(e) => onSortChange(e.target.value as TaskSortValue)} disabled={disabled}>
             <option value="position">Board position</option>
             <option value="priorityScore">Priority score (high first)</option>
             <option value="dueDate">Due date (soonest first)</option>
             <option value="createdDate">Created date (newest first)</option>
             <option value="effort">Effort (low first)</option>
             <option value="title">Title (A-Z)</option>
-          </select>
-        </label>
-        <label className={styles.checkboxFilter} htmlFor="overdueFilter">
-          <span>Overdue</span>
-          <input id="overdueFilter" type="checkbox" checked={overdueOnly} onChange={(e) => onOverdueOnlyChange(e.target.checked)} disabled={disabled} />
-          <small>Only overdue tasks</small>
-        </label>
-        <div className={styles.actions}><button type="button" onClick={onClearAll} disabled={activeFilterCount === 0}>Clear all</button></div>
+          </Select>
+        </Field>
+        <Field label="Area" htmlFor="areaFilter">
+          <Select id="areaFilter" value={areaFilter} onChange={(e) => onAreaFilterChange(e.target.value)} disabled={disabled}>
+            <option value="all">All areas</option>
+            {areaOptions.map((area) => <option key={area} value={area}>{area}</option>)}
+          </Select>
+        </Field>
+        <Field label="Effort" htmlFor="effortFilter">
+          <Select id="effortFilter" value={effortFilter} onChange={(e) => onEffortFilterChange(e.target.value)} disabled={disabled}>
+            <option value="all">All effort</option>
+            {effortOptions.map((effort) => <option key={effort} value={effort}>{effort}</option>)}
+          </Select>
+        </Field>
+        <Field label="Due from" htmlFor="dueFromFilter">
+          <Input id="dueFromFilter" type="date" value={dueFrom} max={dueTo || undefined} onChange={(e) => onDueFromChange(e.target.value)} disabled={disabled} />
+        </Field>
+        <Field label="Due to" htmlFor="dueToFilter">
+          <Input id="dueToFilter" type="date" value={dueTo} min={dueFrom || undefined} onChange={(e) => onDueToChange(e.target.value)} disabled={disabled} />
+        </Field>
+        <div className="flex items-end pb-1 sm:col-span-2">
+          <Checkbox
+            id="overdueFilter"
+            label="Only overdue tasks"
+            checked={overdueOnly}
+            onChange={(e) => onOverdueOnlyChange(e.target.checked)}
+            disabled={disabled}
+          />
+        </div>
       </div>
-      <details className={styles.savedViews}>
-        <summary>Saved views</summary>
-        <div className={styles.savedViewsContent} aria-label="Saved task views">
-          <label htmlFor="savedTaskView">
-            <span>Saved view</span>
-            <select id="savedTaskView" value={selectedViewName} onChange={(e) => setSelectedViewName(e.target.value)} disabled={disabled}>
+      <Collapsible title="Saved views">
+        <div className="flex flex-col gap-3" aria-label="Saved task views">
+          <Field label="Saved view" htmlFor="savedTaskView">
+            <Select id="savedTaskView" value={selectedViewName} onChange={(e) => setSelectedViewName(e.target.value)} disabled={disabled}>
               <option value="">Select a saved view</option>
               {savedViews.map((view) => <option key={view.name} value={view.name}>{view.name}</option>)}
-            </select>
-          </label>
-          <label htmlFor="savedTaskViewName" className={styles.search}>
-            <span>View name</span>
-            <input id="savedTaskViewName" placeholder="My focused view" value={viewName} onChange={(e) => setViewName(e.target.value)} disabled={disabled} />
-          </label>
-          <div className={`${styles.actions} ${styles.savedViewActions}`}>
-            <button type="button" onClick={() => selectedView && onApplySavedView(selectedView.params)} disabled={disabled || !selectedView}>Apply</button>
-            <button type="button" onClick={saveCurrentView} disabled={disabled || !viewName.trim()}>Save current</button>
-            <button type="button" onClick={renameSelectedView} disabled={disabled || !selectedView || !viewName.trim()}>Rename</button>
-            <button type="button" onClick={deleteSelectedView} disabled={disabled || !selectedView}>Delete</button>
+            </Select>
+          </Field>
+          <Field label="View name" htmlFor="savedTaskViewName">
+            <Input id="savedTaskViewName" placeholder="My focused view" value={viewName} onChange={(e) => setViewName(e.target.value)} disabled={disabled} />
+          </Field>
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="sm" onClick={() => selectedView && onApplySavedView(selectedView.params)} disabled={disabled || !selectedView}>Apply</Button>
+            <Button size="sm" onClick={saveCurrentView} disabled={disabled || !viewName.trim()}>Save current</Button>
+            <Button size="sm" onClick={renameSelectedView} disabled={disabled || !selectedView || !viewName.trim()}>Rename</Button>
+            <Button size="sm" variant="ghost" onClick={deleteSelectedView} disabled={disabled || !selectedView}>Delete</Button>
           </div>
         </div>
-      </details>
+      </Collapsible>
     </div>
   );
 }
