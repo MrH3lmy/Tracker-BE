@@ -1,18 +1,21 @@
-import styles from './TaskCard.module.css';
+import type { BadgeVariant } from '../ui';
 
-const statusClassByStatus: Record<string, string> = {
-  BACKLOG: styles.statusTaskBacklog,
-  NOT_STARTED: styles.statusTaskNotStarted,
-  IN_PROGRESS: styles.statusTaskInProgress,
-  WAITING: styles.statusTaskWaiting,
-  BLOCKED: styles.statusTaskBlocked,
-  DONE: styles.statusTaskDone,
-  CANCELLED: styles.statusTaskCancelled,
-  unknown: styles.statusTaskUnknown,
+const statusVariantByStatus: Record<string, BadgeVariant> = {
+  BACKLOG: 'neutral',
+  NOT_STARTED: 'outline',
+  IN_PROGRESS: 'brand',
+  WAITING: 'caution',
+  BLOCKED: 'critical',
+  DONE: 'positive',
+  CANCELLED: 'neutral',
 };
 
-export const taskStatusClassName = (status?: string) => [
-  'status-badge',
-  styles.statusBadge,
-  statusClassByStatus[status ?? 'unknown'] ?? styles.statusTaskUnknown,
-].filter(Boolean).join(' ');
+export const taskStatusVariant = (status?: string): BadgeVariant =>
+  statusVariantByStatus[status ?? ''] ?? 'neutral';
+
+export const riskVariantByLevel: Record<string, BadgeVariant> = {
+  LOW: 'neutral',
+  MEDIUM: 'caution',
+  HIGH: 'critical',
+  CRITICAL: 'critical',
+};
