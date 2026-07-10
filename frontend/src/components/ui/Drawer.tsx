@@ -1,4 +1,4 @@
-import { Dialog as RadixDialog } from 'radix-ui';
+import * as RadixDialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from './cn';

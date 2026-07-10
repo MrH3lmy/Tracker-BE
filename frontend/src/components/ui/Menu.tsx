@@ -1,4 +1,4 @@
-import { DropdownMenu as RadixDropdownMenu } from 'radix-ui';
+import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu';
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from './cn';
 
