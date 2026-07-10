@@ -36,8 +36,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={cn(
-        // min-h-0 and the transparent border neutralize legacy App.css button
-        // element rules until that stylesheet is fully retired.
         'inline-flex min-h-0 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent font-medium transition-colors duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50',
         variantClasses[variant],
         iconOnly ? iconOnlySizeClasses[size] : sizeClasses[size],

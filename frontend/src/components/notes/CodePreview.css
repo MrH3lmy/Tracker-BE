@@ -5,7 +5,7 @@
    theme, which is a deliberate, common choice for code readability. */
 
 .code-preview {
-  margin-top: var(--space-4, 1rem);
+  margin-top: 1rem;
   overflow: hidden;
   border: 1px solid var(--app-line);
   border-radius: 1rem;

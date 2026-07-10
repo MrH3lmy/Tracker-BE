@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clearApiHistory, getApiHistory, subscribeToApiHistory } from '../apiClient';
 import { RequestInspector } from '../components/RequestInspector';
-import { PrimitivesGallery } from '../components/dev/PrimitivesGallery';
+import { Button, Card, CardHeader, PageHeader } from '../components/ui';
 
 export function DeveloperToolsPage() {
   const [history, setHistory] = useState(() => getApiHistory());
@@ -20,50 +20,46 @@ export function DeveloperToolsPage() {
   }, [history]);
 
   return (
-    <div className="page-pattern developer-tools-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Developer tooling</p>
-          <h2>Developer Tools</h2>
-          <p>Inspect recent API calls without rendering diagnostics inside primary task workflows.</p>
-        </div>
-        <button type="button" onClick={clearApiHistory} disabled={history.length === 0}>Clear history</button>
-      </header>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Developer Tools"
+        description="Inspect recent API calls without rendering diagnostics inside primary task workflows."
+        actions={<Button onClick={clearApiHistory} disabled={history.length === 0}>Clear history</Button>}
+        className="mb-0"
+      />
 
-      <section className="page-card diagnostics-card" aria-labelledby="developer-api-summary-title">
-        <div className="section-header">
-          <div>
-            <h3 id="developer-api-summary-title">API request summary</h3>
-            <p className="muted">The most recent {history.length} request{history.length === 1 ? '' : 's'} are captured from the shared API client.</p>
-          </div>
-        </div>
-        <div className="metric-grid compact-metrics" aria-label="API request metrics">
-          <article className="metric-card">
-            <span>Total</span>
-            <strong>{history.length}</strong>
+      <Card aria-labelledby="developer-api-summary-title">
+        <CardHeader
+          title={<span id="developer-api-summary-title">API request summary</span>}
+          description={`The most recent ${history.length} request${history.length === 1 ? '' : 's'} are captured from the shared API client.`}
+        />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="API request metrics">
+          <article className="rounded-lg border border-line bg-inset/40 px-3.5 py-3">
+            <span className="text-xs text-fg-muted">Total</span>
+            <strong className="block text-xl font-semibold tracking-tight text-fg tabular-nums">{history.length}</strong>
           </article>
-          <article className="metric-card">
-            <span>Successful</span>
-            <strong>{summary.successful}</strong>
+          <article className="rounded-lg border border-line bg-inset/40 px-3.5 py-3">
+            <span className="text-xs text-fg-muted">Successful</span>
+            <strong className="block text-xl font-semibold tracking-tight text-fg tabular-nums">{summary.successful}</strong>
           </article>
-          <article className="metric-card">
-            <span>Failed</span>
-            <strong>{summary.failed}</strong>
+          <article className="rounded-lg border border-line bg-inset/40 px-3.5 py-3">
+            <span className="text-xs text-fg-muted">Failed</span>
+            <strong className="block text-xl font-semibold tracking-tight text-fg tabular-nums">{summary.failed}</strong>
           </article>
-          <article className="metric-card">
-            <span>Average latency</span>
-            <strong>{summary.averageLatency} ms</strong>
+          <article className="rounded-lg border border-line bg-inset/40 px-3.5 py-3">
+            <span className="text-xs text-fg-muted">Average latency</span>
+            <strong className="block text-xl font-semibold tracking-tight text-fg tabular-nums">{summary.averageLatency} ms</strong>
           </article>
         </div>
-      </section>
+      </Card>
 
-      <section className="page-card diagnostics-card" aria-labelledby="developer-inspector-title">
-        <h3 id="developer-inspector-title">Request inspector</h3>
-        <p className="muted">Use this developer-only view to inspect request metadata, payloads, responses, and errors.</p>
+      <Card aria-labelledby="developer-inspector-title">
+        <CardHeader
+          title={<span id="developer-inspector-title">Request inspector</span>}
+          description="Use this developer-only view to inspect request metadata, payloads, responses, and errors."
+        />
         <RequestInspector result={latestResult} history={history} />
-      </section>
-
-      <PrimitivesGallery />
+      </Card>
     </div>
   );
 }

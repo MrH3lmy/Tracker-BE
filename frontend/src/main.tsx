@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './styles/theme.css';
-import './index.css';
 import App from './App';
 import { applyDocumentTheme, DEFAULT_THEME, readStoredTheme } from './theme';
 

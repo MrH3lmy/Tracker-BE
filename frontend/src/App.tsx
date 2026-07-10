@@ -29,7 +29,6 @@ import {
   Wrench,
   X,
 } from './components/ui/icons';
-import './App.css';
 
 const isDevMode = import.meta.env.DEV;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'tracker.sidebar.collapsed';

@@ -1,20 +1,13 @@
-/* Establish layer order before Tailwind declares its own: the legacy App.css
-   layer must sit above preflight (base) but below components/utilities. */
-@layer theme, base, legacy, components, utilities;
-
 @import "@fontsource-variable/inter";
 @import "tailwindcss";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
- * Redesign token system. Semantic values live on unlayered [data-theme]
+ * Design token system. Semantic values live on unlayered [data-theme]
  * blocks so they always win the cascade and switch with the theme; the
  * @theme inline block below maps them into Tailwind utility names
  * (bg-canvas, text-fg-muted, border-line, bg-brand, ...).
- *
- * Names deliberately avoid the legacy tokens.css --color-* names so both
- * systems can coexist until the migration completes.
  */
 
 :root,
@@ -144,6 +137,22 @@
 }
 
 @layer base {
+  :root {
+    line-height: 1.5;
+    font-weight: 400;
+    font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  body {
+    margin: 0;
+    background: var(--app-canvas);
+    color: var(--app-fg);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
   :focus-visible {
     outline: 2px solid var(--app-brand);
     outline-offset: 2px;
