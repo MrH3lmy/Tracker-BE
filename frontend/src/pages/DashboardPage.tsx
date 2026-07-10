@@ -1,14 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ComponentType } from 'react';
 import { Link } from 'react-router-dom';
 import { apiJson, type ApiCallResult } from '../apiClient';
 import { ProgressBar } from '../components/ProgressBar';
 import { StackedProgressBar, type StackedProgressSegment } from '../components/StackedProgressBar';
 import { appRoutes } from '../router/routes';
+import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, type BadgeVariant } from '../components/ui';
+import {
+  ArrowRight,
+  Calendar,
+  CalendarDays,
+  Grid2x2,
+  Import,
+  Inbox,
+  ListTodo,
+  Settings,
+} from '../components/ui/icons';
+
+type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 interface ToolCard {
   label: string;
   path: string;
-  icon: string;
+  icon: IconComponent;
   description: string;
 }
 
@@ -28,32 +41,30 @@ interface DashboardSummaryView {
 
 const toolMetadata: Record<string, Pick<ToolCard, 'icon' | 'description'>> = {
   Tasks: {
-    icon: '✅',
+    icon: ListTodo,
     description: 'Capture work, tune priorities, and keep task execution visible.',
   },
   Planning: {
-    icon: '🗺️',
+    icon: CalendarDays,
     description: 'Shape upcoming work into a practical sequence before you start.',
   },
   Matrix: {
-    icon: '🧭',
+    icon: Grid2x2,
     description: 'Review effort and urgency in a matrix view for smarter prioritization.',
   },
   Calendar: {
-    icon: '📆',
+    icon: Calendar,
     description: 'Prepare scheduled work for calendar review and export workflows.',
   },
   Settings: {
-    icon: '⚙️',
+    icon: Settings,
     description: 'Adjust workspace defaults and integration preferences.',
   },
   Import: {
-    icon: '📥',
+    icon: Import,
     description: 'Bring existing task lists into Tracker without losing context.',
   },
 };
-
-const featuredCapabilities = ['Prioritize tasks', 'Plan weekly focus', 'Export calendars', 'Review matrix views', 'Import backlogs', 'Tune settings'];
 
 const metricLabels: Record<string, string> = {
   total: 'Total tasks',
@@ -206,11 +217,10 @@ function collectMetrics(data: unknown, parentLabel?: string): DashboardMetric[] 
   });
 }
 
-function statusClass(status: number): 'status-2xx' | 'status-4xx' | 'status-5xx' | 'status-other' {
-  if (status >= 200 && status < 300) return 'status-2xx';
-  if (status >= 400 && status < 500) return 'status-4xx';
-  if (status >= 500 && status < 600) return 'status-5xx';
-  return 'status-other';
+function statusBadgeVariant(status: number): BadgeVariant {
+  if (status >= 200 && status < 300) return 'positive';
+  if (status >= 400 && status < 600) return 'critical';
+  return 'neutral';
 }
 
 export function DashboardPage() {
@@ -248,87 +258,93 @@ export function DashboardPage() {
   };
 
   return (
-    <div className="dashboard-page">
-      <section className="dashboard-hero" aria-labelledby="dashboard-title">
-        <div className="dashboard-hero-copy">
-          <p className="eyebrow">Command center</p>
-          <h2 id="dashboard-title">Prioritize, plan, and move work from intake to calendar.</h2>
-          <p>
-            Tracker brings task prioritization, planning, matrix review, calendar export, import tools,
-            and workspace settings into one focused dashboard.
-          </p>
-          <div className="dashboard-hero-actions">
-            <Link to="/tasks" className="button-primary">Open tasks</Link>
-            <Link to="/planning" className="button-secondary">Start planning</Link>
-          </div>
-        </div>
-        <div className="dashboard-capability-card" aria-label="Dashboard capabilities">
-          {featuredCapabilities.map((capability) => (
-            <span key={capability} className="pill">{capability}</span>
-          ))}
-        </div>
-      </section>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Overview"
+        description="Prioritize, plan, and move work from intake to calendar."
+        actions={
+          <>
+            <Link
+              to="/planning"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-card px-3.5 text-sm font-medium text-fg shadow-2xs hover:bg-inset"
+            >
+              Start planning
+            </Link>
+            <Link
+              to="/tasks"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-medium text-brand-fg hover:bg-brand-hover"
+            >
+              Open tasks
+            </Link>
+          </>
+        }
+        className="mb-0"
+      />
 
-      <section className="dashboard-section" aria-labelledby="toolkit-title">
-        <div className="section-header">
-          <div>
-            <p className="eyebrow">Toolkit</p>
-            <h3 id="toolkit-title">Choose your next workflow</h3>
-          </div>
-          <p className="section-kicker">Every card links directly to a workspace area.</p>
-        </div>
-        <div className="dashboard-tool-grid">
-          {toolCards.map((tool) => (
-            <article key={tool.path} className="dashboard-tool-card">
-              <span className="dashboard-tool-icon" aria-hidden="true">{tool.icon}</span>
-              <div>
-                <h4>{tool.label}</h4>
-                <p>{tool.description}</p>
-              </div>
-              <Link to={tool.path} className="button-primary dashboard-tool-link">
-                Open {tool.label}
+      <section aria-labelledby="toolkit-title" className="flex flex-col gap-3">
+        <h3 id="toolkit-title" className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Workspaces</h3>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {toolCards.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <Link
+                key={tool.path}
+                to={tool.path}
+                className="group rounded-xl border border-line bg-card p-4 shadow-2xs transition-colors duration-(--duration-fast) hover:border-line-strong hover:bg-inset/40"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                    <Icon className="h-4.5 w-4.5" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-fg">
+                      {tool.label}
+                      <ArrowRight className="h-3.5 w-3.5 text-fg-subtle opacity-0 transition-opacity duration-(--duration-fast) group-hover:opacity-100" aria-hidden />
+                    </span>
+                    <p className="mt-0.5 text-sm text-fg-muted">{tool.description}</p>
+                  </div>
+                </div>
               </Link>
-            </article>
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      <section className="dashboard-grid" aria-label="Dashboard summaries and status">
-        <div className="dashboard-section dashboard-metrics-panel">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">API summary</p>
-              <h3>Dashboard metrics</h3>
-            </div>
-            <button type="button" onClick={checkApi} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
-          </div>
+      <section className="grid items-start gap-4 lg:grid-cols-[2fr_1fr]" aria-label="Dashboard summaries and status">
+        <Card>
+          <CardHeader
+            title="Metrics"
+            description="Summaries from /api/v1/dashboard."
+            actions={
+              <Button size="sm" onClick={checkApi} disabled={loading}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            }
+          />
 
           {metrics.length > 0 ? (
-            <div className="dashboard-metric-grid">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {metrics.map((metric) => (
-                <article key={`${metric.hint ?? 'root'}-${metric.label}`} className="metric-card dashboard-metric-card">
-                  {metric.hint && <span className="metric-hint">{metric.hint}</span>}
-                  <strong>{metric.value}</strong>
-                  <span>{metric.label}</span>
+                <article key={`${metric.hint ?? 'root'}-${metric.label}`} className="rounded-lg border border-line bg-inset/40 px-3.5 py-3">
+                  {metric.hint && <span className="block text-[11px] text-fg-subtle">{metric.hint}</span>}
+                  <strong className="block text-xl font-semibold tracking-tight text-fg tabular-nums">{metric.value}</strong>
+                  <span className="text-xs text-fg-muted">{metric.label}</span>
                 </article>
               ))}
             </div>
           ) : (
-            <div className="dashboard-empty-state">
-              <h4>No structured metrics yet</h4>
-              <p>Refresh the dashboard endpoint to render numeric, boolean, string, or list summaries when available.</p>
-            </div>
+            <EmptyState
+              icon={Inbox}
+              title="No metrics loaded yet"
+              description="Refresh to pull numeric, boolean, string, or list summaries from the dashboard endpoint."
+              action={<Button size="sm" onClick={checkApi} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</Button>}
+            />
           )}
 
           {hasProgressSummary && (
-            <section className="dashboard-progress-panel" aria-labelledby="dashboard-progress-title">
-              <div className="section-header compact">
-                <div>
-                  <p className="eyebrow">Progress</p>
-                  <h4 id="dashboard-progress-title">Task completion and distribution</h4>
-                </div>
-              </div>
-              <div className="dashboard-progress-grid">
+            <section className="mt-5 border-t border-line pt-4" aria-labelledby="dashboard-progress-title">
+              <h4 id="dashboard-progress-title" className="mb-3 text-sm font-semibold text-fg">Task completion and distribution</h4>
+              <div className="grid gap-4 md:grid-cols-2">
                 {dashboardSummary.completionRate !== undefined && (
                   <ProgressBar
                     label="Completion rate"
@@ -357,39 +373,44 @@ export function DashboardPage() {
           )}
 
           {hasRawPreview && (
-            <details className="dashboard-diagnostics">
-              <summary>Diagnostics: raw /api/v1/dashboard preview</summary>
-              <pre>{JSON.stringify(result.data, null, 2)}</pre>
+            <details className="group mt-5 rounded-lg border border-line">
+              <summary className="cursor-pointer list-none rounded-lg px-4 py-3 text-sm font-medium text-fg-muted select-none hover:bg-inset [&::-webkit-details-marker]:hidden">
+                Diagnostics: raw /api/v1/dashboard preview
+              </summary>
+              <pre className="overflow-x-auto border-t border-line px-4 py-3 font-mono text-xs text-fg-muted">{JSON.stringify(result.data, null, 2)}</pre>
             </details>
           )}
-        </div>
+        </Card>
 
-        <aside className="dashboard-section system-status-card" aria-labelledby="system-status-title">
-          <div>
-            <p className="eyebrow">System status</p>
-            <h3 id="system-status-title">API health check</h3>
-            <p>Keep the endpoint check handy without letting it dominate the dashboard.</p>
-          </div>
-          <button type="button" onClick={checkApi} disabled={loading}>{loading ? 'Checking...' : 'Check API'}</button>
+        <Card aria-labelledby="system-status-title">
+          <CardHeader
+            title={<span id="system-status-title">API health</span>}
+            description="Verify /api/v1/dashboard connectivity."
+            actions={
+              <Button size="sm" onClick={checkApi} disabled={loading}>
+                {loading ? 'Checking...' : 'Check API'}
+              </Button>
+            }
+          />
           {result ? (
-            <dl className="status-list">
-              <div>
-                <dt>Status</dt>
-                <dd><span className={`status-badge ${statusClass(result.status)}`}>{result.status || result.outcome}</span></dd>
+            <dl className="flex flex-col gap-2.5 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-fg-muted">Status</dt>
+                <dd><Badge variant={statusBadgeVariant(result.status)}>{result.status || result.outcome}</Badge></dd>
               </div>
-              <div>
-                <dt>Latency</dt>
-                <dd>{result.latencyMs} ms</dd>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-fg-muted">Latency</dt>
+                <dd className="font-medium text-fg tabular-nums">{result.latencyMs} ms</dd>
               </div>
-              <div>
-                <dt>Outcome</dt>
-                <dd>{result.ok ? 'Connected' : result.error?.message ?? 'Unavailable'}</dd>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-fg-muted">Outcome</dt>
+                <dd className="font-medium text-fg">{result.ok ? 'Connected' : result.error?.message ?? 'Unavailable'}</dd>
               </div>
             </dl>
           ) : (
-            <p className="status-placeholder">Run a check to verify /api/v1/dashboard.</p>
+            <p className="text-sm text-fg-muted">Run a check to verify /api/v1/dashboard.</p>
           )}
-        </aside>
+        </Card>
       </section>
     </div>
   );
