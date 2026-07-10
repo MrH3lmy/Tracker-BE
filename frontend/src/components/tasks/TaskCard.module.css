@@ -483,7 +483,7 @@
   gap: var(--space-2);
   margin-top: var(--space-3);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--legacy-radius-md);
   background: color-mix(in srgb, var(--task-accent-blue) 8%, var(--task-surface-soft));
   padding: var(--space-3);
 }
@@ -620,7 +620,7 @@
   gap: 0.55rem;
   min-width: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--legacy-radius-sm);
   background: color-mix(in srgb, var(--task-surface-soft) 70%, transparent);
   padding: 0.48rem 0.58rem;
 }
@@ -711,10 +711,10 @@
   right: 0;
   width: min(18rem, calc(100vw - 2rem));
   border: 1px solid var(--task-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--legacy-radius-md);
   background: var(--task-surface-elevated);
   padding: var(--space-3);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--legacy-shadow-md);
 }
 
 .secondaryActions label {
@@ -818,7 +818,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--task-accent-blue) 18%, transparent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--legacy-radius-sm);
   background: color-mix(in srgb, var(--task-accent-blue) 8%, transparent);
   padding: 0.45rem 0.7rem;
   color: var(--task-accent-blue);

@@ -1,0 +1,157 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Redesign token system. Semantic values live on unlayered [data-theme]
+ * blocks so they always win the cascade and switch with the theme; the
+ * @theme inline block below maps them into Tailwind utility names
+ * (bg-canvas, text-fg-muted, border-line, bg-brand, ...).
+ *
+ * Names deliberately avoid the legacy tokens.css --color-* names so both
+ * systems can coexist until the migration completes.
+ */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --app-canvas: #f9f9fb;
+  --app-card: #ffffff;
+  --app-inset: #f3f4f6;
+  --app-raised: #ffffff;
+  --app-scrim: rgb(9 9 11 / 0.4);
+  --app-fg: #18181b;
+  --app-fg-muted: #52525b;
+  --app-fg-subtle: #9d9da7;
+  --app-line: #e5e5ea;
+  --app-line-strong: #d2d2d9;
+  --app-brand: #2563eb;
+  --app-brand-hover: #1d4ed8;
+  --app-brand-soft: #eef4ff;
+  --app-brand-fg: #ffffff;
+  --app-positive: #15803d;
+  --app-positive-soft: #f0fdf4;
+  --app-caution: #b45309;
+  --app-caution-soft: #fffbeb;
+  --app-critical: #dc2626;
+  --app-critical-soft: #fef2f2;
+  --app-neutral: #52525b;
+  --app-neutral-soft: #f3f4f6;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --app-canvas: #0e0e11;
+  --app-card: #17171b;
+  --app-inset: #202027;
+  --app-raised: #1c1c22;
+  --app-scrim: rgb(0 0 0 / 0.55);
+  --app-fg: #f4f4f5;
+  --app-fg-muted: #a7a7b0;
+  --app-fg-subtle: #6e6e78;
+  --app-line: #27272e;
+  --app-line-strong: #36363f;
+  --app-brand: #3b82f6;
+  --app-brand-hover: #60a5fa;
+  --app-brand-soft: #1c2740;
+  --app-brand-fg: #ffffff;
+  --app-positive: #4ade80;
+  --app-positive-soft: #132a1c;
+  --app-caution: #fbbf24;
+  --app-caution-soft: #2b2213;
+  --app-critical: #f87171;
+  --app-critical-soft: #2e1618;
+  --app-neutral: #a7a7b0;
+  --app-neutral-soft: #26262e;
+}
+
+/* Layout / stacking vars shared by both themes (unlayered on purpose). */
+:root {
+  --z-dropdown: 30;
+  --z-sticky: 40;
+  --z-overlay: 50;
+  --z-toast: 60;
+}
+
+@media (prefers-contrast: more) {
+  :root,
+  [data-theme="light"] {
+    --app-line: #6b6b76;
+    --app-line-strong: #3f3f46;
+    --app-fg-muted: #3f3f46;
+    --app-fg-subtle: #52525b;
+  }
+
+  [data-theme="dark"] {
+    --app-line: #8e8e99;
+    --app-line-strong: #c9c9d2;
+    --app-fg-muted: #d4d4d8;
+    --app-fg-subtle: #a7a7b0;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--app-canvas);
+  --color-card: var(--app-card);
+  --color-inset: var(--app-inset);
+  --color-raised: var(--app-raised);
+  --color-scrim: var(--app-scrim);
+  --color-fg: var(--app-fg);
+  --color-fg-muted: var(--app-fg-muted);
+  --color-fg-subtle: var(--app-fg-subtle);
+  --color-line: var(--app-line);
+  --color-line-strong: var(--app-line-strong);
+  --color-brand: var(--app-brand);
+  --color-brand-hover: var(--app-brand-hover);
+  --color-brand-soft: var(--app-brand-soft);
+  --color-brand-fg: var(--app-brand-fg);
+  --color-positive: var(--app-positive);
+  --color-positive-soft: var(--app-positive-soft);
+  --color-caution: var(--app-caution);
+  --color-caution-soft: var(--app-caution-soft);
+  --color-critical: var(--app-critical);
+  --color-critical-soft: var(--app-critical-soft);
+  --color-neutral: var(--app-neutral);
+  --color-neutral-soft: var(--app-neutral-soft);
+}
+
+@theme {
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  --shadow-2xs: 0 1px 2px rgb(9 9 11 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(9 9 11 / 0.06);
+  --shadow-sm: 0 1px 3px rgb(9 9 11 / 0.08), 0 1px 2px rgb(9 9 11 / 0.04);
+  --shadow-md: 0 4px 12px rgb(9 9 11 / 0.08), 0 1px 2px rgb(9 9 11 / 0.04);
+  --shadow-lg: 0 12px 32px rgb(9 9 11 / 0.12), 0 2px 6px rgb(9 9 11 / 0.06);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--app-brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

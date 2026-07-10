@@ -19,7 +19,7 @@
   gap: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   background: var(--color-bg-soft);
 }
 
@@ -80,7 +80,7 @@
 .savedViews {
   padding: var(--space-3);
   border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   background: var(--color-surface-glass-soft);
 }
 

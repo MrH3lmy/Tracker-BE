@@ -18,7 +18,7 @@
   min-width: 61rem;
   overflow: visible;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--legacy-radius-lg);
   background: var(--color-surface-overlay);
 }
 
@@ -95,9 +95,9 @@
   width: max-content;
   max-width: min(28rem, calc(100vw - (var(--space-4) * 2)));
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--legacy-radius-md);
   background: var(--color-surface-overlay);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--legacy-shadow-lg);
   color: var(--color-text);
   font-size: 0.84rem;
   font-weight: 700;
@@ -218,7 +218,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--task-success) 24%, transparent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--legacy-radius-sm);
   background: color-mix(in srgb, var(--task-success) 10%, transparent);
   color: var(--task-success);
   cursor: default;
@@ -257,9 +257,9 @@
   overflow-y: auto;
   gap: var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--legacy-radius-md);
   background: var(--color-surface-overlay);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--legacy-shadow-lg);
   padding: var(--space-2);
 }
 
@@ -460,7 +460,7 @@
 
 .nestedItem {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--legacy-radius-md);
   background: color-mix(in srgb, var(--color-bg-soft-raised) 38%, transparent);
   padding: var(--space-2) var(--space-3);
 }
@@ -626,7 +626,7 @@
   justify-content: center;
   gap: 0.3rem;
   border: 1px solid color-mix(in srgb, var(--task-accent-blue) 18%, transparent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--legacy-radius-sm);
   background: color-mix(in srgb, var(--task-accent-blue) 8%, transparent);
   padding: 0.28rem 0.55rem;
   color: var(--task-accent-blue);
