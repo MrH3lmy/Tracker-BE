@@ -1,4 +1,4 @@
-import { Collapsible as RadixCollapsible } from 'radix-ui';
+import * as RadixCollapsible from '@radix-ui/react-collapsible';
 import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from './cn';

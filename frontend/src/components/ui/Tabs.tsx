@@ -1,4 +1,4 @@
-import { Tabs as RadixTabs } from 'radix-ui';
+import * as RadixTabs from '@radix-ui/react-tabs';
 import type { ComponentProps } from 'react';
 import { cn } from './cn';
 
