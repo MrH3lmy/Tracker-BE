@@ -24,7 +24,7 @@ export function SettingsPage() {
   const saveMutation = useSaveSettingsMutation();
   const { theme, setTheme } = useTheme();
   const [body, setBody] = useState('{}');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedManuallyOpen, setAdvancedManuallyOpen] = useState(false);
 
   useEffect(() => {
     if (settingsQuery.data?.ok) {
@@ -45,9 +45,7 @@ export function SettingsPage() {
   const aiFeaturesEnabled = currentSettings[AI_FEATURES_ENABLED_KEY] === true;
 
   // Errors must stay visible even while the Advanced section is collapsed.
-  useEffect(() => {
-    if (hasValidationErrors) setAdvancedOpen(true);
-  }, [hasValidationErrors]);
+  const advancedOpen = advancedManuallyOpen || hasValidationErrors;
 
   const updateSettingBody = (updates: Record<string, unknown>) => {
     setBody(JSON.stringify({ ...currentSettings, ...updates }, null, 2));
@@ -168,7 +166,7 @@ export function SettingsPage() {
           <Collapsible
             title="Advanced: raw settings JSON"
             open={advancedOpen}
-            onOpenChange={setAdvancedOpen}
+            onOpenChange={setAdvancedManuallyOpen}
             badge={hasValidationErrors ? <Badge variant="critical">{bodyValidation.errors.length} issue{bodyValidation.errors.length === 1 ? '' : 's'}</Badge> : undefined}
           >
             <div className="flex flex-col gap-3">
