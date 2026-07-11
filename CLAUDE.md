@@ -43,21 +43,17 @@ mvn -DskipTests clean package   # package only (what the Dockerfile does)
 |---|---|
 | `model/` | JPA entities and enums (`Task`, `RecurrenceRule`, `Note`, `NoteBlock`, `NoteAttachment`, `Tag`, `Board`/`BoardColumn`, `TaskDependency`, `AppSetting`, etc.) |
 | `repository/` | Spring Data JPA repositories; dynamic Note filtering via the Specification pattern (`NoteSpecifications`, `NoteRepositoryCustom`/`Impl`) |
-| `service/` | **Legacy** cross-cutting logic: `TaskService`, `PriorityEngine`, `BlockerAnalysisService` |
-| `controller/` | **Legacy**, unversioned REST endpoints: `TaskController` (`/api/tasks`), `AnalyticsController` (`/api/analytics/**`) |
+| `service/` | Cross-cutting logic still backing the v1 API: `TaskService` (used directly by `TaskControllerV1`, `PlanningService`, `DashboardService`, `MatrixController`, `BlockerAnalysisService`, `NoteTaskConversionService`), `PriorityEngine`, `BlockerAnalysisService` |
 | `common/exception/` | Global error handling: `GlobalExceptionHandler` (`@ControllerAdvice`), `ApiErrorResponse`, `ResourceNotFoundException` |
 | `config/` | `WebConfig` — CORS filter, origins from `app.cors.allowed-origins` |
-| `task/api/` `task/application/` `task/domain/` | **Current** v1 task API: `TaskControllerV1` (`/api/v1/tasks`), `ImportController`, `TaskApiMapper`, request/response records, `RecurrenceService`, `DuplicateDetectionService`, `ImportService`, and a second `PriorityEngine` |
+| `task/api/` `task/application/` `task/domain/` | **Current** v1 task API: `TaskControllerV1` (`/api/v1/tasks`), `ImportController`, `TaskApiMapper`, request/response records, `RecurrenceService`, `DuplicateDetectionService`, `ImportService` |
 | `planning/` | `PlanningController` (`/api/v1/planning`), `MatrixController` (`/api/v1/matrix`), recommendation/working-calendar services |
 | `settings/` | `SettingsController`/`SettingsService` (`/api/v1/settings`) |
 | `dashboard/` | `DashboardController`/`DashboardService` (`/api/v1/dashboard`) |
 | `calendar/` | `CalendarController`/`CalendarService` (`/api/v1/calendar`, month view + `.ics` export) |
 | `notes/`, `notes/ai/`, `notes/api/` | Sticky-notes subsystem: notes, blocks, attachments, collections, templates, saved views, version history, and heuristic AI note actions |
 
-**Two things to check before touching prioritization or routing logic:**
-
-- **Duplicate `PriorityEngine`**: one copy lives in `service/PriorityEngine.java`, another in `task/domain/PriorityEngine.java`. Confirm which one is actually wired into the code path you're changing before editing scoring behavior — don't assume there's a single source of truth.
-- **Legacy vs. current API**: `controller/TaskController` (`/api/tasks`) and `controller/AnalyticsController` (`/api/analytics/**`) are legacy/superseded. All current and new work — backend or frontend — should target `/api/v1/**` (`task/api`, `planning`, `dashboard`, `calendar`, `settings`, `notes/api`). Don't extend the legacy `controller/` package.
+All current and new work — backend or frontend — should target `/api/v1/**` (`task/api`, `planning`, `dashboard`, `calendar`, `settings`, `notes/api`). The scoring logic lives solely in `service/PriorityEngine.java` — there is no other copy to reconcile.
 
 ### Architecture patterns
 
@@ -89,7 +85,7 @@ mvn -DskipTests clean package   # package only (what the Dockerfile does)
 
 JUnit 5 + Mockito + MockMvc, run with `mvn test`. No shared base test class; each test wires its own annotations. Patterns in use:
 
-- `@WebMvcTest` slice tests with mocked service beans (e.g. `TaskControllerJsonTest`).
+- `@WebMvcTest` slice tests with mocked service beans (e.g. `TaskControllerV1ValidationTest`).
 - `@SpringBootTest` + `@AutoConfigureMockMvc` + `@ActiveProfiles("local-test")` integration tests against H2 (e.g. `ApiV1IntegrationTest`).
 - `@Testcontainers(disabledWithoutDocker = true)` tests against a real `postgres:16-alpine` container for Postgres-specific behavior/migrations (e.g. `NotesBodyMigrationPostgresTest`, `NoteControllerPostgresApiTest`).
 
@@ -166,8 +162,7 @@ Frequency semantics: `DAILY` adds `interval` days; `WEEKLY` honors `daysOfWeek` 
 
 ## Conventions and gotchas
 
-- Target `/api/v1/**` for any new or modified backend↔frontend integration; don't extend the legacy `controller/` package (`/api/tasks`, `/api/analytics/**`).
-- Confirm which `PriorityEngine` (`service/` vs `task/domain/`) is actually wired before changing scoring behavior.
+- Target `/api/v1/**` for any new or modified backend↔frontend integration.
 - No Maven wrapper — use `mvn`, not `./mvnw`.
 - Add new Flyway migrations as new `V<n+1>__*.sql` files; never edit an applied one.
 - No formatter/linter is enforced on the backend; the frontend has ESLint but no Prettier — match existing style by hand in both.
