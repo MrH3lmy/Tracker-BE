@@ -41,7 +41,7 @@ public class PlanningService {
         List<Task> overdue = taskRepository.findOverdueTasks(today.minusDays(1), Status.DONE);
         List<Task> dueToday = taskRepository.findByDueDate(today);
         List<Task> active = taskRepository.findAll().stream().filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED).toList();
-        active.forEach(taskService::computeDerivedFields);
+        taskService.computeDerivedFieldsBatch(active);
         List<Task> topPriority = active.stream().filter(t -> t.getDueDate() == null || t.getDueDate().isAfter(today))
                 .sorted((a, b) -> Integer.compare(b.getPriorityScore(), a.getPriorityScore())).limit(3).toList();
         return new TaskService.TodayView(overdue, dueToday, topPriority);
@@ -57,7 +57,7 @@ public class PlanningService {
         List<Task> tasks = taskRepository.findByDueDateBetween(planningDates.get(0), end).stream()
                 .filter(task -> workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings))
                 .toList();
-        tasks.forEach(taskService::computeDerivedFields);
+        taskService.computeDerivedFieldsBatch(tasks);
         Map<LocalDate, List<Task>> byDate = tasks.stream().collect(Collectors.groupingBy(Task::getDueDate));
         List<TaskService.DailyPlan> plan = new ArrayList<>();
         for (LocalDate date : planningDates) plan.add(new TaskService.DailyPlan(date, byDate.getOrDefault(date, List.of())));

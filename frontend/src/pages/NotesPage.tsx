@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { isQueryError } from "../apiClient";
 import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
@@ -1323,7 +1324,7 @@ export function NotesPage() {
         <div className="mt-4">
           <NotesState
             isLoading={notesQuery.isLoading}
-            isError={Boolean(notesQuery.data && !notesQuery.data.ok)}
+            isError={isQueryError(notesQuery.data)}
             isEmpty={!notesQuery.isLoading && notes.length === 0}
             hasActiveFilters={hasActiveNoteFilters}
             errorMessage={notesQueryErrorMessage}

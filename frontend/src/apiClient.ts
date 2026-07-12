@@ -20,6 +20,8 @@ export interface ApiCallResult<T> {
   contentType?: string;
 }
 
+export const isQueryError = (result?: ApiCallResult<unknown> | null): boolean => Boolean(result && !result.ok);
+
 interface ApiRequestOptions {
   body?: BodyInit;
   contentType?: string;

@@ -1,4 +1,5 @@
 import { useState, type ComponentType } from 'react';
+import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useMatrixQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, cn, type BadgeVariant } from '../components/ui';
@@ -187,7 +188,7 @@ export function MatrixPage() {
           <h3 id="matrix-content-title" className="text-base font-semibold text-fg">Quadrants</h3>
           <p className="mt-0.5 text-sm text-fg-muted">Supported matrix responses render as action-oriented cards; unknown shapes keep a JSON fallback.</p>
         </div>
-        <QueryState isLoading={query.isLoading || query.isFetching} isError={Boolean(query.data && !query.data.ok)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} />
+        <QueryState isLoading={query.isLoading || query.isFetching} isError={isQueryError(query.data)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} />
         {hasData && (canRenderQuadrants ? <MatrixQuadrants data={query.data?.data} /> : <pre className="overflow-x-auto rounded-lg bg-inset p-3 font-mono text-xs text-fg-muted">{JSON.stringify(query.data?.data, null, 2)}</pre>)}
       </Card>
     </div>

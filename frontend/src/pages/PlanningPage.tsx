@@ -1,4 +1,5 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
+import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, SegmentedControl, cn, type BadgeVariant } from '../components/ui';
@@ -565,7 +566,7 @@ export function PlanningPage() {
             ]}
           />
         </div>
-        <QueryState isLoading={active.isLoading || active.isFetching} isError={Boolean(active.data && !active.data.ok)} isEmpty={!active.isLoading && Boolean(active.data && !active.data.data)} />
+        <QueryState isLoading={active.isLoading || active.isFetching} isError={isQueryError(active.data)} isEmpty={!active.isLoading && Boolean(active.data && !active.data.data)} />
         {selected !== 'board' && <CalendarExclusionSummary data={settings.data?.data} />}
         {hasData && (selected === 'board' ? <ProjectBoardView data={active.data?.data} /> : selected === 'today' ? <TodayPlanningView data={active.data?.data} /> : <WeeklyPlanningView data={active.data?.data} />)}
       </section>
