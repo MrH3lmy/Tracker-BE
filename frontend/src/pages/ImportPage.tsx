@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useImportMutations } from '../hooks/useApiQueries';
 import { validateImportTasksPayload } from '../validation/import';
@@ -107,7 +108,7 @@ export function ImportPage() {
         )}
 
         <div className="mt-4">
-          <QueryState isLoading={busy} isError={Boolean((importCsv.data && !importCsv.data.ok) || (importTasks.data && !importTasks.data.ok))} isEmpty={false} successMessage={(importCsv.data?.ok || importTasks.data?.ok) ? 'Import request completed successfully.' : undefined} />
+          <QueryState isLoading={busy} isError={isQueryError(importCsv.data) || isQueryError(importTasks.data)} isEmpty={false} successMessage={(importCsv.data?.ok || importTasks.data?.ok) ? 'Import request completed successfully.' : undefined} />
         </div>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ApiCallResult } from '../apiClient';
+import { isQueryError, type ApiCallResult } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
 import { QueryState } from '../components/QueryState';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
@@ -198,7 +198,7 @@ export function TasksPage() {
   }, [areaFilter, dueFrom, dueTo, effortFilter, overdueOnly, search, sort, statusFilter]);
   const taskTree = useMemo(() => buildTaskTree(sortedFilteredTasks, (nodes) => nodes), [sortedFilteredTasks]);
   const taskQueryLoading = query.isLoading || query.isFetching;
-  const taskQueryError = Boolean(query.data && !query.data.ok);
+  const taskQueryError = isQueryError(query.data);
   const showActiveEmptyState = tab === 'active' && !taskQueryLoading && !taskQueryError && sortedFilteredTasks.length === 0 && taskFilterCount === 0;
   const latestMutationResult = latestResult(removeDependency.data, addDependency.data, changeStatus.data, completeTask.data, deleteTask.data, updateTask.data, createTask.data);
   const taskListLabel = `${tab === 'archive' ? 'Archived' : tab === 'done' ? 'Done' : 'Active'} task list`;
@@ -226,7 +226,7 @@ export function TasksPage() {
   };
 
   const submitCreate = (payload: CreateTaskPayload, onSuccess: () => void) => {
-    createTask.mutate(payload, { onSuccess });
+    createTask.mutate(payload, { onSuccess: (result) => { if (result.ok) onSuccess(); } });
   };
 
   const updateTaskFromCard = (task: TaskRecord, updates: Partial<TaskRecord>) => {
@@ -249,7 +249,7 @@ export function TasksPage() {
     const id = Number(dependencyTaskId);
     const blocksTaskId = Number(dependencyBlocksTaskId);
     if (!Number.isFinite(id) || !Number.isFinite(blocksTaskId) || id === blocksTaskId) return;
-    addDependency.mutate({ id, blocksTaskId }, { onSuccess: () => setDependenciesOpen(false) });
+    addDependency.mutate({ id, blocksTaskId }, { onSuccess: (result) => { if (result.ok) setDependenciesOpen(false); } });
   };
 
   return (

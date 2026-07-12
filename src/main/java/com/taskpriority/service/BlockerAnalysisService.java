@@ -32,7 +32,8 @@ public class BlockerAnalysisService {
     @Transactional(readOnly = true)
     public BlockerAnalysis analyze() {
         LocalDate today = LocalDate.now();
-        List<Task> tasks = taskRepository.findAll().stream().peek(taskService::computeDerivedFields).toList();
+        List<Task> tasks = taskRepository.findAll();
+        taskService.computeDerivedFieldsBatch(tasks);
         Map<Long, Task> byId = tasks.stream().filter(task -> task.getId() != null).collect(Collectors.toMap(Task::getId, Function.identity()));
         List<TaskDependency> dependencies = taskDependencyRepository.findAll();
         Map<Long, List<Long>> blockedBy = dependencies.stream().collect(Collectors.groupingBy(

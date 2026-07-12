@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -69,7 +70,11 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
-    public List<Task> findAll() { return taskRepository.findAll().stream().peek(this::computeDerivedFields).toList(); }
+    public List<Task> findAll() {
+        List<Task> tasks = taskRepository.findAll();
+        computeDerivedFieldsBatch(tasks);
+        return tasks;
+    }
 
     @Transactional(readOnly = true)
     public Task findById(Long id) {
@@ -83,9 +88,9 @@ public class TaskService {
         if (!taskRepository.existsById(parentTaskId)) {
             throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
         }
-        return taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(parentTaskId).stream()
-                .peek(this::computeDerivedFields)
-                .toList();
+        List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(parentTaskId);
+        computeDerivedFieldsBatch(subtasks);
+        return subtasks;
     }
 
     @Transactional
@@ -212,12 +217,17 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
-    public List<Task> getArchive() { return taskRepository.findAll().stream().filter(t -> t.getStatus()==Status.DONE||t.getStatus()==Status.CANCELLED).peek(this::computeDerivedFields).toList(); }
+    public List<Task> getArchive() {
+        List<Task> archived = taskRepository.findAll().stream().filter(t -> t.getStatus()==Status.DONE||t.getStatus()==Status.CANCELLED).toList();
+        computeDerivedFieldsBatch(archived);
+        return archived;
+    }
 
     @Transactional(readOnly = true)
     public Map<PriorityCategory, List<Task>> getMatrixView() {
-        return taskRepository.findAll().stream().filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED).peek(this::computeDerivedFields)
-                .collect(Collectors.groupingBy(Task::getPriorityCategory));
+        List<Task> active = taskRepository.findAll().stream().filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED).toList();
+        computeDerivedFieldsBatch(active);
+        return active.stream().collect(Collectors.groupingBy(Task::getPriorityCategory));
     }
 
     private void validateParentTask(Task task) {
@@ -297,6 +307,38 @@ public class TaskService {
             task.setSubtaskCount(subtasks.size());
             task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
         }
+        applyPriority(task);
+    }
+
+    public void computeDerivedFieldsBatch(List<Task> tasks) {
+        if (tasks.isEmpty()) {
+            return;
+        }
+        List<Long> ids = tasks.stream().map(Task::getId).filter(Objects::nonNull).toList();
+
+        Map<Long, List<Long>> dependencyIdsByTask = taskDependencyRepository.findByTaskIdIn(ids).stream()
+                .collect(Collectors.groupingBy(dependency -> dependency.getTask().getId(),
+                        Collectors.mapping(dependency -> dependency.getBlocksTask().getId(), Collectors.toList())));
+        Map<Long, List<Long>> blockingTaskIdsByTask = taskDependencyRepository.findByBlocksTaskIdIn(ids).stream()
+                .collect(Collectors.groupingBy(dependency -> dependency.getBlocksTask().getId(),
+                        Collectors.mapping(dependency -> dependency.getTask().getId(), Collectors.toList())));
+        Map<Long, List<Task>> subtasksByParent = taskRepository.findByParentTaskIdInOrderByPositionAscIdAsc(ids).stream()
+                .collect(Collectors.groupingBy(Task::getParentTaskId));
+
+        for (Task task : tasks) {
+            if (task.getId() != null) {
+                task.setDependencyIds(dependencyIdsByTask.getOrDefault(task.getId(), List.of()));
+                task.setBlockingTaskIds(blockingTaskIdsByTask.getOrDefault(task.getId(), List.of()));
+                List<Task> subtasks = subtasksByParent.getOrDefault(task.getId(), List.of());
+                task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
+                task.setSubtaskCount(subtasks.size());
+                task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
+            }
+            applyPriority(task);
+        }
+    }
+
+    private void applyPriority(Task task) {
         PriorityEngine.PriorityComputation c = priorityEngine.compute(task, new PriorityEngine.DependencyContext(task.getDependencyIds().size(), task.getBlockingTaskIds().size()));
         task.setDaysLeft(c.daysLeft());task.setOverdue(c.overdue());task.setUrgent(c.urgent());task.setPriorityScore(c.priorityScore());task.setPriorityCategory(c.priorityCategory());task.setAgeFlag(c.ageFlag());task.setPriorityReason(c.priorityReason());
     }

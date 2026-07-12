@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
@@ -194,7 +195,7 @@ export function SettingsPage() {
             </div>
           </Collapsible>
 
-          <QueryState isLoading={settingsQuery.isLoading} isError={Boolean((settingsQuery.data && !settingsQuery.data.ok) || (saveMutation.data && !saveMutation.data.ok))} isEmpty={false} successMessage={saveMutation.data?.ok ? 'Settings saved successfully.' : undefined} />
+          <QueryState isLoading={settingsQuery.isLoading} isError={isQueryError(settingsQuery.data) || isQueryError(saveMutation.data)} isEmpty={false} successMessage={saveMutation.data?.ok ? 'Settings saved successfully.' : undefined} />
         </div>
       </Card>
     </div>

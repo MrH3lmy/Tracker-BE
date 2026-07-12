@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { apiDownload } from '../apiClient';
+import { apiDownload, isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useCalendarMonthQuery } from '../hooks/useApiQueries';
 import { validateCalendarInputs } from '../validation/calendar';
@@ -107,7 +107,7 @@ export function CalendarPage() {
           </Button>
         </div>
 
-        <QueryState isLoading={query.isLoading || query.isFetching} isError={Boolean(query.data && !query.data.ok)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} />
+        <QueryState isLoading={query.isLoading || query.isFetching} isError={isQueryError(query.data)} isEmpty={!query.isLoading && Boolean(query.data && !query.data.data)} />
         {hasMonthData && <MonthSummary data={query.data?.data} />}
       </Card>
     </div>
