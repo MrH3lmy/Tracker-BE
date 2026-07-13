@@ -8,7 +8,7 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 export function Card({ padded = true, className, ...rest }: CardProps) {
   return (
     <div
-      className={cn('rounded-xl border border-line bg-card shadow-2xs', padded && 'p-5', className)}
+      className={cn('rounded-xl border border-line bg-glass shadow-2xs backdrop-blur-(--blur-panel)', padded && 'p-5', className)}
       {...rest}
     />
   );

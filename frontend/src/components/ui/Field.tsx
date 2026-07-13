@@ -2,7 +2,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from './cn';
 
 const controlClasses =
-  'w-full rounded-md border border-line bg-card px-3 text-sm text-fg shadow-2xs placeholder:text-fg-subtle focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25 disabled:opacity-50 aria-invalid:border-critical aria-invalid:focus-visible:ring-critical/25';
+  'w-full rounded-md border border-line bg-card px-3 text-sm text-fg shadow-2xs placeholder:text-fg-subtle transition-shadow duration-(--duration-fast) focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25 focus-visible:shadow-(--shadow-glow-brand) disabled:opacity-50 aria-invalid:border-critical aria-invalid:focus-visible:ring-critical/25';
 
 export interface FieldProps {
   label: ReactNode;

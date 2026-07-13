@@ -11,7 +11,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-brand text-brand-fg hover:bg-brand-hover',
+  primary: 'bg-brand text-brand-fg hover:bg-brand-hover hover:shadow-(--shadow-glow-brand) focus-visible:shadow-(--shadow-glow-brand)',
   secondary: 'border-line bg-card text-fg shadow-2xs hover:bg-inset',
   ghost: 'bg-transparent text-fg-muted hover:bg-inset hover:text-fg',
   danger: 'bg-critical text-white hover:opacity-90',
@@ -36,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={cn(
-        'inline-flex min-h-0 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent font-medium transition-colors duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex min-h-0 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent font-medium transition-[background-color,box-shadow,color] duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50',
         variantClasses[variant],
         iconOnly ? iconOnlySizeClasses[size] : sizeClasses[size],
         className,
