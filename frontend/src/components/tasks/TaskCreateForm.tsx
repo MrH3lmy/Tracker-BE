@@ -27,11 +27,11 @@ interface TaskCreateFormState {
 
 type TaskCreateFormAction =
   | { type: 'field'; field: keyof TaskCreateFormState; value: string | boolean }
-  | { type: 'reset' }
+  | { type: 'reset'; initialState: TaskCreateFormState }
   | { type: 'parent'; parentTaskId: string }
   | { type: 'status'; status: '' | CreateTaskPayload['status'] };
 
-const initialState: TaskCreateFormState = {
+const emptyState: TaskCreateFormState = {
   title: '',
   description: '',
   status: '',
@@ -52,6 +52,32 @@ const initialState: TaskCreateFormState = {
   followUpDate: '',
 };
 
+const toFormNumber = (value: number | undefined) => (value === undefined ? '' : String(value));
+
+const mapRecordToFormState = (task: TaskRecord | undefined): TaskCreateFormState => {
+  if (!task) return emptyState;
+  return {
+    title: task.title ?? '',
+    description: task.description ?? '',
+    status: task.status ?? '',
+    dueDate: task.dueDate?.slice(0, 10) ?? '',
+    startDate: task.startDate?.slice(0, 10) ?? '',
+    estimatedMinutes: toFormNumber(task.estimatedMinutes),
+    actualMinutes: toFormNumber(task.actualMinutes),
+    riskLevel: task.riskLevel ?? '',
+    riskReason: task.riskReason ?? '',
+    track: task.track ?? '',
+    phase: task.phase ?? '',
+    parentTaskId: toFormNumber(task.parentTaskId),
+    important: Boolean(task.important),
+    area: task.area ?? '',
+    effort: task.effort ?? '',
+    blockedReason: task.blockedReason ?? '',
+    waitingOn: task.waitingOn ?? '',
+    followUpDate: task.followUpDate?.slice(0, 10) ?? '',
+  };
+};
+
 const reducer = (state: TaskCreateFormState, action: TaskCreateFormAction): TaskCreateFormState => {
   switch (action.type) {
     case 'field':
@@ -61,7 +87,7 @@ const reducer = (state: TaskCreateFormState, action: TaskCreateFormAction): Task
     case 'status':
       return { ...state, status: action.status };
     case 'reset':
-      return initialState;
+      return action.initialState;
     default:
       return state;
   }
@@ -82,14 +108,16 @@ export interface TaskCreateFormHandle {
 interface TaskCreateFormProps {
   activeTasks: TaskRecord[];
   busy: boolean;
-  isCreating: boolean;
+  isSubmitting: boolean;
+  mode?: 'create' | 'edit';
+  initialValue?: TaskRecord;
   onCancel: () => void;
-  onCreate: (payload: CreateTaskPayload, onSuccess: () => void) => void;
+  onSubmit: (payload: CreateTaskPayload, onSuccess: () => void) => void;
   onInvalidTitle: () => void;
 }
 
-export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormProps>(function TaskCreateForm({ activeTasks, busy, isCreating, onCancel, onCreate, onInvalidTitle }, ref) {
-  const [form, dispatch] = useReducer(reducer, initialState);
+export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormProps>(function TaskCreateForm({ activeTasks, busy, isSubmitting, mode = 'create', initialValue, onCancel, onSubmit, onInvalidTitle }, ref) {
+  const [form, dispatch] = useReducer(reducer, initialValue, mapRecordToFormState);
   const titleRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -100,13 +128,13 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
 
   const setField = (field: keyof TaskCreateFormState, value: string | boolean) => dispatch({ type: 'field', field, value });
 
-  const submitCreate = () => {
+  const submitForm = () => {
     if (!form.title.trim()) {
       onInvalidTitle();
       titleRef.current?.focus();
       return;
     }
-    onCreate({
+    onSubmit({
       title: form.title.trim(),
       description: form.description || undefined,
       dueDate: form.dueDate || undefined,
@@ -125,7 +153,7 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
       waitingOn: form.waitingOn || undefined,
       followUpDate: form.followUpDate || undefined,
       status: form.status || undefined,
-    }, () => dispatch({ type: 'reset' }));
+    }, () => dispatch({ type: 'reset', initialState: emptyState }));
   };
 
   return (
@@ -147,7 +175,7 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
           <Field label="Parent task" htmlFor="taskParentTask">
             <Select id="taskParentTask" value={form.parentTaskId} onChange={(e) => setField('parentTaskId', e.target.value)} disabled={busy}>
               <option value="">No parent</option>
-              {activeTasks.map((task) => <option key={`parent-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}
+              {activeTasks.filter((task) => task.id !== initialValue?.id).map((task) => <option key={`parent-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}
             </Select>
           </Field>
           <Field label="Start date" htmlFor="taskStartDate">
@@ -211,7 +239,9 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
       </div>
       <div className="flex justify-end gap-2 border-t border-line pt-4">
         <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-        <Button variant="primary" onClick={submitCreate} disabled={busy}>{isCreating ? 'Creating...' : 'Create task'}</Button>
+        <Button variant="primary" onClick={submitForm} disabled={busy}>
+          {mode === 'edit' ? (isSubmitting ? 'Saving...' : 'Save changes') : (isSubmitting ? 'Creating...' : 'Create task')}
+        </Button>
       </div>
     </div>
   );

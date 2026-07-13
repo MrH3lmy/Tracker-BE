@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient';
 import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteBlockRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteVersionRecord } from '../components/notes/noteTypes';
-import type { TaskRecord } from '../components/tasks/taskTypes';
+import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes';
+import type { BoardColumnRecord } from '../components/board/boardTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -47,12 +48,16 @@ export const queryKeys = {
   matrix: ['matrix'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
   settings: ['settings'] as const,
+  boardColumns: ['board-columns'] as const,
+  taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
 
 export const useTasksQuery = (tab: TaskTab) => useQuery({ queryKey: queryKeys.tasks(tab), queryFn: () => apiJson<TaskRecord[]>('GET', taskPathByTab[tab]) });
 export const useTaskBlockersQuery = () => useQuery({ queryKey: queryKeys.taskBlockers, queryFn: () => apiJson<unknown>('GET', '/api/v1/tasks/blockers') });
+export const useBoardColumnsQuery = () => useQuery({ queryKey: queryKeys.boardColumns, queryFn: () => apiJson<BoardColumnRecord[]>('GET', '/api/v1/board-columns') });
+export const useTaskDetailQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.taskDetail(id), queryFn: () => apiJson<TaskDetailRecord>('GET', `/api/v1/tasks/${id}/detail`), enabled });
 export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
   queryKey: queryKeys.notes(filters),
   queryFn: () => {
