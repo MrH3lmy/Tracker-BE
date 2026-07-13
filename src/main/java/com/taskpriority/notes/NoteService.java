@@ -220,7 +220,7 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        note.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : noteRepository.findMaxDisplayOrder() + 1);
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
@@ -242,7 +242,9 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        if (request.displayOrder() != null) {
+            note.setDisplayOrder(request.displayOrder());
+        }
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
@@ -283,7 +285,9 @@ public class NoteService {
     @Transactional
     public NoteResponse updateLayout(Long id, UpdateNoteLayoutRequest request) {
         Note note = getNote(id);
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        if (request.displayOrder() != null) {
+            note.setDisplayOrder(request.displayOrder());
+        }
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
