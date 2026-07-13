@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { isQueryError } from "../apiClient";
-import { CodePreview } from "../components/notes/CodePreview";
 import { NoteActions } from "../components/notes/NoteActions";
+import { NoteCard } from "../components/notes/NoteCard";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
 import { NotesToolbar } from "../components/notes/NotesToolbar";
 import { NotesHeader } from "../components/notes/NotesHeader";
@@ -45,7 +45,7 @@ import {
   useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
-import { Badge, Button, Dialog, Field, Input, Select } from "../components/ui";
+import { Button, Card, Dialog, Field, Input, Select } from "../components/ui";
 
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
 const DEFAULT_NOTE_SAVED_VIEWS = [
@@ -667,37 +667,21 @@ export function NotesPage() {
         <div className="mt-4">
         <NotesResults viewMode={viewMode}>
         {viewMode === "sticky" ? (
-          // Canvas geometry note: notes.positionX/positionY/width/height/zIndex
-          // and note.color are persisted, user-driven layout data rendered
-          // via the inline `style` below (unchanged). The container keeps the
-          // exact position/overflow/min-height/margin/padding values it had
-          // under the legacy .panel + .stickyBoard classes (mt-4 p-5 unit-for
-          // -unit match var(--space-4)/var(--space-5)), and no border or
-          // transform was added to it, so the absolute-positioning
-          // containing block is unchanged. Each card keeps the same padding
-          // (p-4 matches the old var(--space-4) that was already winning the
-          // cascade) and the same accidental panel margin-top (mt-4) so
-          // on-screen placement for existing saved layouts is pixel-for-pixel
-          // identical to before. Only decorative chrome changed: background,
-          // shadow, radius, and a thin side border (the top accent border
-          // stays driven by the inline borderTop so note.color still renders
-          // exactly as before).
-          <div
-            className="relative mt-4 min-h-[34rem] overflow-auto rounded-xl bg-[linear-gradient(135deg,var(--app-caution-soft),var(--app-brand-soft))] p-5"
-            aria-label="Sticky note board"
-          >
-            {notes.map((note, index) => (
-              <article
+          // note.positionX/positionY/width/height/zIndex are still written on
+          // create/edit (kept for backend/API compatibility and any future
+          // drag-to-reposition feature), but are no longer read for layout:
+          // there was never any drag interaction wired up for them, so a
+          // responsive masonry grid replaces the old absolute-position canvas.
+          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4" aria-label="Sticky note board">
+            {notes.map((note) => (
+              <NoteCard
                 key={note.id}
-                className="mt-4 flex flex-col gap-2 rounded-lg border border-line bg-card p-4 shadow-md"
-                style={{ left: note.positionX ?? 24 + (index % 3) * 280, top: note.positionY ?? 24 + Math.floor(index / 3) * 220, width: note.width ?? 250, minHeight: note.height ?? 170, zIndex: note.zIndex ?? index + 1, position: "absolute", borderTop: `0.35rem solid ${note.color ?? "#facc15"}` }}
-              >
-                <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Sticky note #{getStickyNoteNumber(note)}</p>
-                <h3 className="text-sm font-semibold text-fg">{note.title}</h3>
-                <p className="text-xs text-fg-muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>
-                <CodePreview body={note.body.slice(0, 360)} contentType={note.contentType} />
-                <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} />
-              </article>
+                note={note}
+                layout="tile"
+                eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Sticky note #{getStickyNoteNumber(note)}</p>}
+                subtitle={<p className="text-xs text-fg-muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>}
+                actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} />}
+              />
             ))}
           </div>
         ) : null}
@@ -705,30 +689,13 @@ export function NotesPage() {
         {viewMode === "list" ? (
           <div className="flex flex-col gap-3" aria-label="Fast scanning notes list">
             {notes.map((note) => (
-              <article key={note.id} className="rounded-xl border border-line bg-card p-4 shadow-2xs">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-fg">{note.title}</h3>
-                    <p className="mt-0.5 text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
-                    <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
-                  </div>
-                  <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
-                </div>
-                {note.tags?.length ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {note.tags.map((tag) => <Badge key={tag} variant="neutral">{tag}</Badge>)}
-                  </div>
-                ) : null}
-
-                {note.attachments?.filter((attachment) => attachment.kind === "SCREENSHOT" && attachment.downloadUrl).map((attachment) => (
-                  <figure key={attachment.id} className="mt-3 rounded-lg border border-line bg-inset/30 p-3">
-                    <img src={attachment.downloadUrl!} alt={attachment.caption ?? attachment.fileName} className="block max-w-full rounded-md" />
-                    <figcaption className="mt-2 text-xs text-fg-muted">
-                      {attachment.caption ?? attachment.fileName} · <a className="text-brand hover:underline" href={attachment.downloadUrl!} target="_blank" rel="noreferrer">Open/download attachment</a>
-                    </figcaption>
-                  </figure>
-                ))}
-              </article>
+              <NoteCard
+                key={note.id}
+                note={note}
+                layout="row"
+                subtitle={<p className="text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>}
+                actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
+              />
             ))}
           </div>
         ) : null}
@@ -756,22 +723,21 @@ export function NotesPage() {
         {viewMode === "timeline" ? (
           <div className="flex flex-col gap-4" aria-label="Notes timeline">
             {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
-              <section key={date} className="rounded-xl border border-line bg-card p-4 shadow-2xs">
+              <Card key={date} aria-label={`Notes from ${date}`}>
                 <h3 className="text-sm font-semibold text-fg">{date}</h3>
                 <div className="mt-3 flex flex-col gap-3">
                   {dateNotes.map((note) => (
-                    <article key={note.id} className="rounded-lg border border-line bg-inset/30 p-3">
-                      <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p>
-                      <h4 className="mt-0.5 text-sm font-semibold text-fg">{note.title}</h4>
-                      <p className="mt-0.5 text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>
-                      <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p>
-                      <div className="mt-3">
-                        <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
-                      </div>
-                    </article>
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      layout="row"
+                      eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p>}
+                      subtitle={<p className="text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>}
+                      actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
+                    />
                   ))}
                 </div>
-              </section>
+              </Card>
             ))}
           </div>
         ) : null}
