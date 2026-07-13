@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
 import { riskVariantByLevel, taskStatusVariant } from './taskStyleUtils';
@@ -137,7 +138,13 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
       >
         <div className="flex min-w-0 items-center gap-2" role="cell" data-label="Task">
           <span className="shrink-0 text-xs text-fg-subtle tabular-nums">#{task.id}</span>
-          <strong className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{task.title}</strong>
+          <Link
+            to={`/tasks/${task.id}`}
+            className="min-w-0 flex-1 truncate text-sm font-medium text-fg hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {task.title}
+          </Link>
           {task.important ? <Badge variant="caution">Important</Badge> : null}
           <a
             className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-fg-muted opacity-0 transition-opacity duration-(--duration-fast) group-hover:opacity-100 hover:bg-inset hover:text-fg focus-visible:opacity-100"
@@ -192,6 +199,9 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
               </Button>
             </MenuTrigger>
             <MenuContent aria-label={`More actions for #${task.id}`}>
+              <MenuItem asChild>
+                <Link to={`/tasks/${task.id}`}>Edit</Link>
+              </MenuItem>
               <MenuItem onSelect={() => onStartSubtask(task)} disabled={busy}>Add subtask</MenuItem>
               <MenuItem asChild>
                 <a href={taskNotesHref(task.id)}>{notesLabel}</a>

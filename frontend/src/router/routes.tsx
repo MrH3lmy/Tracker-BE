@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { BoardPage } from '../pages/BoardPage';
 import { CalendarPage } from '../pages/CalendarPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
@@ -8,6 +9,7 @@ import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { TaskDetailPage } from '../pages/TaskDetailPage';
 import { TasksPage } from '../pages/TasksPage';
 
 export interface AppRoute {
@@ -19,6 +21,7 @@ export interface AppRoute {
 export const primaryRoutes: AppRoute[] = [
   { label: 'Dashboard', path: '/dashboard', element: <DashboardPage /> },
   { label: 'Tasks', path: '/tasks', element: <TasksPage /> },
+  { label: 'Board', path: '/board', element: <BoardPage /> },
   { label: 'Notes', path: '/notes', element: <NotesPage /> },
   { label: 'Planning', path: '/planning', element: <PlanningPage /> },
   { label: 'Matrix', path: '/matrix', element: <MatrixPage /> },
@@ -32,7 +35,12 @@ export const developerRoutes: AppRoute[] = [
   { label: 'Developer Tools', path: '/developer-tools', element: <DeveloperToolsPage /> },
 ];
 
-export const appRoutes = [...primaryRoutes, ...developerRoutes];
+// Routes that render via the router but do not appear as sidebar tabs.
+export const detailRoutes: AppRoute[] = [
+  { label: 'Task Detail', path: '/tasks/:id', element: <TaskDetailPage /> },
+];
+
+export const appRoutes = [...primaryRoutes, ...developerRoutes, ...detailRoutes];
 
 export const appTabs = primaryRoutes.map(({ label, path }) => ({ label, path }));
 export const developerTabs = developerRoutes.map(({ label, path }) => ({ label, path }));

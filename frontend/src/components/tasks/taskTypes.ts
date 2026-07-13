@@ -44,6 +44,13 @@ export interface TaskTreeNode extends TaskRecord {
   subtasks: TaskTreeNode[];
 }
 
+export interface TaskDetailRecord {
+  task: TaskRecord;
+  notes: unknown[];
+  screenshots: unknown[];
+  linkedNotes: unknown[];
+}
+
 export interface DuplicateGroup {
   representative: TaskRecord;
   duplicates: TaskRecord[];

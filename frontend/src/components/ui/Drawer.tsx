@@ -20,13 +20,13 @@ export function Drawer({ open, onOpenChange, title, description, children, foote
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-(--z-overlay) bg-scrim" />
+        <RadixDialog.Overlay className="fixed inset-0 z-(--z-overlay) bg-scrim backdrop-blur-(--blur-panel)" />
         <RadixDialog.Content
           aria-modal="true"
           onOpenAutoFocus={returnFocus.onOpenAutoFocus}
           onCloseAutoFocus={returnFocus.onCloseAutoFocus}
           className={cn(
-            'fixed inset-y-0 right-0 z-(--z-overlay) flex w-full flex-col border-l border-line bg-card shadow-lg',
+            'fixed inset-y-0 right-0 z-(--z-overlay) flex w-full flex-col border-l border-line bg-glass shadow-lg backdrop-blur-(--blur-panel)',
             wide ? 'max-w-2xl' : 'max-w-md',
           )}
         >

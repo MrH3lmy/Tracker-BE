@@ -4,6 +4,7 @@ export const THEME_STORAGE_KEY = 'tracker.theme';
 export const THEME_OPTIONS = [
   { value: 'light', label: 'Light', description: 'Bright, neutral workspace.' },
   { value: 'dark', label: 'Dark', description: 'Low-glare palette for dim environments.' },
+  { value: 'neon', label: 'Neon', description: 'Dark with electric-blue glow.' },
 ] as const;
 
 export type AppTheme = (typeof THEME_OPTIONS)[number]['value'];
@@ -21,6 +22,7 @@ const LEGACY_THEME_MAP: Record<string, AppTheme> = {
   forest: 'light',
   dark: 'dark',
   midnight: 'dark',
+  neon: 'neon',
 };
 
 export function isAppTheme(value: unknown): value is AppTheme {

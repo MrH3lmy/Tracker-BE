@@ -8,6 +8,7 @@ import { ManageDependenciesDrawer } from '../components/tasks/ManageDependencies
 import { TaskEmptyState } from '../components/tasks/TaskEmptyState';
 import { TaskFilters } from '../components/tasks/TaskFilters';
 import { TaskListView } from '../components/tasks/TaskListView';
+import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import { latestResult, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
@@ -77,35 +78,6 @@ const sortTasks = (tasks: TaskRecord[], sort: TaskSortValue) => [...tasks].sort(
 
 const isOnOrAfterDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) >= filterDate;
 const isOnOrBeforeDate = (taskDate: string | undefined, filterDate: string) => Boolean(taskDate) && taskDate!.slice(0, 10) <= filterDate;
-
-const nullableValue = <T,>(value: T | undefined | null) => value ?? null;
-
-const buildTaskUpdateBody = (task: TaskRecord, updates: Partial<TaskRecord>) => {
-  const next = { ...task, ...updates };
-  return {
-    title: next.title,
-    description: nullableValue(next.description),
-    dueDate: nullableValue(next.dueDate?.slice(0, 10)),
-    startDate: nullableValue(next.startDate?.slice(0, 10)),
-    estimatedMinutes: nullableValue(next.estimatedMinutes),
-    actualMinutes: nullableValue(next.actualMinutes),
-    riskLevel: nullableValue(next.riskLevel),
-    riskReason: nullableValue(next.riskReason),
-    track: nullableValue(next.track),
-    phase: nullableValue(next.phase),
-    parentTaskId: nullableValue(next.parentTaskId),
-    important: Boolean(next.important),
-    status: nullableValue(next.status),
-    area: nullableValue(next.area),
-    effort: nullableValue(next.effort),
-    blockedReason: nullableValue(next.blockedReason),
-    waitingOn: nullableValue(next.waitingOn),
-    followUpDate: nullableValue(next.followUpDate?.slice(0, 10)),
-    boardColumnId: nullableValue(next.boardColumnId),
-    position: nullableValue(next.position),
-    dependencyIds: next.dependencyIds ?? [],
-  };
-};
 
 export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -379,9 +351,9 @@ export function TasksPage() {
           ref={createFormRef}
           activeTasks={activeTasks}
           busy={busy}
-          isCreating={createTask.isPending}
+          isSubmitting={createTask.isPending}
           onCancel={closeCreatePanel}
-          onCreate={submitCreate}
+          onSubmit={submitCreate}
           onInvalidTitle={() => setCreateOpen(true)}
         />
       </Drawer>
