@@ -132,7 +132,7 @@ public class NoteController {
     }
 
     @PatchMapping("/{id}/blocks/{blockId}")
-    public NoteBlockResponse updateBlock(@PathVariable Long id, @PathVariable Long blockId, @RequestBody UpdateNoteBlockRequest request) {
+    public NoteBlockResponse updateBlock(@PathVariable Long id, @PathVariable Long blockId, @Validated @RequestBody UpdateNoteBlockRequest request) {
         return noteBlockService.update(id, blockId, request);
     }
 

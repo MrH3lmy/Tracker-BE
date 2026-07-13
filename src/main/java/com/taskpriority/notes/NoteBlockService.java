@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class NoteBlockService {
@@ -37,7 +39,7 @@ public class NoteBlockService {
     @Transactional(readOnly = true)
     public List<NoteBlockResponse> findByNoteId(Long noteId) {
         requireNote(noteId);
-        return noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(noteId).stream().map(this::toResponse).toList();
+        return toResponseBatch(noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(noteId));
     }
 
     @Transactional
@@ -85,9 +87,10 @@ public class NoteBlockService {
         }
         java.util.Map<Long, NoteBlock> byId = blocks.stream().collect(java.util.stream.Collectors.toMap(NoteBlock::getId, b -> b));
         for (int i = 0; i < request.blockIds().size(); i++) byId.get(request.blockIds().get(i)).setPosition(i);
-        return noteBlockRepository.saveAll(blocks).stream()
+        List<NoteBlock> saved = noteBlockRepository.saveAll(blocks).stream()
                 .sorted(java.util.Comparator.comparing(NoteBlock::getPosition).thenComparing(NoteBlock::getId))
-                .map(this::toResponse).toList();
+                .toList();
+        return toResponseBatch(saved);
     }
 
     private Note requireNote(Long noteId) {
@@ -107,6 +110,23 @@ public class NoteBlockService {
 
     public NoteBlockResponse toResponse(NoteBlock block) {
         var links = noteTaskLinkRepository.findByNoteBlockId(block.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return buildResponse(block, links);
+    }
+
+    private List<NoteBlockResponse> toResponseBatch(List<NoteBlock> blocks) {
+        if (blocks.isEmpty()) {
+            return List.of();
+        }
+        List<Long> blockIds = blocks.stream().map(NoteBlock::getId).toList();
+        Map<Long, List<com.taskpriority.notes.api.NoteTaskLinkResponse>> linksByBlock = noteTaskLinkRepository.findByNoteBlockIdIn(blockIds).stream()
+                .collect(Collectors.groupingBy(link -> link.getNoteBlock().getId(),
+                        Collectors.mapping(noteTaskLinkMapper::toResponse, Collectors.toList())));
+        return blocks.stream()
+                .map(block -> buildResponse(block, linksByBlock.getOrDefault(block.getId(), List.of())))
+                .toList();
+    }
+
+    private NoteBlockResponse buildResponse(NoteBlock block, List<com.taskpriority.notes.api.NoteTaskLinkResponse> links) {
         return new NoteBlockResponse(block.getId(), block.getNote().getId(), block.getType(), block.getContent(), block.getPosition(), block.getChecked(), block.getMetadata(), block.getCreatedAt(), block.getUpdatedAt(), links);
     }
 }

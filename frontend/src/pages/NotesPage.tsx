@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type FormEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { isQueryError } from "../apiClient";
 import { CodePreview } from "../components/notes/CodePreview";
@@ -13,24 +13,22 @@ import { NotesSidebar } from "../components/notes/NotesSidebar";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
 import { ScreenshotCropOverlay } from "../components/notes/ScreenshotCropOverlay";
 import { blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
+import { useNoteVersionHistory } from "../components/notes/useNoteVersionHistory";
+import { useNoteScreenshots } from "../components/notes/useNoteScreenshots";
 import type {
   NoteAiAction,
   NoteAiGenerationRecord,
-  NoteAttachmentRecord,
   NoteContentType,
   NoteRecord,
   NoteTemplateRecord,
-  NoteVersionRecord,
 } from "../components/notes/noteTypes";
 import {
+  buildNotePayload,
   EMPTY_FORM,
   formatDate,
   getStickyNoteNumber,
   humanizeContentType,
   noteToForm,
-  type CropOverlayState,
-  type CropPoint,
-  type CropSelection,
   type NoteFormState,
   type NoteSortBy,
   type NotesViewMode,
@@ -41,7 +39,6 @@ import {
   useNoteCollectionsQuery,
   useNoteAiGenerationsQuery,
   useNoteMutations,
-  useNoteVersionsQuery,
   useNoteTemplatesQuery,
   useNoteSavedViewsQuery,
   useNotesQuery,
@@ -50,19 +47,6 @@ import {
 } from "../hooks/useApiQueries";
 import { Badge, Button, Dialog, Field, Input, Select } from "../components/ui";
 
-const SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-]);
-const SCREEN_CAPTURE_UNAVAILABLE_MESSAGE =
-  "Screen capture is not available in this browser. Please attach an image file instead.";
-const SCREEN_CAPTURE_DENIED_MESSAGE =
-  "Screen capture was cancelled or denied. Please allow screen sharing to take a screenshot.";
-const SCREENSHOT_NOTE_BODY =
-  "Screenshot captured from the notes page for the selected task.";
-const SCREENSHOT_NOTE_UPLOAD_CAPTION = "Screenshot captured for this task.";
-const PASTED_SCREENSHOT_PENDING_REFERENCE = "[Pasted screenshot pending upload]";
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
 const DEFAULT_NOTE_SAVED_VIEWS = [
   { name: 'All notes', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
@@ -74,17 +58,6 @@ const DEFAULT_NOTE_SAVED_VIEWS = [
   { name: 'Checklists', filters: { contentType: 'MARKDOWN', q: '- [ ]' }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
 ];
 
-const AREA_SCREENSHOT_SHORTCUT = "Ctrl+Alt+S (or Ctrl+Shift+S)";
-
-
-
-
-
-interface PendingClipboardImage {
-  placeholder: string;
-  caption: string;
-  fileName: string;
-}
 
 interface TemplateVariableState {
   taskTitle: string;
@@ -109,7 +82,7 @@ interface ConvertTaskModalState {
   sourceText: string;
   title: string;
   dueDate: string;
-  priority: string;
+  status: string;
   area: string;
   effort: string;
   parentTaskId: string;
@@ -124,19 +97,6 @@ function parseTags(value: string): string[] {
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
-}
-
-function buildPayload(form: NoteFormState) {
-  const trimmedTaskId = form.taskId.trim();
-  const trimmedCollectionId = form.collectionId.trim();
-  return {
-    title: form.title.trim(),
-    contentType: form.contentType,
-    taskId: trimmedTaskId ? Number(trimmedTaskId) : null,
-    collectionId: trimmedCollectionId ? Number(trimmedCollectionId) : null,
-    tags: parseTags(form.tags),
-    body: form.body,
-  };
 }
 
 export function NotesPage() {
@@ -164,52 +124,22 @@ export function NotesPage() {
   const [showRawBody, setShowRawBody] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
-  const [versionHistoryNoteId, setVersionHistoryNoteId] = useState<number | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
-  const [attachmentCaptions, setAttachmentCaptions] = useState<
-    Record<number, string>
-  >({});
-  const [screenshotMessages, setScreenshotMessages] = useState<
-    Record<number, { kind: "error" | "success"; text: string }>
-  >({});
-  const [screenshotNoteMessage, setScreenshotNoteMessage] = useState<{
-    kind: "error" | "success";
-    text: string;
-  } | null>(null);
-  const [clipboardImageMessage, setClipboardImageMessage] = useState<{
-    kind: "error" | "success";
-    text: string;
-  } | null>(null);
-  const [pendingClipboardImages, setPendingClipboardImages] = useState<
-    PendingClipboardImage[]
-  >([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [templateVariables, setTemplateVariables] = useState<TemplateVariableState>({ taskTitle: '', date: new Date().toISOString().slice(0, 10), area: '', priority: '', dueDate: '' });
   const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
   const [aiReviewSuggestion, setAiReviewSuggestion] = useState<NoteAiGenerationRecord | null>(null);
-  const [capturingNoteId, setCapturingNoteId] = useState<number | null>(null);
-  const [isCreatingScreenshotNote, setIsCreatingScreenshotNote] =
-    useState(false);
-  const screenshotFileInputs = useRef<Record<number, HTMLInputElement | null>>(
-    {},
-  );
   const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const noteFormTitleRef = useRef<HTMLHeadingElement | null>(null);
   const noteTitleInputRef = useRef<HTMLInputElement | null>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement | null>(null);
   const wasCreateDrawerOpenRef = useRef(false);
-  const cropImageRef = useRef<HTMLImageElement | null>(null);
-  const [cropOverlay, setCropOverlay] = useState<CropOverlayState | null>(null);
-  const cropOverlayRef = useRef<CropOverlayState | null>(null);
-  const screenshotNoteHandlerRef = useRef<() => Promise<void>>(async () => undefined);
 
   const templatesQuery = useNoteTemplatesQuery();
   const collectionsQuery = useNoteCollectionsQuery();
   const savedViewsQuery = useNoteSavedViewsQuery();
   const settingsQuery = useSettingsQuery(true);
   const aiGenerationsQuery = useNoteAiGenerationsQuery(editingNoteId ?? 0, editingNoteId !== null);
-  const noteVersionsQuery = useNoteVersionsQuery(versionHistoryNoteId ?? 0, versionHistoryNoteId !== null);
   const notesQuery = useNotesQuery({
     q: search,
     contentType: contentTypeFilter,
@@ -268,6 +198,17 @@ export function NotesPage() {
       return orderDelta === 0 ? first.id - second.id : orderDelta;
     });
   }, [linkedTaskId, notesQuery.data]);
+  const {
+    versionHistoryNoteId,
+    setVersionHistoryNoteId,
+    setSelectedVersionId,
+    noteVersionsQuery,
+    noteVersions,
+    selectedVersion,
+    versionHistoryNote,
+    openVersionHistory,
+    restoreSelectedVersion,
+  } = useNoteVersionHistory({ notes, restoreNoteVersion, setForm, setDraftBlocks, setEditingNoteId, formatDate });
   const notesQueryErrorMessage =
     notesQuery.data && !notesQuery.data.ok
       ? notesQuery.data.error?.message ??
@@ -293,14 +234,50 @@ export function NotesPage() {
   const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
   const isBusy =
     createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending || runNoteAiAction.isPending || restoreNoteVersion.isPending;
-  const isUploadPending = uploadScreenshot.isPending;
-  const isCapturePending = capturingNoteId !== null || isCreatingScreenshotNote;
   const screenshotNoteTaskId =
     linkedTaskId || (editingNoteId === null ? form.taskId.trim() : "");
   const activeForm =
     editingNoteId === null && linkedTaskId && form.taskId.trim() === ""
       ? { ...form, taskId: linkedTaskId }
       : form;
+  const {
+    attachmentCaptions,
+    setAttachmentCaptions,
+    screenshotMessages,
+    screenshotNoteMessage,
+    clipboardImageMessage,
+    setClipboardImageMessage,
+    pendingClipboardImages,
+    capturingNoteId,
+    isCreatingScreenshotNote,
+    cropOverlay,
+    setScreenshotFileInput,
+    cropImageRef,
+    isUploadPending,
+    isCapturePending,
+    handleBodyPaste,
+    handleScreenshotNote,
+    handleTakeScreenshot,
+    handleScreenshotSubmit,
+    cancelCropOverlay,
+    confirmCropOverlay,
+    handleCropPointerDown,
+    handleCropPointerMove,
+    handleCropPointerUp,
+    getNormalizedSelection,
+  } = useNoteScreenshots({
+    activeForm,
+    setForm,
+    editingNoteId,
+    setEditingNoteId,
+    isBusy,
+    screenshotNoteTaskId,
+    noteBodyRef,
+    createNote,
+    updateNote,
+    uploadScreenshot,
+    refetchNotes: notesQuery.refetch,
+  });
   const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
   const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
   const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
@@ -308,12 +285,6 @@ export function NotesPage() {
     () => (Array.isArray(aiGenerationsQuery.data?.data) ? aiGenerationsQuery.data.data : []),
     [aiGenerationsQuery.data],
   );
-  const noteVersions = useMemo<NoteVersionRecord[]>(
-    () => (Array.isArray(noteVersionsQuery.data?.data) ? noteVersionsQuery.data.data : []),
-    [noteVersionsQuery.data],
-  );
-  const selectedVersion = useMemo(() => noteVersions.find((version) => version.id === selectedVersionId) ?? noteVersions[0] ?? null, [noteVersions, selectedVersionId]);
-  const versionHistoryNote = useMemo(() => notes.find((note) => note.id === versionHistoryNoteId) ?? null, [notes, versionHistoryNoteId]);
   const templates = useMemo<NoteTemplateRecord[]>(
     () => (Array.isArray(templatesQuery.data?.data) ? templatesQuery.data.data : []),
     [templatesQuery.data],
@@ -382,7 +353,7 @@ export function NotesPage() {
       return;
     }
     const trimmed = sourceText.trim();
-    setConvertTaskModal({ noteId: editingNoteId, blockId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", priority: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
+    setConvertTaskModal({ noteId: editingNoteId, blockId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
   };
 
   const submitConvertTask = () => {
@@ -394,7 +365,7 @@ export function NotesPage() {
         title: convertTaskModal.title,
         selectedText: convertTaskModal.sourceText,
         dueDate: convertTaskModal.dueDate || null,
-        priority: convertTaskModal.priority || null,
+        status: convertTaskModal.status || null,
         area: convertTaskModal.area || null,
         effort: convertTaskModal.effort || null,
         parentTaskId: convertTaskModal.parentTaskId ? Number(convertTaskModal.parentTaskId) : null,
@@ -520,7 +491,7 @@ export function NotesPage() {
     event.preventDefault();
     if (!canSubmit) return;
 
-    const payload = { ...buildPayload(activeForm), body: effectiveBody };
+    const payload = { ...buildNotePayload(activeForm), body: effectiveBody };
     if (editingNoteId === null) {
       createNote.mutate(payload, {
         onSuccess: (result) => {
@@ -538,622 +509,6 @@ export function NotesPage() {
         },
       },
     );
-  };
-
-  const setScreenshotMessage = (
-    noteId: number,
-    kind: "error" | "success",
-    text: string,
-  ) => {
-    setScreenshotMessages((current) => ({
-      ...current,
-      [noteId]: { kind, text },
-    }));
-  };
-
-  const getCropPoint = (event: PointerEvent<HTMLImageElement>): CropPoint | null => {
-    if (!cropOverlay || !cropImageRef.current) return null;
-
-    const bounds = cropImageRef.current.getBoundingClientRect();
-    if (bounds.width === 0 || bounds.height === 0) return null;
-
-    return {
-      x: Math.min(
-        cropOverlay.width,
-        Math.max(0, ((event.clientX - bounds.left) / bounds.width) * cropOverlay.width),
-      ),
-      y: Math.min(
-        cropOverlay.height,
-        Math.max(0, ((event.clientY - bounds.top) / bounds.height) * cropOverlay.height),
-      ),
-    };
-  };
-
-  const getNormalizedSelection = (selection: CropSelection | null) => {
-    if (!selection) return null;
-
-    const left = Math.min(selection.start.x, selection.end.x);
-    const top = Math.min(selection.start.y, selection.end.y);
-    const width = Math.abs(selection.end.x - selection.start.x);
-    const height = Math.abs(selection.end.y - selection.start.y);
-
-    if (width < 1 || height < 1) return null;
-    return { left, top, width, height };
-  };
-
-  const cancelCropOverlay = (message = "Screenshot area selection was cancelled.") => {
-    setCropOverlay((current) => {
-      current?.reject(new Error(message));
-      return null;
-    });
-  };
-
-  const confirmCropOverlay = async () => {
-    if (!cropOverlay) return;
-
-    const selection = getNormalizedSelection(cropOverlay.selection);
-    if (!selection) return;
-
-    try {
-      const sourceImage = new Image();
-      sourceImage.src = cropOverlay.imageSrc;
-      await sourceImage.decode();
-
-      const cropWidth = Math.max(1, Math.round(selection.width));
-      const cropHeight = Math.max(1, Math.round(selection.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Could not prepare the screenshot crop canvas.");
-
-      context.drawImage(
-        sourceImage,
-        Math.round(selection.left),
-        Math.round(selection.top),
-        cropWidth,
-        cropHeight,
-        0,
-        0,
-        cropWidth,
-        cropHeight,
-      );
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png"),
-      );
-      if (!blob) throw new Error("Could not convert the cropped screenshot to PNG.");
-
-      cropOverlay.resolve({
-        file: new File([blob], cropOverlay.fileName, { type: "image/png" }),
-        width: cropWidth,
-        height: cropHeight,
-      });
-      setCropOverlay(null);
-    } catch (error) {
-      cropOverlay.reject(error);
-      setCropOverlay(null);
-    }
-  };
-
-  const captureScreenshotFile = async (
-    fileName: string,
-  ): Promise<{ file: File; width: number; height: number }> => {
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      throw new Error(SCREEN_CAPTURE_UNAVAILABLE_MESSAGE);
-    }
-
-    let stream: MediaStream | null = null;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      const [track] = stream.getVideoTracks();
-      if (!track)
-        throw new Error("No video track was returned from screen capture.");
-
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
-      await video.play();
-
-      await new Promise<void>((resolve) => {
-        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          resolve();
-          return;
-        }
-        video.addEventListener("loadeddata", () => resolve(), { once: true });
-      });
-
-      const settings = track.getSettings();
-      const width = video.videoWidth || settings.width || 1;
-      const height = video.videoHeight || settings.height || 1;
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Could not prepare the screenshot canvas.");
-      context.drawImage(video, 0, 0, width, height);
-
-      const imageSrc = canvas.toDataURL("image/png");
-      return await new Promise<{ file: File; width: number; height: number }>(
-        (resolve, reject) => {
-          setCropOverlay({
-            fileName,
-            imageSrc,
-            width,
-            height,
-            selection: null,
-            isDragging: false,
-            resolve,
-            reject,
-          });
-        },
-      );
-    } catch (error) {
-      if (
-        error instanceof DOMException &&
-        (error.name === "NotAllowedError" || error.name === "AbortError")
-      ) {
-        throw new Error(SCREEN_CAPTURE_DENIED_MESSAGE, { cause: error });
-      }
-      throw error;
-    } finally {
-      stream?.getTracks().forEach((track) => track.stop());
-    }
-  };
-
-  const extractCreatedNoteId = (data: unknown): number | null => {
-    if (data && typeof data === "object" && "id" in data) {
-      const id = Number((data as { id?: unknown }).id);
-      return Number.isFinite(id) ? id : null;
-    }
-    return null;
-  };
-
-  const getClipboardImageFile = (
-    clipboardData: DataTransfer,
-  ): File | null => {
-    const files = Array.from(clipboardData.files).find((file) =>
-      SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES.has(file.type),
-    );
-    if (files) return files;
-
-    const item = Array.from(clipboardData.items).find(
-      (clipboardItem) =>
-        clipboardItem.kind === "file" &&
-        SUPPORTED_CLIPBOARD_IMAGE_MIME_TYPES.has(clipboardItem.type),
-    );
-    return item?.getAsFile() ?? null;
-  };
-
-  const buildClipboardReference = (
-    attachment: NoteAttachmentRecord,
-    fallbackCaption: string,
-    contentType = activeForm.contentType,
-  ) => {
-    const caption = attachment.caption?.trim() || fallbackCaption;
-    const fileName = attachment.fileName;
-    const downloadUrl = attachment.downloadUrl?.trim() || null;
-    const label = caption || fileName;
-
-    if (contentType === "MARKDOWN" && downloadUrl) {
-      return `![${label}](${downloadUrl})`;
-    }
-
-    return downloadUrl
-      ? `[Screenshot: ${label} (${fileName})] ${downloadUrl}`
-      : `[Screenshot: ${label} (${fileName})]`;
-  };
-
-  const insertReferenceIntoBody = (
-    body: string,
-    reference: string,
-    selectionStart?: number | null,
-    selectionEnd?: number | null,
-  ) => {
-    const start = Math.max(0, Math.min(selectionStart ?? body.length, body.length));
-    const end = Math.max(start, Math.min(selectionEnd ?? start, body.length));
-    const prefix = body.slice(0, start);
-    const suffix = body.slice(end);
-    const spacingBefore = prefix && !prefix.endsWith("\n") ? "\n" : "";
-    const spacingAfter = suffix && !suffix.startsWith("\n") ? "\n" : "";
-
-    return `${prefix}${spacingBefore}${reference}${spacingAfter}${suffix}`;
-  };
-
-  const moveBodyCursorAfterReference = (reference: string) => {
-    window.setTimeout(() => {
-      const body = noteBodyRef.current?.value ?? "";
-      const referenceIndex = body.indexOf(reference);
-      const cursorPosition =
-        referenceIndex === -1 ? body.length : referenceIndex + reference.length;
-
-      noteBodyRef.current?.focus();
-      noteBodyRef.current?.setSelectionRange(cursorPosition, cursorPosition);
-    }, 0);
-  };
-
-  const handleBodyPaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const pastedImage = getClipboardImageFile(event.clipboardData);
-    if (!pastedImage) return;
-
-    event.preventDefault();
-    if (isBusy || isUploadPending) return;
-
-    const caption = `Pasted screenshot - ${new Date().toLocaleString()}`;
-    const pendingImage: PendingClipboardImage = {
-      placeholder: PASTED_SCREENSHOT_PENDING_REFERENCE,
-      caption,
-      fileName: pastedImage.name || "pasted-screenshot",
-    };
-    const selectionStart = event.currentTarget.selectionStart;
-    const selectionEnd = event.currentTarget.selectionEnd;
-    const formWithLinkedTask = activeForm;
-    const bodyWithPendingReference = insertReferenceIntoBody(
-      formWithLinkedTask.body,
-      pendingImage.placeholder,
-      selectionStart,
-      selectionEnd,
-    );
-    const formWithPendingReference = {
-      ...formWithLinkedTask,
-      body: bodyWithPendingReference,
-    };
-    let noteId = editingNoteId;
-
-    setPendingClipboardImages((current) => [...current, pendingImage]);
-    setForm(formWithPendingReference);
-    moveBodyCursorAfterReference(pendingImage.placeholder);
-    setClipboardImageMessage({
-      kind: "success",
-      text: "Pasted image added to the note body. Uploading...",
-    });
-
-    try {
-      if (noteId === null) {
-        if (!formWithPendingReference.title.trim()) {
-          setClipboardImageMessage({
-            kind: "error",
-            text: "Enter a note title before pasting an image into a new note.",
-          });
-          return;
-        }
-
-        const createResult = await createNote.mutateAsync(
-          buildPayload(formWithPendingReference),
-        );
-        if (!createResult.ok) {
-          setClipboardImageMessage({
-            kind: "error",
-            text: `Note creation failed: ${createResult.error?.message ?? "Unable to create note for pasted image."}`,
-          });
-          return;
-        }
-
-        noteId = extractCreatedNoteId(createResult.data);
-        if (noteId === null) {
-          setClipboardImageMessage({
-            kind: "error",
-            text: "Note creation failed: the response did not include the new note id.",
-          });
-          return;
-        }
-        setEditingNoteId(noteId);
-      }
-
-      const uploadResult = await uploadScreenshot.mutateAsync({
-        noteId,
-        file: pastedImage,
-        caption,
-        source: "clipboard",
-      });
-      if (!uploadResult.ok) {
-        setClipboardImageMessage({
-          kind: "error",
-          text: uploadResult.error?.message ?? "Clipboard image upload failed.",
-        });
-        return;
-      }
-
-      const attachment = uploadResult.data;
-      if (!attachment) {
-        setClipboardImageMessage({
-          kind: "error",
-          text: "Clipboard image upload failed: the response did not include attachment metadata.",
-        });
-        return;
-      }
-
-      const finalReference = buildClipboardReference(
-        attachment,
-        caption,
-        formWithPendingReference.contentType,
-      );
-      const bodyWithFinalReference = bodyWithPendingReference.replace(
-        pendingImage.placeholder,
-        finalReference,
-      );
-      const updatedForm = {
-        ...formWithPendingReference,
-        body: bodyWithFinalReference,
-      };
-
-      setForm(updatedForm);
-      moveBodyCursorAfterReference(finalReference);
-      setPendingClipboardImages((current) =>
-        current.filter((image) => image !== pendingImage),
-      );
-
-      const updateResult = await updateNote.mutateAsync({
-        id: noteId,
-        body: buildPayload(updatedForm),
-      });
-      if (!updateResult.ok) {
-        setClipboardImageMessage({
-          kind: "error",
-          text: `Pasted image uploaded, but the note body still has the pending placeholder: ${updateResult.error?.message ?? "Unable to update note body."}`,
-        });
-        return;
-      }
-
-      setClipboardImageMessage({
-        kind: "success",
-        text: "Pasted image uploaded and inserted into the note body.",
-      });
-    } catch (error) {
-      setClipboardImageMessage({
-        kind: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "Clipboard image upload failed.",
-      });
-    }
-  };
-
-  const handleScreenshotNote = async () => {
-    const taskId = Number(screenshotNoteTaskId);
-    if (
-      !Number.isFinite(taskId) ||
-      isBusy ||
-      isUploadPending ||
-      isCapturePending
-    )
-      return;
-
-    setIsCreatingScreenshotNote(true);
-    setScreenshotNoteMessage({
-      kind: "success",
-      text: `Choose a screen, window, or tab, then drag to crop the area. Shortcut: ${AREA_SCREENSHOT_SHORTCUT}.`,
-    });
-
-    let createdNoteId: number | null = null;
-    try {
-      const captured = await captureScreenshotFile(
-        `task-${taskId}-screenshot-${Date.now()}.png`,
-      );
-      const createResult = await createNote.mutateAsync({
-        taskId,
-        title: `Screenshot - ${new Date().toLocaleString()}`,
-        contentType: "PLAIN_TEXT",
-        tags: [],
-        body: SCREENSHOT_NOTE_BODY,
-      });
-
-      if (!createResult.ok) {
-        setScreenshotNoteMessage({
-          kind: "error",
-          text: `Note creation failed: ${createResult.error?.message ?? "Unable to create screenshot note."}`,
-        });
-        return;
-      }
-
-      createdNoteId = extractCreatedNoteId(createResult.data);
-      if (createdNoteId === null) {
-        setScreenshotNoteMessage({
-          kind: "error",
-          text: "Note creation failed: the response did not include the new note id.",
-        });
-        return;
-      }
-
-      const uploadResult = await uploadScreenshot.mutateAsync({
-        noteId: createdNoteId,
-        file: captured.file,
-        caption: SCREENSHOT_NOTE_UPLOAD_CAPTION,
-        source: "browser-screen-capture",
-        width: captured.width,
-        height: captured.height,
-      });
-
-      if (!uploadResult.ok) {
-        setScreenshotNoteMessage({
-          kind: "error",
-          text: `Screenshot upload failed for note #${createdNoteId}: ${uploadResult.error?.message ?? "Unable to upload screenshot."}`,
-        });
-        return;
-      }
-
-      setScreenshotNoteMessage({
-        kind: "success",
-        text: `Screenshot note #${createdNoteId} created and uploaded.`,
-      });
-    } catch (error) {
-      setScreenshotNoteMessage({
-        kind: "error",
-        text:
-          error instanceof Error ? error.message : "Screenshot note failed.",
-      });
-    } finally {
-      if (createdNoteId !== null) await notesQuery.refetch();
-      setIsCreatingScreenshotNote(false);
-    }
-  };
-
-  const handleTakeScreenshot = async (note: NoteRecord) => {
-    if (isUploadPending || isCapturePending) return;
-
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      setScreenshotMessage(
-        note.id,
-        "error",
-        SCREEN_CAPTURE_UNAVAILABLE_MESSAGE,
-      );
-      return;
-    }
-
-    setCapturingNoteId(note.id);
-    setScreenshotMessage(
-      note.id,
-      "success",
-      "Choose a screen, window, or tab, then drag to crop the area.",
-    );
-
-    try {
-      const captured = await captureScreenshotFile(
-        `note-${note.id}-screenshot-${Date.now()}.png`,
-      );
-      const caption = attachmentCaptions[note.id]?.trim() || note.title.trim();
-
-      uploadScreenshot.mutate(
-        {
-          noteId: note.id,
-          file: captured.file,
-          caption,
-          source: "browser-screen-capture",
-          width: captured.width,
-          height: captured.height,
-        },
-        {
-          onSuccess: (result) => {
-            if (!result.ok) {
-              setScreenshotMessage(
-                note.id,
-                "error",
-                result.error?.message ?? "Screenshot upload failed.",
-              );
-              return;
-            }
-            screenshotFileInputs.current[note.id]?.form?.reset();
-            setAttachmentCaptions((current) => ({ ...current, [note.id]: "" }));
-            setScreenshotMessage(
-              note.id,
-              "success",
-              "Screenshot captured and uploaded.",
-            );
-          },
-          onError: () =>
-            setScreenshotMessage(note.id, "error", "Screenshot upload failed."),
-        },
-      );
-    } catch (error) {
-      setScreenshotMessage(
-        note.id,
-        "error",
-        error instanceof Error ? error.message : "Screenshot capture failed.",
-      );
-    } finally {
-      setCapturingNoteId(null);
-    }
-  };
-
-  const handleCropPointerDown = (event: PointerEvent<HTMLImageElement>) => {
-    const point = getCropPoint(event);
-    if (!point) return;
-
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setCropOverlay((current) =>
-      current
-        ? {
-            ...current,
-            selection: { start: point, end: point },
-            isDragging: true,
-          }
-        : current,
-    );
-  };
-
-  const handleCropPointerMove = (event: PointerEvent<HTMLImageElement>) => {
-    const point = getCropPoint(event);
-    if (!point) return;
-
-    setCropOverlay((current) =>
-      current?.isDragging && current.selection
-        ? { ...current, selection: { ...current.selection, end: point } }
-        : current,
-    );
-  };
-
-  const handleCropPointerUp = (event: PointerEvent<HTMLImageElement>) => {
-    const point = getCropPoint(event);
-    if (point) {
-      setCropOverlay((current) =>
-        current?.selection
-          ? {
-              ...current,
-              selection: { ...current.selection, end: point },
-              isDragging: false,
-            }
-          : current,
-      );
-      return;
-    }
-
-    setCropOverlay((current) =>
-      current ? { ...current, isDragging: false } : current,
-    );
-  };
-
-  const handleScreenshotSubmit = (
-    event: FormEvent<HTMLFormElement>,
-    note: NoteRecord,
-  ) => {
-    event.preventDefault();
-    if (isUploadPending) return;
-
-    const formData = new FormData(event.currentTarget);
-    const file = formData.get("screenshot");
-    if (!(file instanceof File) || file.size === 0) return;
-
-    const caption = attachmentCaptions[note.id]?.trim() || note.title.trim();
-    uploadScreenshot.mutate(
-      { noteId: note.id, file, caption },
-      {
-        onSuccess: (result) => {
-          if (!result.ok) {
-            setScreenshotMessage(
-              note.id,
-              "error",
-              result.error?.message ?? "Image upload failed.",
-            );
-            return;
-          }
-          event.currentTarget.reset();
-          setScreenshotMessage(note.id, "success", "Image uploaded.");
-          setAttachmentCaptions((current) => ({ ...current, [note.id]: "" }));
-        },
-      },
-    );
-  };
-
-
-  const openVersionHistory = (note: NoteRecord) => {
-    setVersionHistoryNoteId(note.id);
-    setSelectedVersionId(null);
-  };
-
-  const restoreSelectedVersion = () => {
-    if (!versionHistoryNoteId || !selectedVersion) return;
-    const confirmed = window.confirm(`Restore “${selectedVersion.title}” from ${formatDate(selectedVersion.createdAt)}? This will save the current note as a version first.`);
-    if (!confirmed) return;
-    restoreNoteVersion.mutate({ noteId: versionHistoryNoteId, versionId: selectedVersion.id }, {
-      onSuccess: () => {
-        const restored = selectedVersion;
-        setForm({ ...noteToForm({ ...(versionHistoryNote ?? {} as NoteRecord), id: versionHistoryNoteId, title: restored.title, body: restored.body ?? "", contentType: restored.contentType, tags: restored.tags ?? [] }) });
-        setDraftBlocks(blocksFromBody(restored.body ?? ""));
-        setEditingNoteId(versionHistoryNoteId);
-      },
-    });
   };
 
   const copyBody = (note: NoteRecord) => {
@@ -1175,10 +530,6 @@ export function NotesPage() {
   };
 
   useEffect(() => {
-    screenshotNoteHandlerRef.current = handleScreenshotNote;
-  });
-
-  useEffect(() => {
     if (isCreateDrawerOpen) {
       focusNoteEditor();
     } else if (wasCreateDrawerOpenRef.current) {
@@ -1189,40 +540,6 @@ export function NotesPage() {
 
     wasCreateDrawerOpenRef.current = isCreateDrawerOpen;
   }, [focusNoteEditor, isCreateDrawerOpen]);
-
-  useEffect(() => {
-    cropOverlayRef.current = cropOverlay;
-  }, [cropOverlay]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && cropOverlayRef.current) {
-        event.preventDefault();
-        cancelCropOverlay();
-        return;
-      }
-
-      const target = event.target;
-      const isTypingTarget =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement;
-      if (isTypingTarget) return;
-
-      const isScreenshotShortcut =
-        event.ctrlKey &&
-        event.key.toLowerCase() === "s" &&
-        (event.altKey || event.shiftKey);
-
-      if (!isScreenshotShortcut) return;
-
-      event.preventDefault();
-      void screenshotNoteHandlerRef.current();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   return (
     <div className="flex flex-col gap-5" aria-busy={isBusy}>
@@ -1395,7 +712,7 @@ export function NotesPage() {
                     <p className="mt-0.5 text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>
                     <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 220)}{note.body.length > 220 ? "…" : ""}</p>
                   </div>
-                  <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
+                  <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
                 </div>
                 {note.tags?.length ? (
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1429,7 +746,7 @@ export function NotesPage() {
             screenshotMessages={screenshotMessages}
             attachmentCaptions={attachmentCaptions}
             onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))}
-            screenshotInputRef={(noteId, element) => { screenshotFileInputs.current[noteId] = element; }}
+            screenshotInputRef={(noteId, element) => setScreenshotFileInput(noteId, element)}
             isUploadPending={isUploadPending}
             isCapturePending={isCapturePending}
             capturingNoteId={capturingNoteId}
@@ -1449,7 +766,7 @@ export function NotesPage() {
                       <p className="mt-0.5 text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>
                       <p className="mt-2 text-sm text-fg">{note.body.replace(/\s+/g, " ").slice(0, 180)}{note.body.length > 180 ? "…" : ""}</p>
                       <div className="mt-3">
-                        <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => { screenshotFileInputs.current[note.id] = element; }} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
+                        <NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />
                       </div>
                     </article>
                   ))}
@@ -1532,8 +849,8 @@ export function NotesPage() {
             <Field label="Due date" htmlFor="convertTaskDueDate">
               <Input id="convertTaskDueDate" type="date" value={convertTaskModal.dueDate} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, dueDate: event.target.value } : current)} />
             </Field>
-            <Field label="Priority" htmlFor="convertTaskPriority">
-              <Select id="convertTaskPriority" value={convertTaskModal.priority} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, priority: event.target.value } : current)}>
+            <Field label="Status" htmlFor="convertTaskStatus">
+              <Select id="convertTaskStatus" value={convertTaskModal.status} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, status: event.target.value } : current)}>
                 <option value="">Backlog</option>
                 <option value="NOT_STARTED">Not started</option>
                 <option value="IN_PROGRESS">In progress</option>

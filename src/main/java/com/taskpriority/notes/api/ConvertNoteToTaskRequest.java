@@ -14,7 +14,7 @@ public record ConvertNoteToTaskRequest(
         String selectedText,
         String description,
         LocalDate dueDate,
-        Status priority,
+        Status status,
         Area area,
         Effort effort,
         @Positive(message = "parentTaskId must be greater than 0")

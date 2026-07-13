@@ -123,11 +123,11 @@ public class NoteService {
 
         Map<Long, Note> notesById = noteRepository.findAllWithAssociationsByIdIn(noteIds).stream()
                 .collect(Collectors.toMap(Note::getId, Function.identity()));
-        return noteIds.stream()
+        List<Note> notes = noteIds.stream()
                 .map(notesById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(this::toResponse)
                 .toList();
+        return toResponseBatch(notes);
     }
 
     @Transactional(readOnly = true)
@@ -135,10 +135,7 @@ public class NoteService {
         if (!taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponseBatch(noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId));
     }
 
 
@@ -692,6 +689,33 @@ public class NoteService {
     }
 
     private NoteResponse toResponse(Note note) {
+        List<NoteAttachmentResponse> attachments = noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
+                .stream()
+                .map(this::toAttachmentResponse)
+                .toList();
+        List<NoteTaskLinkResponse> links = noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return buildResponse(note, attachments, links);
+    }
+
+    private List<NoteResponse> toResponseBatch(List<Note> notes) {
+        if (notes.isEmpty()) {
+            return List.of();
+        }
+        List<Long> noteIds = notes.stream().map(Note::getId).toList();
+
+        Map<Long, List<NoteAttachmentResponse>> attachmentsByNote = noteAttachmentRepository.findByNoteIdInAndKindOrderByCreatedAtAscIdAsc(noteIds, NoteAttachmentKind.SCREENSHOT).stream()
+                .collect(Collectors.groupingBy(attachment -> attachment.getNote().getId(),
+                        Collectors.mapping(this::toAttachmentResponse, Collectors.toList())));
+        Map<Long, List<NoteTaskLinkResponse>> linksByNote = noteTaskLinkRepository.findByNoteIdIn(noteIds).stream()
+                .collect(Collectors.groupingBy(link -> link.getNote().getId(),
+                        Collectors.mapping(noteTaskLinkMapper::toResponse, Collectors.toList())));
+
+        return notes.stream()
+                .map(note -> buildResponse(note, attachmentsByNote.getOrDefault(note.getId(), List.of()), linksByNote.getOrDefault(note.getId(), List.of())))
+                .toList();
+    }
+
+    private NoteResponse buildResponse(Note note, List<NoteAttachmentResponse> attachments, List<NoteTaskLinkResponse> links) {
         Long taskId = note.getTask() == null ? null : note.getTask().getId();
         Long collectionId = note.getCollection() == null ? null : note.getCollection().getId();
         String collectionName = note.getCollection() == null ? null : note.getCollection().getName();
@@ -715,11 +739,8 @@ public class NoteService {
                 note.getColor(),
                 note.getZIndex(),
                 tags,
-                noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
-                        .stream()
-                        .map(this::toAttachmentResponse)
-                        .toList(),
-                noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList(),
+                attachments,
+                links,
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

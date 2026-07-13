@@ -53,7 +53,7 @@ public class NoteTaskConversionService {
         task.setTitle(title);
         task.setDescription(firstNonBlank(request.description(), sourceText));
         task.setDueDate(request.dueDate());
-        if (request.priority() != null) task.setStatus(request.priority());
+        if (request.status() != null) task.setStatus(request.status());
         if (request.area() != null) task.setArea(request.area());
         if (request.effort() != null) task.setEffort(request.effort());
         task.setParentTaskId(request.parentTaskId());
