@@ -79,7 +79,7 @@ public class NoteService {
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
-    private static final List<String> SUPPORTED_NOTE_SORT_FIELDS = List.of(
+    static final List<String> SUPPORTED_NOTE_SORT_FIELDS = List.of(
             "createdAt", "updatedAt", "displayOrder", "title", "task", "contentType"
     );
 
@@ -220,6 +220,10 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
+        // Read-then-increment, not atomic: two concurrent creates could read the same max and
+        // assign the same displayOrder. Accepted for a single-user app - worst case is cosmetic
+        // duplicate sticky-note numbers, not data loss. A true fix would need a DB sequence, but
+        // that would require Flyway (disabled in the local-test H2 profile) to create it.
         note.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : noteRepository.findMaxDisplayOrder() + 1);
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());

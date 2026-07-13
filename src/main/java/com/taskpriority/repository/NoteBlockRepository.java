@@ -9,5 +9,4 @@ import java.util.Optional;
 public interface NoteBlockRepository extends JpaRepository<NoteBlock, Long> {
     List<NoteBlock> findByNoteIdOrderByPositionAscIdAsc(Long noteId);
     Optional<NoteBlock> findByIdAndNoteId(Long id, Long noteId);
-    int countByNoteId(Long noteId);
 }

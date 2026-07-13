@@ -47,6 +47,9 @@ import {
 } from "../hooks/useApiQueries";
 import { Button, Card, Dialog, Field, Input, Select } from "../components/ui";
 
+const NOTES_PAGE_SIZE_STEP = 100;
+const NOTES_PAGE_SIZE_MAX = 200;
+
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
 const DEFAULT_NOTE_SAVED_VIEWS = [
   { name: 'All notes', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
@@ -78,7 +81,6 @@ const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
 
 interface ConvertTaskModalState {
   noteId: number;
-  blockId?: number;
   sourceText: string;
   title: string;
   dueDate: string;
@@ -119,6 +121,7 @@ export function NotesPage() {
   const [createdTo, setCreatedTo] = useState("");
   const [updatedFrom, setUpdatedFrom] = useState("");
   const [updatedTo, setUpdatedTo] = useState("");
+  const [notesPageSize, setNotesPageSize] = useState(100);
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
   const [showRawBody, setShowRawBody] = useState(false);
@@ -156,7 +159,7 @@ export function NotesPage() {
     updatedTo,
     sortBy,
     sortDirection,
-    size: 100,
+    size: notesPageSize,
   });
   const tasksQuery = useTasksQuery("active");
   const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView } =
@@ -347,20 +350,19 @@ export function NotesPage() {
   };
 
 
-  const openConvertTaskModal = (sourceText: string, blockId?: number) => {
+  const openConvertTaskModal = (sourceText: string) => {
     if (editingNoteId === null) {
       setClipboardImageMessage({ kind: "error", text: "Save the note before converting note content into a task." });
       return;
     }
     const trimmed = sourceText.trim();
-    setConvertTaskModal({ noteId: editingNoteId, blockId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
+    setConvertTaskModal({ noteId: editingNoteId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
   };
 
   const submitConvertTask = () => {
     if (!convertTaskModal) return;
     convertNoteToTask.mutate({
       noteId: convertTaskModal.noteId,
-      blockId: convertTaskModal.blockId,
       body: {
         title: convertTaskModal.title,
         selectedText: convertTaskModal.sourceText,
@@ -742,6 +744,17 @@ export function NotesPage() {
           </div>
         ) : null}
         </NotesResults>
+
+        {!notesQuery.isLoading && notes.length >= notesPageSize && notesPageSize < NOTES_PAGE_SIZE_MAX ? (
+          <div className="mt-4 flex justify-center">
+            <Button
+              onClick={() => setNotesPageSize((current) => Math.min(current + NOTES_PAGE_SIZE_STEP, NOTES_PAGE_SIZE_MAX))}
+              disabled={notesQuery.isFetching}
+            >
+              {notesQuery.isFetching ? "Loading..." : "Load more notes"}
+            </Button>
+          </div>
+        ) : null}
         </div>
 
       </section>

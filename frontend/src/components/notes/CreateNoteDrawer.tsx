@@ -234,6 +234,9 @@ export function CreateNoteDrawer({
                   description="Generate summaries, task candidates, decisions, rewrites, or task plans for review. Suggestions are stored separately with audit metadata and tasks are never auto-created."
                   actions={<Badge variant={aiFeaturesEnabled ? "positive" : "neutral"}>{aiFeaturesEnabled ? "Enabled" : "Disabled in settings"}</Badge>}
                 />
+                <p className="-mt-2 mb-3 text-xs text-fg-subtle">
+                  These run entirely locally as rule-based text heuristics (sentence splitting and keyword matching) — not a hosted LLM or any external AI service.
+                </p>
                 <div className="flex flex-wrap gap-1.5" role="menu" aria-label="AI actions menu">
                   {aiNoteActions.map((item) => (
                     <Button
@@ -254,7 +257,7 @@ export function CreateNoteDrawer({
                   </p>
                 ) : null}
                 {aiReviewSuggestion ? (
-                  <div className="mt-3 rounded-lg border border-line bg-inset/30 p-3">
+                  <div className="mt-3 rounded-lg border border-line bg-inset/30 p-3" role="status" aria-live="polite">
                     <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">
                       Review before applying · {aiReviewSuggestion.provider} {aiReviewSuggestion.model ? `(${aiReviewSuggestion.model})` : ""}
                     </p>

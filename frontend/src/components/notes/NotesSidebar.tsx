@@ -84,7 +84,7 @@ export function NotesSidebar({ collectionFilter, setCollectionFilter, collection
                 <button
                   type="button"
                   className="shrink-0 rounded-md px-1.5 py-1 text-fg-subtle hover:bg-inset hover:text-critical"
-                  onClick={() => deleteSavedView.mutate(view.id)}
+                  onClick={() => { if (window.confirm(`Delete saved view "${view.name}"?`)) deleteSavedView.mutate(view.id); }}
                   aria-label={`Delete saved view ${view.name}`}
                 >
                   ×
