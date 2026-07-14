@@ -186,7 +186,7 @@ Services:
 - App/API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
 
-The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci`, then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
+The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
 
 ---
 
