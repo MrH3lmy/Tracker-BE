@@ -3,18 +3,25 @@ package com.taskpriority.task.application;
 import com.taskpriority.model.RecurrenceRule;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
+import com.taskpriority.model.TaskSchedule;
+import com.taskpriority.repository.TaskScheduleRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.MonthDay;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class RecurrenceServiceTest {
 
-    private final RecurrenceService recurrenceService = new RecurrenceService();
+    private final TaskScheduleRepository taskScheduleRepository = mock(TaskScheduleRepository.class);
+    private final RecurrenceService recurrenceService = new RecurrenceService(taskScheduleRepository);
 
     @Test
     void completesDailyRecurringTaskAndResetsTask() {
@@ -58,6 +65,37 @@ class RecurrenceServiceTest {
         recurrenceService.completeRecurringTask(task, LocalDate.of(2025, 2, 28));
 
         assertEquals(LocalDate.of(2026, 2, 28), task.getDueDate());
+    }
+
+    @Test
+    void streakIncrementsOnConsecutiveOnTimeCompletionsAndResetsAfterAMissedCycle() {
+        Task task = recurringTask(RecurrenceRule.Frequency.DAILY, 2);
+
+        recurrenceService.completeRecurringTask(task, LocalDate.of(2026, 5, 26)); // due null -> on time
+        assertEquals(1, task.getRecurrenceRule().getCurrentStreak());
+        assertEquals(1, task.getRecurrenceRule().getLongestStreak());
+
+        recurrenceService.completeRecurringTask(task, LocalDate.of(2026, 5, 28)); // completed on the due date -> on time
+        assertEquals(2, task.getRecurrenceRule().getCurrentStreak());
+        assertEquals(2, task.getRecurrenceRule().getLongestStreak());
+
+        recurrenceService.completeRecurringTask(task, LocalDate.of(2026, 6, 5)); // well after the 5/30 due date -> missed a cycle
+        assertEquals(1, task.getRecurrenceRule().getCurrentStreak());
+        assertEquals(2, task.getRecurrenceRule().getLongestStreak());
+    }
+
+    @Test
+    void rollsTaskScheduleForwardToTheNextDueDateWhenOneExists() {
+        Task task = recurringTask(RecurrenceRule.Frequency.DAILY, 1);
+        task.setId(10L);
+        TaskSchedule schedule = new TaskSchedule();
+        schedule.setScheduledDate(LocalDate.of(2026, 5, 26));
+        when(taskScheduleRepository.findByTaskId(10L)).thenReturn(Optional.of(schedule));
+
+        recurrenceService.completeRecurringTask(task, LocalDate.of(2026, 5, 26));
+
+        assertEquals(LocalDate.of(2026, 5, 27), schedule.getScheduledDate());
+        verify(taskScheduleRepository).save(schedule);
     }
 
     private Task recurringTask(RecurrenceRule.Frequency frequency, int interval) {

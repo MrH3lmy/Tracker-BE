@@ -3,6 +3,7 @@ package com.taskpriority.task.application;
 import com.taskpriority.model.RecurrenceRule;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
+import com.taskpriority.repository.TaskScheduleRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -13,6 +14,12 @@ import java.util.List;
 
 @Service
 public class RecurrenceService {
+    private final TaskScheduleRepository taskScheduleRepository;
+
+    public RecurrenceService(TaskScheduleRepository taskScheduleRepository) {
+        this.taskScheduleRepository = taskScheduleRepository;
+    }
+
     public void applyRecurrenceDefaults(Task task) {
         if (task.getRecurrenceRule() != null && task.getRecurrenceRule().getFrequency() == null) {
             task.setRecurrenceRule(null);
@@ -25,15 +32,36 @@ public class RecurrenceService {
             return false;
         }
 
+        LocalDate previousDueDate = recurrenceRule.getNextDueDate();
         LocalDate nextDueDate = computeNextDueDate(recurrenceRule, completionDate);
         recurrenceRule.setLastCompletedDate(completionDate);
         recurrenceRule.setNextDueDate(nextDueDate);
+        updateStreak(recurrenceRule, previousDueDate, completionDate);
 
         // same-task reset strategy: keep one live task and roll it forward.
         task.setStatus(Status.NOT_STARTED);
         task.setDueDate(nextDueDate);
         task.setCompletedDate(null);
+
+        rollScheduleForward(task, nextDueDate);
         return true;
+    }
+
+    private void updateStreak(RecurrenceRule recurrenceRule, LocalDate previousDueDate, LocalDate completionDate) {
+        boolean onTime = previousDueDate == null || !completionDate.isAfter(previousDueDate);
+        int currentStreak = onTime ? recurrenceRule.getCurrentStreak() + 1 : 1;
+        recurrenceRule.setCurrentStreak(currentStreak);
+        recurrenceRule.setLongestStreak(Math.max(recurrenceRule.getLongestStreak(), currentStreak));
+    }
+
+    private void rollScheduleForward(Task task, LocalDate nextDueDate) {
+        if (task.getId() == null) {
+            return;
+        }
+        taskScheduleRepository.findByTaskId(task.getId()).ifPresent(schedule -> {
+            schedule.setScheduledDate(nextDueDate);
+            taskScheduleRepository.save(schedule);
+        });
     }
 
     LocalDate computeNextDueDate(RecurrenceRule recurrenceRule, LocalDate completionDate) {

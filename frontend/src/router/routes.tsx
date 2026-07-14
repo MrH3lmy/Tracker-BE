@@ -8,6 +8,7 @@ import { MatrixPage } from '../pages/MatrixPage';
 import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
+import { SchedulerPage } from '../pages/SchedulerPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TaskDetailPage } from '../pages/TaskDetailPage';
 import { TasksPage } from '../pages/TasksPage';
@@ -24,6 +25,7 @@ export const primaryRoutes: AppRoute[] = [
   { label: 'Board', path: '/board', element: <BoardPage /> },
   { label: 'Notes', path: '/notes', element: <NotesPage /> },
   { label: 'Planning', path: '/planning', element: <PlanningPage /> },
+  { label: 'Scheduler', path: '/scheduler', element: <SchedulerPage /> },
   { label: 'Matrix', path: '/matrix', element: <MatrixPage /> },
   { label: 'Calendar', path: '/calendar', element: <CalendarPage /> },
   { label: 'Settings', path: '/settings', element: <SettingsPage /> },

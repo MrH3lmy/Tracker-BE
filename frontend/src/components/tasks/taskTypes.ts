@@ -1,8 +1,21 @@
 import type { TaskStatus } from '../../validation/taskStatus';
+import type { DayOfWeekValue, RecurrenceFrequency } from '../../validation/recurrence';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type FilterValue = 'all' | string;
 export type TaskSortValue = 'position' | 'priorityScore' | 'dueDate' | 'createdDate' | 'effort' | 'title';
+
+export interface RecurrenceRuleRecord {
+  frequency: RecurrenceFrequency;
+  interval: number;
+  daysOfWeek?: DayOfWeekValue[];
+  dayOfMonth?: number;
+  annualDate?: string;
+  nextDueDate?: string;
+  lastCompletedDate?: string;
+  currentStreak?: number;
+  longestStreak?: number;
+}
 
 export interface TaskRecord {
   id: number;
@@ -38,6 +51,10 @@ export interface TaskRecord {
   subtaskProgressPercent?: number;
   noteCount?: number;
   notesCount?: number;
+  dailyTargetCount?: number;
+  todayCheckInCount?: number;
+  todayTargetMet?: boolean;
+  recurrence?: RecurrenceRuleRecord;
 }
 
 export interface TaskTreeNode extends TaskRecord {
@@ -92,4 +109,6 @@ export interface CreateTaskPayload {
   waitingOn?: string;
   followUpDate?: string;
   status?: TaskStatus;
+  dailyTargetCount?: number;
+  recurrence?: RecurrenceRuleRecord;
 }
