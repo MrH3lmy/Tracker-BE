@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
+      watch: {
+        ignored: ['**/node_modules/**', '**/.git/**', '**/dist/**'],
+      },
     },
   }
 })

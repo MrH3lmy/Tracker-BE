@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: taskpriority-db
+    mem_limit: 512m
+    cpus: 0.5
     environment:
       POSTGRES_DB: taskpriority
       POSTGRES_USER: taskpriority
@@ -21,6 +23,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: taskpriority-app
+    mem_limit: 768m
+    cpus: 1.0
     depends_on:
       db:
         condition: service_healthy
@@ -35,7 +39,9 @@ services:
   frontend:
     image: node:22-alpine
     container_name: taskpriority-frontend
-    working_dir: /app/frontend
+    working_dir: /app
+    mem_limit: 1g
+    cpus: 1.0
     depends_on:
       - app
     environment:
@@ -43,9 +49,14 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - .:/app
-      - frontend_node_modules:/app/frontend/node_modules
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: >
+      sh -c "
+        if [ ! -f node_modules/.package-lock.json ] || ! cmp -s package-lock.json node_modules/.package-lock.json;
+        then npm ci; fi &&
+        npm run dev -- --host 0.0.0.0
+      "
 
 volumes:
   postgres_data:

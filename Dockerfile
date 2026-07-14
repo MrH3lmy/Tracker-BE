@@ -15,4 +15,4 @@ WORKDIR /app
 COPY --from=build /build/target/*.jar app.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+ENTRYPOINT ["java","-XX:MaxRAMPercentage=50.0","-XX:InitialRAMPercentage=25.0","-jar","/app/app.jar"]
