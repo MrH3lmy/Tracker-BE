@@ -26,5 +26,7 @@ export const buildTaskUpdateBody = (task: TaskRecord, updates: Partial<TaskRecor
     boardColumnId: nullableValue(next.boardColumnId),
     position: nullableValue(next.position),
     dependencyIds: next.dependencyIds ?? [],
+    dailyTargetCount: nullableValue(next.dailyTargetCount),
+    recurrence: nullableValue(next.recurrence),
   };
 };

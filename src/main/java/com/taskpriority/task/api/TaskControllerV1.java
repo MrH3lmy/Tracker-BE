@@ -34,6 +34,8 @@ public class TaskControllerV1 {
     @PutMapping("/{id}") public TaskResponse update(@PathVariable Long id,@Validated @RequestBody UpdateTaskRequest r){return mapper.toResponse(taskService.updateTask(id,r));}
     @DeleteMapping("/{id}") public ResponseEntity<Void> delete(@PathVariable Long id){taskService.delete(id);return ResponseEntity.noContent().build();}
     @PatchMapping("/{id}/complete") public TaskResponse complete(@PathVariable Long id){return mapper.toResponse(taskService.markComplete(id));}
+    @PostMapping("/{id}/check-in") public TaskResponse checkIn(@PathVariable Long id){return mapper.toResponse(taskService.checkIn(id));}
+    @DeleteMapping("/{id}/check-in") public TaskResponse undoCheckIn(@PathVariable Long id){return mapper.toResponse(taskService.undoCheckIn(id));}
     @PatchMapping("/{id}/status") public TaskResponse status(@PathVariable Long id,@RequestParam Status status){return mapper.toResponse(taskService.updateStatus(id,status));}
     @PatchMapping("/{id}/move") public TaskResponse move(@PathVariable Long id,@Validated @RequestBody MoveTaskRequest request){return mapper.toResponse(taskService.moveTask(id, request.status(), request.boardColumnId(), request.position()));}
     @GetMapping("/{id}/subtasks") public List<TaskResponse> subtasks(@PathVariable Long id){return taskService.findSubtasks(id).stream().map(mapper::toResponse).toList();}

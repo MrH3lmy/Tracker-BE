@@ -3,6 +3,7 @@ import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient'
 import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteVersionRecord } from '../components/notes/noteTypes';
 import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
+import type { DayScheduleRecord, ScheduleTaskPayload } from '../components/scheduler/schedulerTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -49,6 +50,7 @@ export const queryKeys = {
   settings: ['settings'] as const,
   boardColumns: ['board-columns'] as const,
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
+  schedulerDay: (date: string) => ['scheduler', 'day', date] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -97,11 +99,13 @@ export const usePlanningProjectBoardQuery = (enabled: boolean) => useQuery({ que
 export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.matrix, queryFn: () => apiJson<unknown>('GET', '/api/v1/matrix'), enabled });
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
+export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
   qc.invalidateQueries({ queryKey: ['planning'] });
   qc.invalidateQueries({ queryKey: ['matrix'] });
+  qc.invalidateQueries({ queryKey: ['scheduler'] });
 };
 
 const sortTasksForPositioning = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
@@ -150,6 +154,8 @@ export function useTaskMutations() {
     updateTask: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/tasks/${id}`, body), onSuccess }),
     deleteTask: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}`), onSuccess }),
     completeTask: useMutation({ mutationFn: (id: number) => apiJson('PATCH', `/api/v1/tasks/${id}/complete`), onSuccess }),
+    checkIn: useMutation({ mutationFn: (id: number) => apiJson('POST', `/api/v1/tasks/${id}/check-in`), onSuccess }),
+    undoCheckIn: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}/check-in`), onSuccess }),
     changeStatus: useMutation({ mutationFn: ({ id, status }: { id: number; status: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/status?status=${encodeURIComponent(status)}`), onSuccess }),
     moveTask: useMutation<ApiCallResult<unknown>, Error, MoveTaskVariables, MoveTaskContext>({
       mutationFn: ({ id, body }) => apiJson('PATCH', `/api/v1/tasks/${id}/move`, body),
@@ -168,6 +174,15 @@ export function useTaskMutations() {
     removeDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('DELETE', `/api/v1/tasks/${id}/dependencies/${blocksTaskId}`), onSuccess }),
   };
 }
+export function useSchedulerMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => { qc.invalidateQueries({ queryKey: ['scheduler'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); };
+  return {
+    scheduleTask: useMutation({ mutationFn: ({ taskId, body }: { taskId: number; body: ScheduleTaskPayload }) => apiJson('PUT', `/api/v1/scheduler/tasks/${taskId}`, body), onSuccess }),
+    unscheduleTask: useMutation({ mutationFn: (taskId: number) => apiJson('DELETE', `/api/v1/scheduler/tasks/${taskId}`), onSuccess }),
+  };
+}
+
 export function useNoteMutations() {
   const qc = useQueryClient();
   const onSuccess = () => { qc.invalidateQueries({ queryKey: ['notes'] }); qc.invalidateQueries({ queryKey: queryKeys.noteCollections }); };

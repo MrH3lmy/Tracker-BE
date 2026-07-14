@@ -4,11 +4,14 @@ import com.taskpriority.model.AgeFlag;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Effort;
 import com.taskpriority.model.PriorityCategory;
+import com.taskpriority.model.RecurrenceRule;
 import com.taskpriority.model.RiskLevel;
 import com.taskpriority.model.Status;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.MonthDay;
 import java.util.List;
 
 public record TaskResponse(
@@ -47,8 +50,24 @@ public record TaskResponse(
         List<Long> subtaskIds,
         int subtaskCount,
         int completedSubtaskCount,
-        int subtaskProgressPercent
+        int subtaskProgressPercent,
+        Integer dailyTargetCount,
+        int todayCheckInCount,
+        boolean todayTargetMet,
+        RecurrenceRuleResponse recurrence
 ) {
+    public record RecurrenceRuleResponse(
+            RecurrenceRule.Frequency frequency,
+            int interval,
+            List<DayOfWeek> daysOfWeek,
+            Integer dayOfMonth,
+            MonthDay annualDate,
+            LocalDate nextDueDate,
+            LocalDate lastCompletedDate,
+            int currentStreak,
+            int longestStreak
+    ) {}
+
     public TaskResponse(
             Long id,
             String title,
@@ -76,6 +95,6 @@ public record TaskResponse(
         this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, createdDate,
                 completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
-                List.of(), List.of(), List.of(), 0, 0, 0);
+                List.of(), List.of(), List.of(), 0, 0, 0, null, 0, false, null);
     }
 }

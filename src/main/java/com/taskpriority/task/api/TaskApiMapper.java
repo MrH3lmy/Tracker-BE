@@ -13,7 +13,7 @@ public class TaskApiMapper {
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
                 request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
-                request.boardColumnId(), request.position(), request.recurrence(), true);
+                request.boardColumnId(), request.position(), request.dailyTargetCount(), request.recurrence(), true);
         return task;
     }
 
@@ -22,7 +22,7 @@ public class TaskApiMapper {
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
                 request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
-                request.boardColumnId(), request.position(), request.recurrence(), false);
+                request.boardColumnId(), request.position(), request.dailyTargetCount(), request.recurrence(), true);
     }
 
     public TaskResponse toResponse(Task task) {
@@ -62,7 +62,28 @@ public class TaskApiMapper {
                 task.getSubtaskIds(),
                 task.getSubtaskCount(),
                 task.getCompletedSubtaskCount(),
-                task.getSubtaskProgressPercent()
+                task.getSubtaskProgressPercent(),
+                task.getDailyTargetCount(),
+                task.getTodayCheckInCount(),
+                task.isTodayTargetMet(),
+                toRecurrenceResponse(task.getRecurrenceRule())
+        );
+    }
+
+    private TaskResponse.RecurrenceRuleResponse toRecurrenceResponse(RecurrenceRule rule) {
+        if (rule == null || rule.getFrequency() == null || rule.getFrequency() == RecurrenceRule.Frequency.NONE) {
+            return null;
+        }
+        return new TaskResponse.RecurrenceRuleResponse(
+                rule.getFrequency(),
+                rule.getInterval(),
+                rule.getDaysOfWeek(),
+                rule.getDayOfMonth(),
+                rule.getAnnualDate(),
+                rule.getNextDueDate(),
+                rule.getLastCompletedDate(),
+                rule.getCurrentStreak(),
+                rule.getLongestStreak()
         );
     }
 
@@ -72,7 +93,7 @@ public class TaskApiMapper {
                                    String phase, Long parentTaskId, boolean important, com.taskpriority.model.Status status,
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
                                    String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
-                                   Long boardColumnId, Integer position,
+                                   Long boardColumnId, Integer position, Integer dailyTargetCount,
                                    CreateTaskRequest.RecurrenceRuleRequest recurrence,
                                    boolean clearRecurrenceWhenMissing) {
         task.setTitle(title);
@@ -95,8 +116,11 @@ public class TaskApiMapper {
         task.setFollowUpDate(followUpDate);
         task.setBoardColumnId(boardColumnId);
         if (position != null) task.setPosition(position);
+        task.setDailyTargetCount(dailyTargetCount);
         if (recurrence != null) {
-            RecurrenceRule recurrenceRule = new RecurrenceRule();
+            // Mutate the existing rule in place (rather than replacing it) so an edit
+            // doesn't wipe out nextDueDate/lastCompletedDate/streak history.
+            RecurrenceRule recurrenceRule = task.getRecurrenceRule() != null ? task.getRecurrenceRule() : new RecurrenceRule();
             recurrenceRule.setFrequency(recurrence.frequency());
             recurrenceRule.setInterval(recurrence.interval());
             recurrenceRule.setDaysOfWeek(recurrence.daysOfWeek());

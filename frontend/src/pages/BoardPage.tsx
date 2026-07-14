@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { isQueryError } from '../apiClient';
@@ -7,13 +7,21 @@ import { BoardColumn } from '../components/board/BoardColumn';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { sortTasksForBoard } from '../components/tasks/taskUtils';
+import { matchesFocus, type Focus } from '../components/scheduler/schedulerStyleUtils';
 import { useBoardColumnsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
-import { PageHeader } from '../components/ui';
+import { PageHeader, SegmentedControl } from '../components/ui';
+
+const focusOptions = [
+  { value: 'all' as Focus, label: 'All' },
+  { value: 'work' as Focus, label: 'Work' },
+  { value: 'training' as Focus, label: 'Training & Life' },
+];
 
 export function BoardPage() {
   const columnsQuery = useBoardColumnsQuery();
   const tasksQuery = useTasksQuery('active');
   const { moveTask } = useTaskMutations();
+  const [focus, setFocus] = useState<Focus>('all');
 
   const columns = useMemo<BoardColumnRecord[]>(() => {
     const data = columnsQuery.data?.data;
@@ -22,8 +30,9 @@ export function BoardPage() {
 
   const tasks = useMemo<TaskRecord[]>(() => {
     const data = tasksQuery.data?.data;
-    return Array.isArray(data) ? (data as TaskRecord[]) : [];
-  }, [tasksQuery.data]);
+    const allTasks = Array.isArray(data) ? (data as TaskRecord[]) : [];
+    return allTasks.filter((task) => matchesFocus(task.area, focus));
+  }, [tasksQuery.data, focus]);
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<number, TaskRecord[]>();
@@ -75,6 +84,7 @@ export function BoardPage() {
         title="Board"
         description="Drag tasks across columns to work on several at once."
         className="mb-0"
+        actions={<SegmentedControl value={focus} onValueChange={setFocus} options={focusOptions} aria-label="Focus filter" />}
       />
 
       <QueryState

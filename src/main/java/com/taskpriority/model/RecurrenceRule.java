@@ -41,6 +41,12 @@ public class RecurrenceRule {
     @Column(name = "last_completed_date")
     private LocalDate lastCompletedDate;
 
+    @Column(name = "current_streak", nullable = false)
+    private int currentStreak = 0;
+
+    @Column(name = "longest_streak", nullable = false)
+    private int longestStreak = 0;
+
     public RecurrenceRule() {}
 
     public RecurrenceRule(Frequency frequency, int interval) {
@@ -66,4 +72,8 @@ public class RecurrenceRule {
     public void setNextDueDate(LocalDate nextDueDate) { this.nextDueDate = nextDueDate; }
     public LocalDate getLastCompletedDate() { return lastCompletedDate; }
     public void setLastCompletedDate(LocalDate lastCompletedDate) { this.lastCompletedDate = lastCompletedDate; }
+    public int getCurrentStreak() { return currentStreak; }
+    public void setCurrentStreak(int currentStreak) { this.currentStreak = currentStreak; }
+    public int getLongestStreak() { return longestStreak; }
+    public void setLongestStreak(int longestStreak) { this.longestStreak = longestStreak; }
 }
