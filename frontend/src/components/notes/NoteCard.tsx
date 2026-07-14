@@ -20,7 +20,7 @@ export function NoteCard({ note, layout, eyebrow, subtitle, actions, className }
   return (
     <Card
       className={cn(
-        "flex flex-col gap-2 transition-shadow duration-(--duration-fast) hover:shadow-(--shadow-glow-brand-lg)",
+        "flex min-w-0 flex-col gap-2 overflow-hidden transition-shadow duration-(--duration-fast) hover:shadow-(--shadow-glow-brand-lg)",
         isTile && "mb-4 break-inside-avoid",
         accent.borderClass,
         className,
@@ -28,7 +28,7 @@ export function NoteCard({ note, layout, eyebrow, subtitle, actions, className }
       style={accent.style}
     >
       {eyebrow}
-      <h3 className="text-sm font-semibold text-fg">{note.title}</h3>
+      <h3 className="text-sm font-semibold break-words text-fg">{note.title}</h3>
       {subtitle}
       <CodePreview body={note.body} contentType={note.contentType} collapsedLineCount={isTile ? 8 : 4} initiallyCollapsed />
       {note.tags?.length ? (

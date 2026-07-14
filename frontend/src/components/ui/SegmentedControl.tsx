@@ -42,7 +42,7 @@ export function SegmentedControl<T extends string>({ value, onValueChange, optio
       role="tablist"
       aria-label={aria['aria-label']}
       onKeyDown={handleKeyDown}
-      className={cn('inline-flex items-center gap-1 rounded-lg bg-inset p-1', className)}
+      className={cn('flex min-w-0 items-center gap-1 rounded-lg bg-inset p-1', className)}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -55,7 +55,7 @@ export function SegmentedControl<T extends string>({ value, onValueChange, optio
             tabIndex={selected ? 0 : -1}
             onClick={() => onValueChange(option.value)}
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-(--duration-fast)',
+              'min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-(--duration-fast)',
               selected ? 'bg-card text-fg shadow-xs' : 'text-fg-muted hover:text-fg',
             )}
           >

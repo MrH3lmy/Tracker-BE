@@ -1,6 +1,6 @@
 import { type RefObject } from "react";
 import { Link } from "react-router-dom";
-import { Button, PageHeader } from "../ui";
+import { Button, PageHeader, cn } from "../ui";
 import { Camera, Plus, RefreshCw } from "../ui/icons";
 
 interface NotesHeaderProps {
@@ -39,9 +39,15 @@ export function NotesHeader({
         description="Capture searchable notes, commands, JSON snippets, screenshots, and reference material."
         actions={
           <>
-            <Button onClick={onReload} disabled={isReloading}>
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              Reload
+            <Button
+              variant="ghost"
+              iconOnly
+              onClick={onReload}
+              disabled={isReloading}
+              aria-label={isReloading ? "Reloading notes" : "Reload notes"}
+              title="Reload"
+            >
+              <RefreshCw className={cn("h-4 w-4", isReloading && "animate-spin")} aria-hidden />
             </Button>
             <Button variant="primary" ref={newNoteButtonRef} onClick={onNewNote} disabled={isBusy}>
               <Plus className="h-4 w-4" aria-hidden />
