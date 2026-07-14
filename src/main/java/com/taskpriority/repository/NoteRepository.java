@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,6 +23,9 @@ public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificat
     List<Note> findByTaskIsNullOrderByUpdatedAtDescIdDesc();
 
     List<Note> findByContentTypeOrderByUpdatedAtDescIdDesc(NoteContentType contentType);
+
+    @Query("select coalesce(max(n.displayOrder), 0) from Note n")
+    Integer findMaxDisplayOrder();
 
     default List<Note> findAllMatching(Long taskId, String query, NoteContentType contentType) {
         List<Long> noteIds = findIds(NoteSpecifications.matching(taskId, null, query, contentType, null, null,

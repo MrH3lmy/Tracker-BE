@@ -115,7 +115,7 @@ npm run preview   # preview production build
 | `hooks/useApiQueries.ts` | All React Query hooks/mutations, keyed by a centralized `queryKeys` object |
 | `hooks/useBoardState.ts` | Task board local state logic |
 | `router/routes.tsx` | Single source of truth for route/tab config, consumed by `App.tsx` |
-| `styles/tokens.css` | Design tokens (spacing, radii, per-theme colors) driven by a `[data-theme]` attribute |
+| `styles/theme.css` | Design tokens (spacing, radii, per-theme colors) driven by a `[data-theme]` attribute |
 | `validation/` | Hand-rolled validators (no schema library) — `json.ts`, `settings.ts`, `import.ts`, `calendar.ts`, `taskStatus.ts` |
 | `apiClient.ts`, `themeContext.tsx`, `announcementContext.tsx` | API client, theme, and accessibility-announcement contexts (see below) |
 
@@ -129,7 +129,7 @@ npm run preview   # preview production build
 
 No Redux/Zustand — React Query is the server-state layer. Two React Context providers at the app root:
 
-- `themeContext.tsx` — active theme (8 options), persisted to `localStorage`, synced from backend settings once loaded.
+- `themeContext.tsx` — active theme (5 options: Light Modern, Midnight Pro, Aurora, Ocean Breeze, Forest), persisted to `localStorage`, synced from backend settings once loaded.
 - `announcementContext.tsx` — global ARIA live-region message for accessibility.
 
 Everything else is local `useState`/`useReducer`.

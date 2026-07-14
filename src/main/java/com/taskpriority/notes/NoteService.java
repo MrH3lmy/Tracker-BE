@@ -79,7 +79,7 @@ public class NoteService {
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
-    private static final List<String> SUPPORTED_NOTE_SORT_FIELDS = List.of(
+    static final List<String> SUPPORTED_NOTE_SORT_FIELDS = List.of(
             "createdAt", "updatedAt", "displayOrder", "title", "task", "contentType"
     );
 
@@ -123,11 +123,11 @@ public class NoteService {
 
         Map<Long, Note> notesById = noteRepository.findAllWithAssociationsByIdIn(noteIds).stream()
                 .collect(Collectors.toMap(Note::getId, Function.identity()));
-        return noteIds.stream()
+        List<Note> notes = noteIds.stream()
                 .map(notesById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(this::toResponse)
                 .toList();
+        return toResponseBatch(notes);
     }
 
     @Transactional(readOnly = true)
@@ -135,10 +135,7 @@ public class NoteService {
         if (!taskRepository.existsById(taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponseBatch(noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId));
     }
 
 
@@ -223,7 +220,11 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        // Read-then-increment, not atomic: two concurrent creates could read the same max and
+        // assign the same displayOrder. Accepted for a single-user app - worst case is cosmetic
+        // duplicate sticky-note numbers, not data loss. A true fix would need a DB sequence, but
+        // that would require Flyway (disabled in the local-test H2 profile) to create it.
+        note.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : noteRepository.findMaxDisplayOrder() + 1);
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
@@ -245,7 +246,9 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        if (request.displayOrder() != null) {
+            note.setDisplayOrder(request.displayOrder());
+        }
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
@@ -286,7 +289,9 @@ public class NoteService {
     @Transactional
     public NoteResponse updateLayout(Long id, UpdateNoteLayoutRequest request) {
         Note note = getNote(id);
-        note.setDisplayOrder(defaultZero(request.displayOrder()));
+        if (request.displayOrder() != null) {
+            note.setDisplayOrder(request.displayOrder());
+        }
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
@@ -692,6 +697,33 @@ public class NoteService {
     }
 
     private NoteResponse toResponse(Note note) {
+        List<NoteAttachmentResponse> attachments = noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
+                .stream()
+                .map(this::toAttachmentResponse)
+                .toList();
+        List<NoteTaskLinkResponse> links = noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return buildResponse(note, attachments, links);
+    }
+
+    private List<NoteResponse> toResponseBatch(List<Note> notes) {
+        if (notes.isEmpty()) {
+            return List.of();
+        }
+        List<Long> noteIds = notes.stream().map(Note::getId).toList();
+
+        Map<Long, List<NoteAttachmentResponse>> attachmentsByNote = noteAttachmentRepository.findByNoteIdInAndKindOrderByCreatedAtAscIdAsc(noteIds, NoteAttachmentKind.SCREENSHOT).stream()
+                .collect(Collectors.groupingBy(attachment -> attachment.getNote().getId(),
+                        Collectors.mapping(this::toAttachmentResponse, Collectors.toList())));
+        Map<Long, List<NoteTaskLinkResponse>> linksByNote = noteTaskLinkRepository.findByNoteIdIn(noteIds).stream()
+                .collect(Collectors.groupingBy(link -> link.getNote().getId(),
+                        Collectors.mapping(noteTaskLinkMapper::toResponse, Collectors.toList())));
+
+        return notes.stream()
+                .map(note -> buildResponse(note, attachmentsByNote.getOrDefault(note.getId(), List.of()), linksByNote.getOrDefault(note.getId(), List.of())))
+                .toList();
+    }
+
+    private NoteResponse buildResponse(Note note, List<NoteAttachmentResponse> attachments, List<NoteTaskLinkResponse> links) {
         Long taskId = note.getTask() == null ? null : note.getTask().getId();
         Long collectionId = note.getCollection() == null ? null : note.getCollection().getId();
         String collectionName = note.getCollection() == null ? null : note.getCollection().getName();
@@ -715,11 +747,8 @@ public class NoteService {
                 note.getColor(),
                 note.getZIndex(),
                 tags,
-                noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
-                        .stream()
-                        .map(this::toAttachmentResponse)
-                        .toList(),
-                noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList(),
+                attachments,
+                links,
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

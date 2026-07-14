@@ -370,6 +370,50 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.zIndex").value(3));
     }
 
+    @Test
+    void createNoteAssignsIncrementingDisplayOrderWhenNotSupplied() throws Exception {
+        long firstId = createNote("First note", "First body", null);
+        long secondId = createNote("Second note", "Second body", null);
+
+        Integer firstDisplayOrder = noteRepository.findById(firstId).orElseThrow(AssertionError::new).getDisplayOrder();
+        Integer secondDisplayOrder = noteRepository.findById(secondId).orElseThrow(AssertionError::new).getDisplayOrder();
+
+        org.assertj.core.api.Assertions.assertThat(firstDisplayOrder).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(secondDisplayOrder).isGreaterThan(firstDisplayOrder);
+    }
+
+    @Test
+    void updateNoteWithoutDisplayOrderPreservesExistingValue() throws Exception {
+        long noteId = createNote("Preserve title", "Preserve body", null);
+        Integer originalDisplayOrder = noteRepository.findById(noteId).orElseThrow(AssertionError::new).getDisplayOrder();
+        String payload = """
+                {"title":"Preserve title updated","body":"Preserve body updated","contentType":"PLAIN_TEXT"}
+                """;
+
+        mockMvc.perform(put("/api/v1/notes/{id}", noteId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayOrder").value(originalDisplayOrder));
+    }
+
+    @Test
+    void updateNoteLayoutWithoutDisplayOrderPreservesExistingValue() throws Exception {
+        long noteId = createNote("Layout preserve title", "Layout preserve body", null);
+        Integer originalDisplayOrder = noteRepository.findById(noteId).orElseThrow(AssertionError::new).getDisplayOrder();
+        String payload = """
+                {"positionX":5,"positionY":6}
+                """;
+
+        mockMvc.perform(patch("/api/v1/notes/{id}/layout", noteId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayOrder").value(originalDisplayOrder))
+                .andExpect(jsonPath("$.positionX").value(5))
+                .andExpect(jsonPath("$.positionY").value(6));
+    }
+
 
     @Test
     void screenshotAttachmentDataFieldUsesBinaryJdbcMapping() throws Exception {

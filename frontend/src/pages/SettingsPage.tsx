@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
-import { isAppTheme, THEME_OPTIONS, THEME_SETTING_KEY } from '../theme';
+import { THEME_OPTIONS, THEME_SETTING_KEY, type AppTheme } from '../theme';
 import { AI_FEATURES_ENABLED_KEY, DEFAULT_DAILY_CAPACITY_HOURS_KEY, EXCLUDED_WEEKDAYS_KEY, HOLIDAY_DATES_KEY, validateSettingsPayload } from '../validation/settings';
-import { Badge, Button, Card, CardHeader, Checkbox, Collapsible, Field, Input, PageHeader, Select, Textarea } from '../components/ui';
+import { Badge, Button, Card, CardHeader, Checkbox, Collapsible, cn, Field, Input, PageHeader, Textarea } from '../components/ui';
 
 const WEEKDAY_OPTIONS = [
   { value: 'MONDAY', label: 'Mon' },
@@ -52,10 +52,7 @@ export function SettingsPage() {
     setBody(JSON.stringify({ ...currentSettings, ...updates }, null, 2));
   };
 
-  const handleThemeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const nextTheme = event.target.value;
-    if (!isAppTheme(nextTheme)) return;
-
+  const handleThemeChange = (nextTheme: AppTheme) => {
     setTheme(nextTheme);
     const updatedSettings = { ...currentSettings, [THEME_SETTING_KEY]: nextTheme };
     setBody(JSON.stringify(updatedSettings, null, 2));
@@ -152,15 +149,35 @@ export function SettingsPage() {
           </section>
 
           <section className="rounded-lg border border-line p-4">
-            <Field label="Interface theme" htmlFor="themeSelector">
-              <Select id="themeSelector" value={theme} onChange={handleThemeChange} disabled={saveMutation.isPending} className="max-w-xs">
-                {THEME_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
-            </Field>
-            <p className="mt-2 text-xs text-fg-subtle">
-              Saved as <code>{THEME_SETTING_KEY}</code>. {THEME_OPTIONS.find((option) => option.value === theme)?.description}
+            <p className="mb-3 text-sm font-medium text-fg">Interface theme</p>
+            <div role="radiogroup" aria-label="Interface theme" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {THEME_OPTIONS.map((option) => {
+                const selected = theme === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={saveMutation.isPending}
+                    onClick={() => handleThemeChange(option.value)}
+                    className={cn(
+                      'flex flex-col gap-2 rounded-lg border p-3 text-left transition-[border-color,box-shadow] duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50',
+                      selected ? 'border-brand shadow-(--shadow-glow-brand)' : 'border-line hover:border-line-strong',
+                    )}
+                  >
+                    <span data-theme={option.value} className="flex h-10 items-stretch gap-1.5 overflow-hidden rounded-md border border-line bg-canvas p-1.5">
+                      <span className="flex-1 rounded-sm bg-card" />
+                      <span className="w-3 shrink-0 rounded-sm bg-brand" />
+                    </span>
+                    <span className="text-sm font-medium text-fg">{option.label}</span>
+                    <span className="text-xs text-fg-subtle">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-fg-subtle">
+              Saved as <code>{THEME_SETTING_KEY}</code>.
             </p>
           </section>
 

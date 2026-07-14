@@ -84,3 +84,16 @@ export function noteToForm(note: NoteRecord): NoteFormState {
     body: note.body,
   };
 }
+
+export function buildNotePayload(form: NoteFormState) {
+  const trimmedTaskId = form.taskId.trim();
+  const trimmedCollectionId = form.collectionId.trim();
+  return {
+    title: form.title.trim(),
+    contentType: form.contentType,
+    taskId: trimmedTaskId ? Number(trimmedTaskId) : null,
+    collectionId: trimmedCollectionId ? Number(trimmedCollectionId) : null,
+    tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+    body: form.body,
+  };
+}
