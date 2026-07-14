@@ -152,7 +152,7 @@ export function NoteActions({
       {displayMode === "menu" ? (
         <Menu>
           <MenuTrigger asChild>
-            <Button variant="ghost" size="sm" iconOnly aria-label={`Open actions for ${note.title}`}>
+            <Button variant="ghost" iconOnly aria-label={`Open actions for ${note.title}`}>
               <MoreHorizontal className="h-4 w-4" aria-hidden />
             </Button>
           </MenuTrigger>
@@ -167,11 +167,11 @@ export function NoteActions({
         </Menu>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          <Button size="sm" onClick={() => onEdit(note)}>Edit</Button>
-          <Button size="sm" onClick={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</Button>
-          <Button size="sm" onClick={() => onVersionHistory(note)}>Version history</Button>
+          <Button onClick={() => onEdit(note)}>Edit</Button>
+          <Button onClick={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</Button>
+          <Button onClick={() => onVersionHistory(note)}>Version history</Button>
           {canAttachScreenshot && screenshotMode === "compact" ? (
-            <Button size="sm" variant="ghost" onClick={() => setIsScreenshotOpen(true)}>Attach screenshot</Button>
+            <Button variant="ghost" onClick={() => setIsScreenshotOpen(true)}>Attach screenshot</Button>
           ) : null}
         </div>
       )}
@@ -198,7 +198,7 @@ export function NoteActions({
                 <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Attach screenshot</p>
                 <h4 className="text-base font-semibold text-fg">{note.title}</h4>
               </div>
-              <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Close" onClick={() => setIsScreenshotOpen(false)}>
+              <Button type="button" variant="ghost" iconOnly aria-label="Close" onClick={() => setIsScreenshotOpen(false)}>
                 <X className="h-4 w-4" aria-hidden />
               </Button>
             </div>

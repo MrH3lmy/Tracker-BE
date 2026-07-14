@@ -49,15 +49,22 @@ function UnscheduledTaskRow({ task, date, busy, onSchedule }: { task: TaskRecord
         <span className="truncate text-sm font-medium text-fg">{task.title}</span>
         {task.area && <Badge variant="outline">{task.area}</Badge>}
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="Time" htmlFor={`schedule-time-${task.id}`}>
-          <Input id={`schedule-time-${task.id}`} type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={busy} />
+      <div className="flex flex-wrap gap-2">
+        <Field label="Time" htmlFor={`schedule-time-${task.id}`} className="min-w-[7.5rem] flex-1">
+          <Input
+            id={`schedule-time-${task.id}`}
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            disabled={busy}
+            className="pr-1 [&::-webkit-calendar-picker-indicator]:ml-1 [&::-webkit-calendar-picker-indicator]:shrink-0"
+          />
         </Field>
-        <Field label="Minutes" htmlFor={`schedule-duration-${task.id}`}>
+        <Field label="Minutes" htmlFor={`schedule-duration-${task.id}`} className="min-w-[5rem] flex-1">
           <Input id={`schedule-duration-${task.id}`} type="number" min="5" step="5" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} disabled={busy} />
         </Field>
-        <Field label="Priority" htmlFor={`schedule-priority-${task.id}`}>
-          <Select id={`schedule-priority-${task.id}`} value={priorityLevel} onChange={(e) => setPriorityLevel(e.target.value as SchedulePriority)} disabled={busy}>
+        <Field label="Priority" htmlFor={`schedule-priority-${task.id}`} className="min-w-[7.5rem] flex-1">
+          <Select id={`schedule-priority-${task.id}`} value={priorityLevel} onChange={(e) => setPriorityLevel(e.target.value as SchedulePriority)} disabled={busy} className="pr-7">
             {SCHEDULE_PRIORITY_VALUES.map((level) => <option key={level} value={level}>{level}</option>)}
           </Select>
         </Field>
