@@ -51,9 +51,6 @@ public record TaskResponse(
         int subtaskCount,
         int completedSubtaskCount,
         int subtaskProgressPercent,
-        Integer dailyTargetCount,
-        int todayCheckInCount,
-        boolean todayTargetMet,
         RecurrenceRuleResponse recurrence
 ) {
     public record RecurrenceRuleResponse(
@@ -95,6 +92,6 @@ public record TaskResponse(
         this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, createdDate,
                 completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
-                List.of(), List.of(), List.of(), 0, 0, 0, null, 0, false, null);
+                List.of(), List.of(), List.of(), 0, 0, 0, null);
     }
 }

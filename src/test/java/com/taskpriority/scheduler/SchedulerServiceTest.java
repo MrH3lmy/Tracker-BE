@@ -1,8 +1,12 @@
 package com.taskpriority.scheduler;
 
+import com.taskpriority.habit.HabitApiMapper;
+import com.taskpriority.habit.HabitService;
 import com.taskpriority.model.SchedulePriority;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskSchedule;
+import com.taskpriority.repository.HabitRepository;
+import com.taskpriority.repository.HabitScheduleRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskScheduleRepository;
 import com.taskpriority.service.TaskService;
@@ -22,17 +26,24 @@ import static org.mockito.Mockito.*;
 class SchedulerServiceTest {
 
     private TaskRepository taskRepository;
+    private HabitRepository habitRepository;
     private TaskScheduleRepository taskScheduleRepository;
+    private HabitScheduleRepository habitScheduleRepository;
     private TaskService taskService;
+    private HabitService habitService;
     private SchedulerService schedulerService;
 
     @BeforeEach
     void setUp() {
         taskRepository = mock(TaskRepository.class);
+        habitRepository = mock(HabitRepository.class);
         taskScheduleRepository = mock(TaskScheduleRepository.class);
+        habitScheduleRepository = mock(HabitScheduleRepository.class);
         taskService = mock(TaskService.class);
+        habitService = mock(HabitService.class);
         doNothing().when(taskService).computeDerivedFields(any(Task.class));
-        schedulerService = new SchedulerService(taskRepository, taskScheduleRepository, taskService, new TaskApiMapper());
+        schedulerService = new SchedulerService(taskRepository, habitRepository, taskScheduleRepository, habitScheduleRepository,
+                taskService, habitService, new TaskApiMapper(), new HabitApiMapper());
     }
 
     private Task task(Long id, String title) {

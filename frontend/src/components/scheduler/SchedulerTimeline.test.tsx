@@ -1,23 +1,24 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SchedulerTimeline } from './SchedulerTimeline';
-import type { ScheduledTaskRecord } from './schedulerTypes';
+import type { ScheduledEntryRecord } from './schedulerTypes';
 import type { TaskRecord } from '../tasks/taskTypes';
 
 function makeTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
   return { id: 1, title: 'E-Statement Email', ...overrides };
 }
 
-function makeEntry(overrides: Partial<ScheduledTaskRecord> = {}): ScheduledTaskRecord {
+function makeEntry(overrides: Partial<ScheduledEntryRecord> = {}): ScheduledEntryRecord {
   return {
-    taskId: 1,
+    kind: 'TASK',
+    id: 1,
     task: makeTask(),
     scheduledDate: '2026-07-14',
     startTime: '02:00',
     endTime: '04:00',
     durationMinutes: 120,
     priorityLevel: 'CRITICAL',
-    overlapsWithTaskIds: [],
+    overlapsWithIds: [],
     ...overrides,
   };
 }
@@ -34,7 +35,8 @@ describe('SchedulerTimeline', () => {
         busy={false}
         onComplete={noop}
         onCheckIn={noop}
-        onUnschedule={noop}
+        onUnscheduleTask={noop}
+        onUnscheduleHabit={noop}
       />,
     );
 
@@ -48,7 +50,7 @@ describe('SchedulerTimeline', () => {
   });
 
   it('renders an event inside the visible window positioned relative to the visible start time, not midnight', () => {
-    const entry = makeEntry({ taskId: 2, startTime: '06:00', endTime: '07:00', task: makeTask({ id: 2, title: 'Standup' }) });
+    const entry = makeEntry({ id: 2, startTime: '06:00', endTime: '07:00', task: makeTask({ id: 2, title: 'Standup' }) });
     render(
       <SchedulerTimeline
         scheduled={[entry]}
@@ -56,7 +58,8 @@ describe('SchedulerTimeline', () => {
         busy={false}
         onComplete={noop}
         onCheckIn={noop}
-        onUnschedule={noop}
+        onUnscheduleTask={noop}
+        onUnscheduleHabit={noop}
       />,
     );
 
@@ -66,7 +69,7 @@ describe('SchedulerTimeline', () => {
   });
 
   it('does not render a negative top offset for any visible event (would escape the clipped timeline container)', () => {
-    const entry = makeEntry({ taskId: 3, startTime: '04:30', endTime: '05:30', task: makeTask({ id: 3, title: 'Boundary task' }) });
+    const entry = makeEntry({ id: 3, startTime: '04:30', endTime: '05:30', task: makeTask({ id: 3, title: 'Boundary task' }) });
     render(
       <SchedulerTimeline
         scheduled={[entry]}
@@ -74,7 +77,8 @@ describe('SchedulerTimeline', () => {
         busy={false}
         onComplete={noop}
         onCheckIn={noop}
-        onUnschedule={noop}
+        onUnscheduleTask={noop}
+        onUnscheduleHabit={noop}
       />,
     );
 

@@ -4,7 +4,17 @@ import { QueryState } from '../components/QueryState';
 import { useSaveSettingsMutation, useSettingsQuery } from '../hooks/useApiQueries';
 import { useTheme } from '../themeContext';
 import { THEME_OPTIONS, THEME_SETTING_KEY, type AppTheme } from '../theme';
-import { AI_FEATURES_ENABLED_KEY, DEFAULT_DAILY_CAPACITY_HOURS_KEY, EXCLUDED_WEEKDAYS_KEY, HOLIDAY_DATES_KEY, validateSettingsPayload } from '../validation/settings';
+import {
+  AI_FEATURES_ENABLED_KEY,
+  DEFAULT_DAILY_CAPACITY_HOURS_KEY,
+  EXCLUDED_WEEKDAYS_KEY,
+  HOLIDAY_DATES_KEY,
+  SLEEP_HOURS_KEY,
+  WORKING_HOURS_KEY,
+  validateSettingsPayload,
+  type TimeWindow,
+  type WeeklyHours,
+} from '../validation/settings';
 import { Badge, Button, Card, CardHeader, Checkbox, Collapsible, cn, Field, Input, PageHeader, Textarea } from '../components/ui';
 
 const WEEKDAY_OPTIONS = [
@@ -19,6 +29,60 @@ const WEEKDAY_OPTIONS = [
 
 const asStringArray = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 const asNumber = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+const asWeeklyHours = (value: unknown): WeeklyHours => value && typeof value === 'object' && !Array.isArray(value) ? (value as WeeklyHours) : {};
+
+function WeeklyHoursEditor({
+  legend, hint, settingKey, hours, disabled, onChangeDay,
+}: {
+  legend: string;
+  hint: string;
+  settingKey: string;
+  hours: WeeklyHours;
+  disabled: boolean;
+  onChangeDay: (day: string, window: TimeWindow | undefined) => void;
+}) {
+  return (
+    <fieldset className="mt-4">
+      <legend className="mb-2 text-[13px] font-medium text-fg-muted">{legend}</legend>
+      <p className="mb-2 text-xs text-fg-subtle">{hint}</p>
+      <div className="flex flex-col gap-2">
+        {WEEKDAY_OPTIONS.map((weekday) => {
+          const window = hours[weekday.value];
+          const enabled = Boolean(window);
+          return (
+            <div key={weekday.value} className="flex flex-wrap items-center gap-2">
+              <Checkbox
+                label={weekday.label}
+                className="w-20"
+                checked={enabled}
+                disabled={disabled}
+                onChange={(event) => onChangeDay(weekday.value, event.target.checked ? { start: '09:00', end: '17:00' } : undefined)}
+              />
+              <Input
+                type="time"
+                aria-label={`${weekday.label} ${legend} start`}
+                value={window?.start ?? ''}
+                disabled={disabled || !enabled}
+                onChange={(event) => onChangeDay(weekday.value, { start: event.target.value, end: window?.end ?? '17:00' })}
+                className="w-32"
+              />
+              <span className="text-xs text-fg-subtle">to</span>
+              <Input
+                type="time"
+                aria-label={`${weekday.label} ${legend} end`}
+                value={window?.end ?? ''}
+                disabled={disabled || !enabled}
+                onChange={(event) => onChangeDay(weekday.value, { start: window?.start ?? '09:00', end: event.target.value })}
+                className="w-32"
+              />
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs text-fg-subtle">Saved as <code>{settingKey}</code>.</p>
+    </fieldset>
+  );
+}
 
 export function SettingsPage() {
   const settingsQuery = useSettingsQuery(true);
@@ -44,6 +108,8 @@ export function SettingsPage() {
   const holidayDates = asStringArray(currentSettings[HOLIDAY_DATES_KEY]);
   const dailyCapacityHours = asNumber(currentSettings[DEFAULT_DAILY_CAPACITY_HOURS_KEY], 6);
   const aiFeaturesEnabled = currentSettings[AI_FEATURES_ENABLED_KEY] === true;
+  const workingHours = asWeeklyHours(currentSettings[WORKING_HOURS_KEY]);
+  const sleepHours = asWeeklyHours(currentSettings[SLEEP_HOURS_KEY]);
 
   // Errors must stay visible even while the Advanced section is collapsed.
   const advancedOpen = advancedManuallyOpen || hasValidationErrors;
@@ -134,6 +200,32 @@ export function SettingsPage() {
             <p className="mt-3 text-xs text-fg-subtle">
               Saved as <code>{EXCLUDED_WEEKDAYS_KEY}</code>, <code>{HOLIDAY_DATES_KEY}</code>, and <code>{DEFAULT_DAILY_CAPACITY_HOURS_KEY}</code>.
             </p>
+          </section>
+
+          <section className="rounded-lg border border-line p-4" aria-label="Working and sleep hours">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Smart scheduling</p>
+            <h4 className="mt-1 text-sm font-semibold text-fg">Working hours &amp; sleep hours</h4>
+            <p className="mt-0.5 text-sm text-fg-muted">
+              Used to suggest schedule slots: work/study tasks are placed within working hours, everything else avoids your sleep hours.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <WeeklyHoursEditor
+                legend="Working hours"
+                hint="Days with no working hours are treated as non-working for suggestions."
+                settingKey={WORKING_HOURS_KEY}
+                hours={workingHours}
+                disabled={saveMutation.isPending}
+                onChangeDay={(day, window) => updateSettingBody({ [WORKING_HOURS_KEY]: { ...workingHours, [day]: window } })}
+              />
+              <WeeklyHoursEditor
+                legend="Sleep hours"
+                hint="Can cross midnight (e.g. 23:00 to 07:00)."
+                settingKey={SLEEP_HOURS_KEY}
+                hours={sleepHours}
+                disabled={saveMutation.isPending}
+                onChangeDay={(day, window) => updateSettingBody({ [SLEEP_HOURS_KEY]: { ...sleepHours, [day]: window } })}
+              />
+            </div>
           </section>
 
           <section className="rounded-lg border border-line p-4">

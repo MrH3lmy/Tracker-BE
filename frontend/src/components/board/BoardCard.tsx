@@ -12,8 +12,6 @@ interface BoardCardProps {
 export function BoardCard({ task }: BoardCardProps) {
   const overdue = isOverdue(task);
   const streak = task.recurrence?.currentStreak ?? 0;
-  const dailyTargetCount = task.dailyTargetCount ?? 1;
-  const isCounterHabit = dailyTargetCount > 1;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
   const style = {
@@ -52,7 +50,6 @@ export function BoardCard({ task }: BoardCardProps) {
         )}
         {task.important ? <Badge variant="caution">Important</Badge> : null}
         {streak > 0 && <Badge variant="caution">🔥 {streak}</Badge>}
-        {isCounterHabit && <Badge variant="outline">{task.todayCheckInCount ?? 0}/{dailyTargetCount} today</Badge>}
       </div>
     </article>
   );

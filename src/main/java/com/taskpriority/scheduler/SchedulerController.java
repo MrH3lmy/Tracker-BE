@@ -11,9 +11,11 @@ import java.time.LocalDate;
 @RequestMapping("/api/v1/scheduler")
 public class SchedulerController {
     private final SchedulerService schedulerService;
+    private final ScheduleSuggestionService suggestionService;
 
-    public SchedulerController(SchedulerService schedulerService) {
+    public SchedulerController(SchedulerService schedulerService, ScheduleSuggestionService suggestionService) {
         this.schedulerService = schedulerService;
+        this.suggestionService = suggestionService;
     }
 
     @GetMapping("/day")
@@ -30,5 +32,37 @@ public class SchedulerController {
     public ResponseEntity<Void> unschedule(@PathVariable Long taskId) {
         schedulerService.unschedule(taskId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/habits/{habitId}")
+    public ScheduledHabitResponse scheduleHabit(@PathVariable Long habitId, @Validated @RequestBody ScheduleHabitRequest request) {
+        return schedulerService.scheduleHabit(habitId, request);
+    }
+
+    @DeleteMapping("/habits/{habitId}")
+    public ResponseEntity<Void> unscheduleHabit(@PathVariable Long habitId) {
+        schedulerService.unscheduleHabit(habitId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/tasks/{taskId}/suggestion")
+    public ResponseEntity<SuggestedSlot> suggestForTask(@PathVariable Long taskId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate earliestDate) {
+        return suggestionService.suggestForTask(taskId, earliestDate)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @GetMapping("/habits/{habitId}/suggestion")
+    public ResponseEntity<SuggestedSlot> suggestForHabit(@PathVariable Long habitId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate earliestDate) {
+        return suggestionService.suggestForHabit(habitId, earliestDate)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PostMapping("/auto-schedule")
+    public AutoScheduleResult autoSchedule(@Validated @RequestBody AutoScheduleRequest request) {
+        return suggestionService.autoSchedule(request.startDate(), request.endDate(), request.resolvedScope());
     }
 }

@@ -13,7 +13,7 @@ public class TaskApiMapper {
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
                 request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
-                request.boardColumnId(), request.position(), request.dailyTargetCount(), request.recurrence(), true);
+                request.boardColumnId(), request.position(), request.recurrence(), true);
         return task;
     }
 
@@ -22,7 +22,7 @@ public class TaskApiMapper {
                 request.estimatedMinutes(), request.actualMinutes(), request.riskLevel(), request.riskReason(),
                 request.track(), request.phase(), request.parentTaskId(), request.important(), request.status(), request.area(),
                 request.effort(), request.blockedReason(), request.waitingOn(), request.followUpDate(),
-                request.boardColumnId(), request.position(), request.dailyTargetCount(), request.recurrence(), true);
+                request.boardColumnId(), request.position(), request.recurrence(), true);
     }
 
     public TaskResponse toResponse(Task task) {
@@ -63,9 +63,6 @@ public class TaskApiMapper {
                 task.getSubtaskCount(),
                 task.getCompletedSubtaskCount(),
                 task.getSubtaskProgressPercent(),
-                task.getDailyTargetCount(),
-                task.getTodayCheckInCount(),
-                task.isTodayTargetMet(),
                 toRecurrenceResponse(task.getRecurrenceRule())
         );
     }
@@ -93,7 +90,7 @@ public class TaskApiMapper {
                                    String phase, Long parentTaskId, boolean important, com.taskpriority.model.Status status,
                                    com.taskpriority.model.Area area, com.taskpriority.model.Effort effort,
                                    String blockedReason, String waitingOn, java.time.LocalDate followUpDate,
-                                   Long boardColumnId, Integer position, Integer dailyTargetCount,
+                                   Long boardColumnId, Integer position,
                                    CreateTaskRequest.RecurrenceRuleRequest recurrence,
                                    boolean clearRecurrenceWhenMissing) {
         task.setTitle(title);
@@ -116,7 +113,6 @@ public class TaskApiMapper {
         task.setFollowUpDate(followUpDate);
         task.setBoardColumnId(boardColumnId);
         if (position != null) task.setPosition(position);
-        task.setDailyTargetCount(dailyTargetCount);
         if (recurrence != null) {
             // Mutate the existing rule in place (rather than replacing it) so an edit
             // doesn't wipe out nextDueDate/lastCompletedDate/streak history.

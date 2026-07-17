@@ -1,5 +1,6 @@
 package com.taskpriority.planning;
 
+import com.taskpriority.model.Area;
 import com.taskpriority.model.RiskLevel;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
@@ -38,9 +39,14 @@ public class PlanningService {
     @Transactional(readOnly = true)
     public TaskService.TodayView getTodayView() {
         LocalDate today = LocalDate.now();
-        List<Task> overdue = taskRepository.findOverdueTasks(today.minusDays(1), Status.DONE);
-        List<Task> dueToday = taskRepository.findByDueDate(today);
-        List<Task> active = taskRepository.findAll().stream().filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED).toList();
+        List<Task> overdue = taskRepository.findOverdueTasks(today.minusDays(1), Status.DONE).stream()
+                .filter(this::isWorkPlanningScope).toList();
+        List<Task> dueToday = taskRepository.findByDueDate(today).stream()
+                .filter(this::isWorkPlanningScope).toList();
+        List<Task> active = taskRepository.findAll().stream()
+                .filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED)
+                .filter(this::isWorkPlanningScope)
+                .toList();
         taskService.computeDerivedFieldsBatch(active);
         List<Task> topPriority = active.stream().filter(t -> t.getDueDate() == null || t.getDueDate().isAfter(today))
                 .sorted((a, b) -> Integer.compare(b.getPriorityScore(), a.getPriorityScore())).limit(3).toList();
@@ -56,6 +62,7 @@ public class PlanningService {
         LocalDate end = planningDates.get(planningDates.size() - 1);
         List<Task> tasks = taskRepository.findByDueDateBetween(planningDates.get(0), end).stream()
                 .filter(task -> workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings))
+                .filter(this::isWorkPlanningScope)
                 .toList();
         taskService.computeDerivedFieldsBatch(tasks);
         Map<LocalDate, List<Task>> byDate = tasks.stream().collect(Collectors.groupingBy(Task::getDueDate));
@@ -70,6 +77,7 @@ public class PlanningService {
         List<Task> tasks = taskRepository.findAll().stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
+                .filter(this::isWorkPlanningScope)
                 .sorted(Comparator.comparing((Task task) -> normalize(task.getTrack()))
                         .thenComparing(task -> normalize(phaseFor(task)))
                         .thenComparing(task -> task.getStatus().name())
@@ -223,6 +231,10 @@ public class PlanningService {
     private String phaseFor(Task task) {
         if (task.getPhase() != null && !task.getPhase().isBlank()) return task.getPhase();
         return task.getStatus().name().replace('_', ' ');
+    }
+
+    private boolean isWorkPlanningScope(Task task) {
+        return Area.WORK_AREAS.contains(task.getArea());
     }
 
     private String normalize(String value) {

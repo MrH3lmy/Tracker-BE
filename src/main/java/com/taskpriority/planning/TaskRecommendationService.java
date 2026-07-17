@@ -1,5 +1,6 @@
 package com.taskpriority.planning;
 
+import com.taskpriority.model.Area;
 import com.taskpriority.model.Effort;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
@@ -35,6 +36,7 @@ public class TaskRecommendationService {
         List<RecommendationCandidate> candidates = taskRepository.findAll().stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
+                .filter(task -> Area.WORK_AREAS.contains(task.getArea()))
                 .map(task -> candidate(task, today))
                 .sorted(Comparator.comparingInt(RecommendationCandidate::recommendationScore).reversed()
                         .thenComparing(candidate -> candidate.task().getDueDate(), Comparator.nullsLast(Comparator.naturalOrder()))

@@ -44,9 +44,7 @@ public record UpdateTaskRequest(
         Long boardColumnId,
         Integer position,
         List<Long> dependencyIds,
-        @Valid CreateTaskRequest.RecurrenceRuleRequest recurrence,
-        @Positive(message = "dailyTargetCount must be greater than 0")
-        Integer dailyTargetCount
+        @Valid CreateTaskRequest.RecurrenceRuleRequest recurrence
 ) {
     @AssertTrue(message = "startDate must be on or before dueDate")
     boolean isStartDateOnOrBeforeDueDate() {

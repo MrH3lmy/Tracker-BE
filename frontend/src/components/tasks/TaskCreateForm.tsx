@@ -43,7 +43,6 @@ interface TaskCreateFormState {
   recurrenceDayOfMonth: string;
   recurrenceAnnualMonth: string;
   recurrenceAnnualDay: string;
-  dailyTargetCount: string;
 }
 
 type TaskCreateFormAction =
@@ -78,7 +77,6 @@ const emptyState: TaskCreateFormState = {
   recurrenceDayOfMonth: '',
   recurrenceAnnualMonth: '',
   recurrenceAnnualDay: '',
-  dailyTargetCount: '',
 };
 
 const toFormNumber = (value: number | undefined) => (value === undefined ? '' : String(value));
@@ -112,7 +110,6 @@ const mapRecordToFormState = (task: TaskRecord | undefined): TaskCreateFormState
     recurrenceDayOfMonth: toFormNumber(recurrence?.dayOfMonth),
     recurrenceAnnualMonth: annualDate.month,
     recurrenceAnnualDay: annualDate.day,
-    dailyTargetCount: toFormNumber(task.dailyTargetCount),
   };
 };
 
@@ -208,7 +205,6 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
       followUpDate: form.followUpDate || undefined,
       status: form.status || undefined,
       recurrence,
-      dailyTargetCount: toOptionalNumber(form.dailyTargetCount),
     }, () => dispatch({ type: 'reset', initialState: emptyState }));
   };
 
@@ -309,9 +305,6 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
             <div className="grid grid-cols-2 gap-3">
               <Field label="Every" htmlFor="taskRecurrenceInterval">
                 <Input id="taskRecurrenceInterval" type="number" min="1" step="1" value={form.recurrenceInterval} onChange={(e) => setField('recurrenceInterval', e.target.value)} disabled={busy} />
-              </Field>
-              <Field label="Daily target count" htmlFor="taskDailyTargetCount">
-                <Input id="taskDailyTargetCount" type="number" min="1" step="1" placeholder="e.g. 8 (glasses of water)" value={form.dailyTargetCount} onChange={(e) => setField('dailyTargetCount', e.target.value)} disabled={busy} />
               </Field>
 
               {form.recurrenceFrequency === 'WEEKLY' && (

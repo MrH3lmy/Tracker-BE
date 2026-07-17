@@ -5,7 +5,6 @@ import com.taskpriority.model.*;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
-import com.taskpriority.task.application.HabitService;
 import com.taskpriority.task.application.RecurrenceService;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
@@ -30,16 +29,14 @@ public class TaskService {
     private final BoardColumnRepository boardColumnRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
-    private final HabitService habitService;
     private final TaskApiMapper taskApiMapper;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, HabitService habitService, TaskApiMapper taskApiMapper) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
-        this.habitService = habitService;
         this.taskApiMapper = taskApiMapper;
     }
 
@@ -170,20 +167,6 @@ public class TaskService {
     }
 
     @Transactional
-    public Task checkIn(Long id) {
-        Task task = habitService.checkIn(id);
-        computeDerivedFields(task);
-        return task;
-    }
-
-    @Transactional
-    public Task undoCheckIn(Long id) {
-        Task task = habitService.undoCheckIn(id);
-        computeDerivedFields(task);
-        return task;
-    }
-
-    @Transactional
     public Task updateStatus(Long id, Status status) {
         return moveTask(id, status, null, null);
     }
@@ -242,7 +225,10 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public Map<PriorityCategory, List<Task>> getMatrixView() {
-        List<Task> active = taskRepository.findAll().stream().filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED).toList();
+        List<Task> active = taskRepository.findAll().stream()
+                .filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED)
+                .filter(t -> Area.WORK_AREAS.contains(t.getArea()))
+                .toList();
         computeDerivedFieldsBatch(active);
         return active.stream().collect(Collectors.groupingBy(Task::getPriorityCategory));
     }
@@ -324,7 +310,6 @@ public class TaskService {
             task.setSubtaskCount(subtasks.size());
             task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
         }
-        habitService.applyTodayProgress(task);
         applyPriority(task);
     }
 
@@ -342,7 +327,6 @@ public class TaskService {
                         Collectors.mapping(dependency -> dependency.getTask().getId(), Collectors.toList())));
         Map<Long, List<Task>> subtasksByParent = taskRepository.findByParentTaskIdInOrderByPositionAscIdAsc(ids).stream()
                 .collect(Collectors.groupingBy(Task::getParentTaskId));
-        habitService.applyTodayProgressBatch(tasks);
 
         for (Task task : tasks) {
             if (task.getId() != null) {

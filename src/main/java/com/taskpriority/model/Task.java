@@ -107,9 +107,6 @@ public class Task {
     @Column(nullable = false)
     private int position;
 
-    @Column(name = "daily_target_count")
-    private Integer dailyTargetCount;
-
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "recurrence_rule_id")
     private RecurrenceRule recurrenceRule;
@@ -149,12 +146,6 @@ public class Task {
 
     @Transient
     private int completedSubtaskCount;
-
-    @Transient
-    private int todayCheckInCount;
-
-    @Transient
-    private boolean todayTargetMet;
 
     public Task() {}
     public Task(@NotBlank String title) { this.title = title; }
@@ -234,10 +225,4 @@ public class Task {
     public int getCompletedSubtaskCount() { return completedSubtaskCount; }
     public void setCompletedSubtaskCount(int completedSubtaskCount) { this.completedSubtaskCount = completedSubtaskCount; }
     public int getSubtaskProgressPercent() { return subtaskCount == 0 ? 0 : (int) Math.round((completedSubtaskCount * 100.0) / subtaskCount); }
-    public Integer getDailyTargetCount() { return dailyTargetCount; }
-    public void setDailyTargetCount(Integer dailyTargetCount) { this.dailyTargetCount = dailyTargetCount; }
-    public int getTodayCheckInCount() { return todayCheckInCount; }
-    public void setTodayCheckInCount(int todayCheckInCount) { this.todayCheckInCount = todayCheckInCount; }
-    public boolean isTodayTargetMet() { return todayTargetMet; }
-    public void setTodayTargetMet(boolean todayTargetMet) { this.todayTargetMet = todayTargetMet; }
 }

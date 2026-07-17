@@ -102,7 +102,7 @@ class ApiV1IntegrationTest {
     @Test
     void endpointContracts() throws Exception {
         String body = """
-                {"title":"Test Task","description":"d"}
+                {"title":"Test Task","description":"d","area":"WORK"}
                 """;
         String createdTask = mockMvc.perform(post("/api/v1/tasks").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())

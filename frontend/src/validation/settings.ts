@@ -4,9 +4,41 @@ export const EXCLUDED_WEEKDAYS_KEY = 'excludedWeekdays';
 export const HOLIDAY_DATES_KEY = 'holidayDates';
 export const DEFAULT_DAILY_CAPACITY_HOURS_KEY = 'defaultDailyCapacityHours';
 export const AI_FEATURES_ENABLED_KEY = 'aiFeaturesEnabled';
+export const WORKING_HOURS_KEY = 'workingHours';
+export const SLEEP_HOURS_KEY = 'sleepHours';
 
 const weekdays = new Set(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']);
 const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+const timeOfDayPattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export type TimeWindow = { start: string; end: string };
+export type WeeklyHours = Record<string, TimeWindow | undefined>;
+
+const validateWeeklyHours = (value: unknown, key: string, errors: string[]) => {
+  if (value === undefined) return;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    errors.push(`${key} must be an object keyed by weekday name.`);
+    return;
+  }
+  for (const [day, window] of Object.entries(value as Record<string, unknown>)) {
+    if (!weekdays.has(day.trim().toUpperCase())) {
+      errors.push(`${key} contains invalid weekday: ${day}.`);
+      continue;
+    }
+    if (window === null || window === undefined) continue;
+    if (typeof window !== 'object' || Array.isArray(window)) {
+      errors.push(`${key}.${day} must be an object with start/end.`);
+      continue;
+    }
+    const { start, end } = window as Record<string, unknown>;
+    if (typeof start !== 'string' || !timeOfDayPattern.test(start)) {
+      errors.push(`${key}.${day}.start must be a valid HH:mm time.`);
+    }
+    if (typeof end !== 'string' || !timeOfDayPattern.test(end)) {
+      errors.push(`${key}.${day}.end must be a valid HH:mm time.`);
+    }
+  }
+};
 
 const isValidIsoDate = (value: string) => {
   if (!isoDateOnlyPattern.test(value)) return false;
@@ -57,6 +89,9 @@ export function validateSettingsPayload(text: string): ValidationResult<Record<s
       errors.push(`${DEFAULT_DAILY_CAPACITY_HOURS_KEY} must be a number greater than 0 and no more than 24.`);
     }
   }
+
+  validateWeeklyHours(result.parsed[WORKING_HOURS_KEY], WORKING_HOURS_KEY, errors);
+  validateWeeklyHours(result.parsed[SLEEP_HOURS_KEY], SLEEP_HOURS_KEY, errors);
 
   return { parsed: result.parsed, errors };
 }

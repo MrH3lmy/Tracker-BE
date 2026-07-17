@@ -11,17 +11,17 @@ import java.util.List;
 import java.util.Optional;
 
 public interface HabitCheckInRepository extends JpaRepository<HabitCheckIn, Long> {
-    int countByTaskIdAndCheckInDate(Long taskId, LocalDate checkInDate);
-    List<HabitCheckIn> findByTaskIdAndCheckInDate(Long taskId, LocalDate checkInDate);
-    Optional<HabitCheckIn> findTopByTaskIdAndCheckInDateOrderByCheckedInAtDesc(Long taskId, LocalDate checkInDate);
-    void deleteByTaskId(Long taskId);
+    int countByHabitIdAndCheckInDate(Long habitId, LocalDate checkInDate);
+    List<HabitCheckIn> findByHabitIdAndCheckInDate(Long habitId, LocalDate checkInDate);
+    Optional<HabitCheckIn> findTopByHabitIdAndCheckInDateOrderByCheckedInAtDesc(Long habitId, LocalDate checkInDate);
+    void deleteByHabitId(Long habitId);
 
-    @Query("SELECT h.task.id AS taskId, COUNT(h) AS checkInCount FROM HabitCheckIn h "
-            + "WHERE h.task.id IN :taskIds AND h.checkInDate = :checkInDate GROUP BY h.task.id")
-    List<TaskCheckInCount> countByTaskIdInAndCheckInDate(@Param("taskIds") Collection<Long> taskIds, @Param("checkInDate") LocalDate checkInDate);
+    @Query("SELECT h.habit.id AS habitId, COUNT(h) AS checkInCount FROM HabitCheckIn h "
+            + "WHERE h.habit.id IN :habitIds AND h.checkInDate = :checkInDate GROUP BY h.habit.id")
+    List<HabitCheckInCount> countByHabitIdInAndCheckInDate(@Param("habitIds") Collection<Long> habitIds, @Param("checkInDate") LocalDate checkInDate);
 
-    interface TaskCheckInCount {
-        Long getTaskId();
+    interface HabitCheckInCount {
+        Long getHabitId();
         Long getCheckInCount();
     }
 }

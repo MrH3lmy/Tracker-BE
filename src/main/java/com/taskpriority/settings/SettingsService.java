@@ -10,9 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,14 +26,20 @@ public class SettingsService {
     public static final String HOLIDAY_DATES_KEY = "holidayDates";
     public static final String DEFAULT_DAILY_CAPACITY_HOURS_KEY = "defaultDailyCapacityHours";
     public static final String AI_FEATURES_ENABLED_KEY = "aiFeaturesEnabled";
+    public static final String WORKING_HOURS_KEY = "workingHours";
+    public static final String SLEEP_HOURS_KEY = "sleepHours";
     public static final List<DayOfWeek> DEFAULT_EXCLUDED_WEEKDAYS = List.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
     public static final double DEFAULT_DAILY_CAPACITY_HOURS = 6.0;
+    private static final List<DayOfWeek> DEFAULT_WORKING_DAYS = List.of(
+            DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY);
 
     private static final Set<String> KNOWN_CALENDAR_KEYS = Set.of(
             EXCLUDED_WEEKDAYS_KEY,
             HOLIDAY_DATES_KEY,
             DEFAULT_DAILY_CAPACITY_HOURS_KEY,
-            AI_FEATURES_ENABLED_KEY
+            AI_FEATURES_ENABLED_KEY,
+            WORKING_HOURS_KEY,
+            SLEEP_HOURS_KEY
     );
 
     private final AppSettingRepository appSettingRepository;
@@ -80,12 +88,42 @@ public class SettingsService {
         return parseCapacityHours(getAll().get(DEFAULT_DAILY_CAPACITY_HOURS_KEY), DEFAULT_DAILY_CAPACITY_HOURS_KEY);
     }
 
+    @Transactional(readOnly = true)
+    public Map<DayOfWeek, TimeWindow> getWorkingHours() {
+        return parseTimeWindowMap(getAll().get(WORKING_HOURS_KEY), WORKING_HOURS_KEY);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<DayOfWeek, TimeWindow> getSleepHours() {
+        return parseTimeWindowMap(getAll().get(SLEEP_HOURS_KEY), SLEEP_HOURS_KEY);
+    }
+
     private Map<String, Object> defaultSettings() {
         Map<String, Object> defaults = new LinkedHashMap<>();
         defaults.put(EXCLUDED_WEEKDAYS_KEY, DEFAULT_EXCLUDED_WEEKDAYS.stream().map(DayOfWeek::name).toList());
         defaults.put(HOLIDAY_DATES_KEY, List.of());
         defaults.put(DEFAULT_DAILY_CAPACITY_HOURS_KEY, DEFAULT_DAILY_CAPACITY_HOURS);
         defaults.put(AI_FEATURES_ENABLED_KEY, false);
+        defaults.put(WORKING_HOURS_KEY, serializeTimeWindowMap(defaultWorkingHours()));
+        defaults.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(defaultSleepHours()));
+        return defaults;
+    }
+
+    private Map<DayOfWeek, TimeWindow> defaultWorkingHours() {
+        Map<DayOfWeek, TimeWindow> defaults = new EnumMap<>(DayOfWeek.class);
+        TimeWindow nineToFive = new TimeWindow(LocalTime.of(9, 0), LocalTime.of(17, 0));
+        for (DayOfWeek day : DEFAULT_WORKING_DAYS) {
+            defaults.put(day, nineToFive);
+        }
+        return defaults;
+    }
+
+    private Map<DayOfWeek, TimeWindow> defaultSleepHours() {
+        Map<DayOfWeek, TimeWindow> defaults = new EnumMap<>(DayOfWeek.class);
+        TimeWindow elevenToSeven = new TimeWindow(LocalTime.of(23, 0), LocalTime.of(7, 0));
+        for (DayOfWeek day : DayOfWeek.values()) {
+            defaults.put(day, elevenToSeven);
+        }
         return defaults;
     }
 
@@ -94,6 +132,60 @@ public class SettingsService {
         settings.put(HOLIDAY_DATES_KEY, parseDates(settings.get(HOLIDAY_DATES_KEY), HOLIDAY_DATES_KEY).stream().map(LocalDate::toString).toList());
         settings.put(DEFAULT_DAILY_CAPACITY_HOURS_KEY, parseCapacityHours(settings.get(DEFAULT_DAILY_CAPACITY_HOURS_KEY), DEFAULT_DAILY_CAPACITY_HOURS_KEY));
         settings.put(AI_FEATURES_ENABLED_KEY, parseBoolean(settings.get(AI_FEATURES_ENABLED_KEY), AI_FEATURES_ENABLED_KEY));
+        settings.put(WORKING_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(WORKING_HOURS_KEY), WORKING_HOURS_KEY)));
+        settings.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(SLEEP_HOURS_KEY), SLEEP_HOURS_KEY)));
+    }
+
+    private Map<DayOfWeek, TimeWindow> parseTimeWindowMap(Object value, String key) {
+        if (value == null) return Map.of();
+        if (!(value instanceof Map<?, ?> raw)) {
+            throw new IllegalArgumentException(key + " must be an object keyed by weekday name.");
+        }
+        Map<DayOfWeek, TimeWindow> result = new EnumMap<>(DayOfWeek.class);
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (!(entry.getKey() instanceof String dayText) || dayText.isBlank()) {
+                throw new IllegalArgumentException(key + " keys must be weekday names.");
+            }
+            DayOfWeek day;
+            try {
+                day = DayOfWeek.valueOf(dayText.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException(key + " contains invalid weekday: " + dayText + ". Use MONDAY through SUNDAY.");
+            }
+            Object entryValue = entry.getValue();
+            if (entryValue == null) {
+                continue;
+            }
+            if (!(entryValue instanceof Map<?, ?> windowMap)) {
+                throw new IllegalArgumentException(key + "." + dayText + " must be an object with start/end.");
+            }
+            Object startRaw = windowMap.get("start");
+            Object endRaw = windowMap.get("end");
+            if (!(startRaw instanceof String startText) || !(endRaw instanceof String endText)) {
+                throw new IllegalArgumentException(key + "." + dayText + " must have start and end HH:mm strings.");
+            }
+            result.put(day, new TimeWindow(parseTimeOfDay(startText, key, dayText), parseTimeOfDay(endText, key, dayText)));
+        }
+        return result;
+    }
+
+    private LocalTime parseTimeOfDay(String text, String key, String dayText) {
+        try {
+            return LocalTime.parse(text.trim());
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException(key + "." + dayText + " must use HH:mm time format.");
+        }
+    }
+
+    private Map<String, Object> serializeTimeWindowMap(Map<DayOfWeek, TimeWindow> windows) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (DayOfWeek day : DayOfWeek.values()) {
+            TimeWindow window = windows.get(day);
+            if (window != null) {
+                result.put(day.name(), Map.of("start", window.start().toString(), "end", window.end().toString()));
+            }
+        }
+        return result;
     }
 
     private Object parseSettingValue(String key, String value) {
@@ -109,6 +201,9 @@ public class SettingsService {
             }
             if (AI_FEATURES_ENABLED_KEY.equals(key)) {
                 return objectMapper.readValue(value, Boolean.class);
+            }
+            if (WORKING_HOURS_KEY.equals(key) || SLEEP_HOURS_KEY.equals(key)) {
+                return objectMapper.readValue(value, new TypeReference<Map<String, Map<String, String>>>() {});
             }
         } catch (JsonProcessingException | IllegalArgumentException ignored) {
             return value;
@@ -136,6 +231,7 @@ public class SettingsService {
             case HOLIDAY_DATES_KEY -> parseDates(value, key);
             case DEFAULT_DAILY_CAPACITY_HOURS_KEY -> parseCapacityHours(value, key);
             case AI_FEATURES_ENABLED_KEY -> parseBoolean(value, key);
+            case WORKING_HOURS_KEY, SLEEP_HOURS_KEY -> parseTimeWindowMap(value, key);
             default -> { }
         }
     }

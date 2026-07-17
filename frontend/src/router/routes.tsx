@@ -3,6 +3,7 @@ import { BoardPage } from '../pages/BoardPage';
 import { CalendarPage } from '../pages/CalendarPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
+import { HabitsPage } from '../pages/HabitsPage';
 import { ImportPage } from '../pages/ImportPage';
 import { MatrixPage } from '../pages/MatrixPage';
 import { NotesPage } from '../pages/NotesPage';
@@ -22,6 +23,7 @@ export interface AppRoute {
 export const primaryRoutes: AppRoute[] = [
   { label: 'Dashboard', path: '/dashboard', element: <DashboardPage /> },
   { label: 'Tasks', path: '/tasks', element: <TasksPage /> },
+  { label: 'Habits', path: '/habits', element: <HabitsPage /> },
   { label: 'Board', path: '/board', element: <BoardPage /> },
   { label: 'Notes', path: '/notes', element: <NotesPage /> },
   { label: 'Planning', path: '/planning', element: <PlanningPage /> },
