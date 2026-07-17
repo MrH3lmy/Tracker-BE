@@ -185,6 +185,7 @@ export default function App() {
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
+  const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
   const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
 
   return (
@@ -250,7 +251,7 @@ export default function App() {
               </Button>
               <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
               <div className="ml-auto flex items-center gap-2">
-                {!routeOwnsPageLayout && (
+                {!hideGlobalQuickAdd && (
                   <NavLink
                     to="/tasks"
                     className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"

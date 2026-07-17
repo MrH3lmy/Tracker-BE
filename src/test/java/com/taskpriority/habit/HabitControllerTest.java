@@ -7,6 +7,12 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,5 +61,23 @@ class HabitControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("must not be NONE")));
+    }
+
+    @Test
+    void historyReturnsDailyCountsForRange() throws Exception {
+        com.taskpriority.repository.HabitCheckInRepository.HabitCheckInDailyCount row =
+                org.mockito.Mockito.mock(com.taskpriority.repository.HabitCheckInRepository.HabitCheckInDailyCount.class);
+        when(row.getHabitId()).thenReturn(1L);
+        when(row.getCheckInDate()).thenReturn(LocalDate.of(2026, 7, 13));
+        when(row.getCheckInCount()).thenReturn(5L);
+        when(habitService.history(any(LocalDate.class), any(LocalDate.class))).thenReturn(List.of(row));
+
+        mockMvc.perform(get("/api/v1/habits/history")
+                        .param("from", "2026-07-13")
+                        .param("to", "2026-07-19"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].habitId").value(1))
+                .andExpect(jsonPath("$[0].date").value("2026-07-13"))
+                .andExpect(jsonPath("$[0].count").value(5));
     }
 }

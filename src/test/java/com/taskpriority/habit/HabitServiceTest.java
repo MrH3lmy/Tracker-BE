@@ -102,6 +102,32 @@ class HabitServiceTest {
     }
 
     @Test
+    void historyExcludesDeletedHabitsAndQueriesActiveIdsOnly() {
+        Habit active = recurringHabit(8L, 1);
+        Habit deleted = recurringHabit(9L, 1);
+        deleted.setDeleted(true);
+        when(habitRepository.findAll()).thenReturn(List.of(active, deleted));
+        LocalDate from = LocalDate.now().minusDays(6);
+        LocalDate to = LocalDate.now();
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to)))
+                .thenReturn(List.of());
+
+        habitService.history(from, to);
+
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to));
+    }
+
+    @Test
+    void historyReturnsEmptyListWhenNoActiveHabits() {
+        when(habitRepository.findAll()).thenReturn(List.of());
+
+        List<HabitCheckInRepository.HabitCheckInDailyCount> result = habitService.history(LocalDate.now().minusDays(6), LocalDate.now());
+
+        assertTrue(result.isEmpty());
+        verify(habitCheckInRepository, org.mockito.Mockito.never()).countByHabitIdInAndCheckInDateBetween(any(), any(), any());
+    }
+
+    @Test
     void applyTodayProgressBatchPopulatesCountsFromGroupedQuery() {
         Habit habitA = recurringHabit(6L, 2);
         Habit habitB = recurringHabit(7L, 2);

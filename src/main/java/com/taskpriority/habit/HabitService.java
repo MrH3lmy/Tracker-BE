@@ -111,6 +111,18 @@ public class HabitService {
         habit.setTodayTargetMet(todayCount >= habit.getDailyTargetCount());
     }
 
+    @Transactional(readOnly = true)
+    public List<HabitCheckInRepository.HabitCheckInDailyCount> history(LocalDate from, LocalDate to) {
+        List<Long> ids = habitRepository.findAll().stream()
+                .filter(habit -> !habit.isDeleted())
+                .map(Habit::getId)
+                .toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(ids, from, to);
+    }
+
     public void applyTodayProgressBatch(List<Habit> habits) {
         List<Long> ids = habits.stream().map(Habit::getId).filter(Objects::nonNull).toList();
         if (ids.isEmpty()) {

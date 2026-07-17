@@ -20,8 +20,19 @@ public interface HabitCheckInRepository extends JpaRepository<HabitCheckIn, Long
             + "WHERE h.habit.id IN :habitIds AND h.checkInDate = :checkInDate GROUP BY h.habit.id")
     List<HabitCheckInCount> countByHabitIdInAndCheckInDate(@Param("habitIds") Collection<Long> habitIds, @Param("checkInDate") LocalDate checkInDate);
 
+    @Query("SELECT h.habit.id AS habitId, h.checkInDate AS checkInDate, COUNT(h) AS checkInCount FROM HabitCheckIn h "
+            + "WHERE h.habit.id IN :habitIds AND h.checkInDate BETWEEN :from AND :to GROUP BY h.habit.id, h.checkInDate")
+    List<HabitCheckInDailyCount> countByHabitIdInAndCheckInDateBetween(
+            @Param("habitIds") Collection<Long> habitIds, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
     interface HabitCheckInCount {
         Long getHabitId();
+        Long getCheckInCount();
+    }
+
+    interface HabitCheckInDailyCount {
+        Long getHabitId();
+        LocalDate getCheckInDate();
         Long getCheckInCount();
     }
 }

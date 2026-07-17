@@ -1,11 +1,13 @@
 package com.taskpriority.habit;
 
 import com.taskpriority.model.Habit;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -27,6 +29,15 @@ public class HabitController {
     @GetMapping("/{id}")
     public HabitResponse byId(@PathVariable Long id) {
         return mapper.toResponse(habitService.findById(id));
+    }
+
+    @GetMapping("/history")
+    public List<HabitHistoryEntry> history(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return habitService.history(from, to).stream()
+                .map(row -> new HabitHistoryEntry(row.getHabitId(), row.getCheckInDate(), row.getCheckInCount().intValue()))
+                .toList();
     }
 
     @PostMapping
