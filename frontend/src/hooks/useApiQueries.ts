@@ -3,7 +3,8 @@ import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient'
 import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteVersionRecord } from '../components/notes/noteTypes';
 import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
-import type { DayScheduleRecord, ScheduleTaskPayload } from '../components/scheduler/schedulerTypes';
+import type { CreateHabitPayload, HabitRecord } from '../components/habits/habitTypes';
+import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -51,6 +52,7 @@ export const queryKeys = {
   boardColumns: ['board-columns'] as const,
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
   schedulerDay: (date: string) => ['scheduler', 'day', date] as const,
+  habits: ['habits'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -100,6 +102,7 @@ export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKe
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
+export const useHabitsQuery = () => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits') });
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -154,8 +157,6 @@ export function useTaskMutations() {
     updateTask: useMutation({ mutationFn: ({ id, body }: { id: number; body: unknown }) => apiJson('PUT', `/api/v1/tasks/${id}`, body), onSuccess }),
     deleteTask: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}`), onSuccess }),
     completeTask: useMutation({ mutationFn: (id: number) => apiJson('PATCH', `/api/v1/tasks/${id}/complete`), onSuccess }),
-    checkIn: useMutation({ mutationFn: (id: number) => apiJson('POST', `/api/v1/tasks/${id}/check-in`), onSuccess }),
-    undoCheckIn: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/tasks/${id}/check-in`), onSuccess }),
     changeStatus: useMutation({ mutationFn: ({ id, status }: { id: number; status: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/status?status=${encodeURIComponent(status)}`), onSuccess }),
     moveTask: useMutation<ApiCallResult<unknown>, Error, MoveTaskVariables, MoveTaskContext>({
       mutationFn: ({ id, body }) => apiJson('PATCH', `/api/v1/tasks/${id}/move`, body),
@@ -176,10 +177,30 @@ export function useTaskMutations() {
 }
 export function useSchedulerMutations() {
   const qc = useQueryClient();
-  const onSuccess = () => { qc.invalidateQueries({ queryKey: ['scheduler'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); };
+  const onSuccess = () => { qc.invalidateQueries({ queryKey: ['scheduler'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['habits'] }); };
   return {
     scheduleTask: useMutation({ mutationFn: ({ taskId, body }: { taskId: number; body: ScheduleTaskPayload }) => apiJson('PUT', `/api/v1/scheduler/tasks/${taskId}`, body), onSuccess }),
     unscheduleTask: useMutation({ mutationFn: (taskId: number) => apiJson('DELETE', `/api/v1/scheduler/tasks/${taskId}`), onSuccess }),
+    scheduleHabit: useMutation({ mutationFn: ({ habitId, body }: { habitId: number; body: ScheduleHabitPayload }) => apiJson('PUT', `/api/v1/scheduler/habits/${habitId}`, body), onSuccess }),
+    unscheduleHabit: useMutation({ mutationFn: (habitId: number) => apiJson('DELETE', `/api/v1/scheduler/habits/${habitId}`), onSuccess }),
+    suggestForTask: useMutation({ mutationFn: (taskId: number) => apiJson<SuggestedSlotRecord>('GET', `/api/v1/scheduler/tasks/${taskId}/suggestion`) }),
+    suggestForHabit: useMutation({ mutationFn: (habitId: number) => apiJson<SuggestedSlotRecord>('GET', `/api/v1/scheduler/habits/${habitId}/suggestion`) }),
+    autoSchedule: useMutation({
+      mutationFn: (body: { startDate: string; endDate: string; scope?: AutoScheduleScope }) => apiJson('POST', '/api/v1/scheduler/auto-schedule', body),
+      onSuccess,
+    }),
+  };
+}
+
+export function useHabitMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => { qc.invalidateQueries({ queryKey: queryKeys.habits }); qc.invalidateQueries({ queryKey: ['scheduler'] }); };
+  return {
+    createHabit: useMutation({ mutationFn: (body: CreateHabitPayload) => apiJson('POST', '/api/v1/habits', body), onSuccess }),
+    updateHabit: useMutation({ mutationFn: ({ id, body }: { id: number; body: CreateHabitPayload }) => apiJson('PUT', `/api/v1/habits/${id}`, body), onSuccess }),
+    deleteHabit: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/habits/${id}`), onSuccess }),
+    checkIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('PATCH', `/api/v1/habits/${id}/check-in`), onSuccess }),
+    undoCheckIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('DELETE', `/api/v1/habits/${id}/check-in`), onSuccess }),
   };
 }
 

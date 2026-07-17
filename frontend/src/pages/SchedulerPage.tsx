@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { SchedulerTimeline } from '../components/scheduler/SchedulerTimeline';
-import { UnscheduledTaskList } from '../components/scheduler/UnscheduledTaskList';
+import { UnscheduledEntryList } from '../components/scheduler/UnscheduledEntryList';
 import type { Focus } from '../components/scheduler/schedulerStyleUtils';
-import type { DayScheduleRecord } from '../components/scheduler/schedulerTypes';
-import { useSchedulerDayQuery, useSchedulerMutations, useTaskMutations } from '../hooks/useApiQueries';
+import type { AutoScheduleResultRecord, DayScheduleRecord } from '../components/scheduler/schedulerTypes';
+import { useHabitMutations, useSchedulerDayQuery, useSchedulerMutations, useTaskMutations } from '../hooks/useApiQueries';
 import { Button, Card, PageHeader, SegmentedControl } from '../components/ui';
 
 const toIsoDate = (date: Date) => {
@@ -34,13 +34,22 @@ const focusOptions = [
   { value: 'training' as Focus, label: 'Training & Life' },
 ];
 
+const autoScheduleSummary = (result: AutoScheduleResultRecord) => {
+  const scheduled = result.scheduledTaskIds.length + result.scheduledHabitIds.length;
+  const unresolved = result.unresolvedTaskIds.length + result.unresolvedHabitIds.length;
+  if (scheduled === 0 && unresolved === 0) return 'Nothing to auto-schedule - everything is already booked.';
+  return `Auto-scheduled ${scheduled} item${scheduled === 1 ? '' : 's'}.${unresolved > 0 ? ` ${unresolved} item${unresolved === 1 ? '' : 's'} had no free slot in range.` : ''}`;
+};
+
 export function SchedulerPage() {
   const [date, setDate] = useState(() => toIsoDate(new Date()));
   const [focus, setFocus] = useState<Focus>('all');
+  const [autoScheduleMessage, setAutoScheduleMessage] = useState<string | null>(null);
 
   const dayQuery = useSchedulerDayQuery(date);
-  const { scheduleTask, unscheduleTask } = useSchedulerMutations();
-  const { completeTask, checkIn } = useTaskMutations();
+  const { scheduleTask, unscheduleTask, scheduleHabit, unscheduleHabit, suggestForTask, suggestForHabit, autoSchedule } = useSchedulerMutations();
+  const { completeTask } = useTaskMutations();
+  const { checkIn } = useHabitMutations();
 
   const day = useMemo<DayScheduleRecord | undefined>(() => {
     const data = dayQuery.data?.data;
@@ -49,18 +58,35 @@ export function SchedulerPage() {
 
   const isLoading = dayQuery.isLoading;
   const hasError = isQueryError(dayQuery.data);
-  const busy = scheduleTask.isPending || unscheduleTask.isPending || completeTask.isPending || checkIn.isPending;
+  const busy = scheduleTask.isPending || unscheduleTask.isPending || scheduleHabit.isPending || unscheduleHabit.isPending
+    || completeTask.isPending || checkIn.isPending || autoSchedule.isPending;
+
+  const runAutoSchedule = () => {
+    setAutoScheduleMessage(null);
+    autoSchedule.mutate({ startDate: date, endDate: shiftDate(date, 6), scope: 'ALL' }, {
+      onSuccess: (result) => {
+        if (result.ok && result.data) setAutoScheduleMessage(autoScheduleSummary(result.data as AutoScheduleResultRecord));
+      },
+    });
+  };
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Scheduler"
-        description="Give tasks a specific time and priority today, separate from whole-day planning."
+        description="Give tasks and habits a specific time and priority today, separate from whole-day planning."
         className="mb-0"
         actions={
-          <SegmentedControl value={focus} onValueChange={setFocus} options={focusOptions} aria-label="Focus filter" />
+          <div className="flex items-center gap-2">
+            <SegmentedControl value={focus} onValueChange={setFocus} options={focusOptions} aria-label="Focus filter" />
+            <Button size="sm" onClick={runAutoSchedule} disabled={busy}>
+              {autoSchedule.isPending ? 'Auto-scheduling...' : 'Auto-schedule week'}
+            </Button>
+          </div>
         }
       />
+
+      {autoScheduleMessage && <p className="text-sm text-fg-muted" role="status">{autoScheduleMessage}</p>}
 
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={() => setDate((current) => shiftDate(current, -1))} disabled={busy}>Previous day</Button>
@@ -83,17 +109,22 @@ export function SchedulerPage() {
             focus={focus}
             busy={busy}
             onComplete={(taskId) => completeTask.mutate(taskId)}
-            onCheckIn={(taskId) => checkIn.mutate(taskId)}
-            onUnschedule={(taskId) => unscheduleTask.mutate(taskId)}
+            onCheckIn={(habitId) => checkIn.mutate(habitId)}
+            onUnscheduleTask={(taskId) => unscheduleTask.mutate(taskId)}
+            onUnscheduleHabit={(habitId) => unscheduleHabit.mutate(habitId)}
           />
           <Card className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-fg">Unscheduled</h3>
-            <UnscheduledTaskList
-              tasks={day.unscheduled}
+            <UnscheduledEntryList
+              tasks={day.unscheduledTasks}
+              habits={day.unscheduledHabits}
               focus={focus}
               date={date}
               busy={busy}
-              onSchedule={(taskId, body) => scheduleTask.mutate({ taskId, body })}
+              onScheduleTask={(taskId, body) => scheduleTask.mutate({ taskId, body })}
+              onScheduleHabit={(habitId, body) => scheduleHabit.mutate({ habitId, body })}
+              onSuggestTask={(taskId) => suggestForTask.mutateAsync(taskId)}
+              onSuggestHabit={(habitId) => suggestForHabit.mutateAsync(habitId)}
             />
           </Card>
         </div>

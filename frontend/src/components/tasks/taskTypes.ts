@@ -51,9 +51,6 @@ export interface TaskRecord {
   subtaskProgressPercent?: number;
   noteCount?: number;
   notesCount?: number;
-  dailyTargetCount?: number;
-  todayCheckInCount?: number;
-  todayTargetMet?: boolean;
   recurrence?: RecurrenceRuleRecord;
 }
 
@@ -109,6 +106,5 @@ export interface CreateTaskPayload {
   waitingOn?: string;
   followUpDate?: string;
   status?: TaskStatus;
-  dailyTargetCount?: number;
   recurrence?: RecurrenceRuleRecord;
 }

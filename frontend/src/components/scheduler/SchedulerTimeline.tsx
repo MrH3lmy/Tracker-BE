@@ -1,4 +1,4 @@
-import type { ScheduledTaskRecord } from './schedulerTypes';
+import type { ScheduledEntryRecord } from './schedulerTypes';
 import { matchesFocus, schedulePriorityVariant, type Focus } from './schedulerStyleUtils';
 import { Badge, Button, cn } from '../ui';
 import { Clock } from '../ui/icons';
@@ -15,20 +15,24 @@ const timeToMinutes = (time: string) => {
   return hours * 60 + (minutes || 0);
 };
 
+const entryTitle = (entry: ScheduledEntryRecord) => (entry.kind === 'HABIT' ? entry.habit?.title : entry.task?.title) ?? '';
+const entryArea = (entry: ScheduledEntryRecord) => (entry.kind === 'HABIT' ? entry.habit?.area : entry.task?.area);
+
 interface SchedulerTimelineProps {
-  scheduled: ScheduledTaskRecord[];
+  scheduled: ScheduledEntryRecord[];
   focus: Focus;
   busy: boolean;
   onComplete: (taskId: number) => void;
-  onCheckIn: (taskId: number) => void;
-  onUnschedule: (taskId: number) => void;
+  onCheckIn: (habitId: number) => void;
+  onUnscheduleTask: (taskId: number) => void;
+  onUnscheduleHabit: (habitId: number) => void;
 }
 
-export function SchedulerTimeline({ scheduled, focus, busy, onComplete, onCheckIn, onUnschedule }: SchedulerTimelineProps) {
+export function SchedulerTimeline({ scheduled, focus, busy, onComplete, onCheckIn, onUnscheduleTask, onUnscheduleHabit }: SchedulerTimelineProps) {
   const hours = Array.from({ length: VISIBLE_END_HOUR - VISIBLE_START_HOUR + 1 }, (_, index) => VISIBLE_START_HOUR + index);
   const totalHeight = (VISIBLE_END_HOUR - VISIBLE_START_HOUR) * HOUR_HEIGHT;
 
-  const focusFiltered = scheduled.filter((entry) => matchesFocus(entry.task.area, focus));
+  const focusFiltered = scheduled.filter((entry) => matchesFocus(entryArea(entry), focus));
   // Events that end before the visible window starts would otherwise render
   // with a negative top offset and escape the timeline container, so they're
   // surfaced in a separate "earlier events" indicator instead.
@@ -47,7 +51,7 @@ export function SchedulerTimeline({ scheduled, focus, busy, onComplete, onCheckI
           <span className="font-medium text-fg">Earlier today:</span>
           <span>
             {earlier
-              .map((entry) => `${entry.task.title} (${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)})`)
+              .map((entry) => `${entryTitle(entry)} (${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)})`)
               .join(', ')}
           </span>
         </div>
@@ -77,39 +81,41 @@ export function SchedulerTimeline({ scheduled, focus, busy, onComplete, onCheckI
             const startMinutes = timeToMinutes(entry.startTime);
             const top = (startMinutes - VISIBLE_START_MINUTES) * PIXELS_PER_MINUTE;
             const height = Math.max(entry.durationMinutes * PIXELS_PER_MINUTE, 32);
-            const hasOverlap = entry.overlapsWithTaskIds.length > 0;
-            const targetCount = entry.task.dailyTargetCount ?? 1;
-            const isCounterHabit = targetCount > 1;
-            const streak = entry.task.recurrence?.currentStreak ?? 0;
+            const hasOverlap = entry.overlapsWithIds.length > 0;
+            const isHabit = entry.kind === 'HABIT';
+            const targetCount = entry.habit?.dailyTargetCount ?? 1;
+            const todayCount = entry.habit?.todayCheckInCount ?? 0;
+            const streak = (isHabit ? entry.habit?.recurrence?.currentStreak : entry.task?.recurrence?.currentStreak) ?? 0;
             return (
               <article
-                key={entry.taskId}
+                key={`${entry.kind}-${entry.id}`}
                 className={cn(
                   'absolute right-2 left-2 flex flex-col gap-1 overflow-hidden rounded-lg border bg-card p-2 shadow-2xs',
                   hasOverlap ? 'border-critical' : 'border-line',
                 )}
                 style={{ top, height }}
-                aria-label={`${entry.task.title}, ${entry.startTime.slice(0, 5)} to ${entry.endTime.slice(0, 5)}`}
+                aria-label={`${entryTitle(entry)}, ${entry.startTime.slice(0, 5)} to ${entry.endTime.slice(0, 5)}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-fg">{entry.task.title}</span>
+                  <span className="truncate text-sm font-medium text-fg">{entryTitle(entry)}</span>
                   <Badge variant={schedulePriorityVariant(entry.priorityLevel)}>{entry.priorityLevel}</Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
                   <span>{entry.startTime.slice(0, 5)}–{entry.endTime.slice(0, 5)}</span>
+                  {isHabit && <Badge variant="outline">Habit</Badge>}
                   {streak > 0 && <Badge variant="caution">🔥 {streak}</Badge>}
-                  {isCounterHabit && <Badge variant="outline">{entry.task.todayCheckInCount ?? 0}/{targetCount} today</Badge>}
+                  {isHabit && <Badge variant="outline">{todayCount}/{targetCount} today</Badge>}
                   {hasOverlap && <Badge variant="critical">Overlaps</Badge>}
                 </div>
                 <div className="mt-auto flex flex-wrap gap-1.5">
-                  {isCounterHabit ? (
-                    <Button size="sm" onClick={() => onCheckIn(entry.taskId)} disabled={busy}>
-                      Check in ({entry.task.todayCheckInCount ?? 0}/{targetCount})
+                  {isHabit ? (
+                    <Button size="sm" onClick={() => onCheckIn(entry.id)} disabled={busy}>
+                      Check in ({todayCount}/{targetCount})
                     </Button>
                   ) : (
-                    <Button size="sm" onClick={() => onComplete(entry.taskId)} disabled={busy}>Complete</Button>
+                    <Button size="sm" onClick={() => onComplete(entry.id)} disabled={busy}>Complete</Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => onUnschedule(entry.taskId)} disabled={busy}>Unschedule</Button>
+                  <Button size="sm" variant="ghost" onClick={() => (isHabit ? onUnscheduleHabit(entry.id) : onUnscheduleTask(entry.id))} disabled={busy}>Unschedule</Button>
                 </div>
               </article>
             );
