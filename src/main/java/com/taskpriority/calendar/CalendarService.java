@@ -1,5 +1,6 @@
 package com.taskpriority.calendar;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Task;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.service.PriorityEngine;
@@ -16,18 +17,25 @@ import java.util.Map;
 public class CalendarService {
     private final TaskRepository taskRepository;
     private final PriorityEngine priorityEngine;
-    public CalendarService(TaskRepository taskRepository, PriorityEngine priorityEngine) { this.taskRepository = taskRepository; this.priorityEngine = priorityEngine; }
+    private final CurrentUserService currentUserService;
+    public CalendarService(TaskRepository taskRepository, PriorityEngine priorityEngine, CurrentUserService currentUserService) {
+        this.taskRepository = taskRepository;
+        this.priorityEngine = priorityEngine;
+        this.currentUserService = currentUserService;
+    }
 
     @Transactional(readOnly = true)
     public List<Task> getMonth(int year, int month) {
+        Long userId = currentUserService.requireUserId();
         YearMonth ym = YearMonth.of(year, month);
-        return taskRepository.findByDueDateBetween(ym.atDay(1), ym.atEndOfMonth());
+        return taskRepository.findByUserIdAndDueDateBetween(userId, ym.atDay(1), ym.atEndOfMonth());
     }
 
     @Transactional(readOnly = true)
     public Map<LocalDate, DaySummary> getMonthSummary(int year, int month) {
+        Long userId = currentUserService.requireUserId();
         YearMonth ym = YearMonth.of(year, month);
-        List<Task> tasks = taskRepository.findByDueDateBetween(ym.atDay(1), ym.atEndOfMonth());
+        List<Task> tasks = taskRepository.findByUserIdAndDueDateBetween(userId, ym.atDay(1), ym.atEndOfMonth());
         Map<LocalDate, List<Task>> grouped = tasks.stream().filter(t -> t.getDueDate() != null && !t.isDeleted())
                 .collect(java.util.stream.Collectors.groupingBy(Task::getDueDate));
         Map<LocalDate, DaySummary> result = new LinkedHashMap<>();
@@ -39,8 +47,9 @@ public class CalendarService {
 
     @Transactional(readOnly = true)
     public String exportCalendar() {
+        Long userId = currentUserService.requireUserId();
         StringBuilder sb = new StringBuilder("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//TaskPriorityTracker//EN\n");
-        for (Task task : taskRepository.findAll()) {
+        for (Task task : taskRepository.findByUserId(userId)) {
             if (task.getDueDate() == null || task.isDeleted()) continue;
             String date = task.getDueDate().toString().replace("-", "");
             int score = priorityEngine.compute(task).priorityScore();

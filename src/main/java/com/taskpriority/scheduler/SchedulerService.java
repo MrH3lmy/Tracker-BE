@@ -1,5 +1,6 @@
 package com.taskpriority.scheduler;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.habit.HabitApiMapper;
 import com.taskpriority.habit.HabitService;
@@ -38,11 +39,13 @@ public class SchedulerService {
     private final HabitService habitService;
     private final TaskApiMapper taskMapper;
     private final HabitApiMapper habitMapper;
+    private final CurrentUserService currentUserService;
 
     public SchedulerService(TaskRepository taskRepository, HabitRepository habitRepository,
                              TaskScheduleRepository taskScheduleRepository, HabitScheduleRepository habitScheduleRepository,
                              TaskService taskService, HabitService habitService,
-                             TaskApiMapper taskMapper, HabitApiMapper habitMapper) {
+                             TaskApiMapper taskMapper, HabitApiMapper habitMapper,
+                             CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.habitRepository = habitRepository;
         this.taskScheduleRepository = taskScheduleRepository;
@@ -51,30 +54,32 @@ public class SchedulerService {
         this.habitService = habitService;
         this.taskMapper = taskMapper;
         this.habitMapper = habitMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public DayScheduleResponse getDaySchedule(LocalDate date) {
+        Long userId = currentUserService.requireUserId();
         List<Booking> bookings = bookingsForDate(date);
         List<ScheduledEntryResponse> scheduled = bookings.stream()
                 .sorted(Comparator.comparing(Booking::startTime))
                 .map(booking -> toEntryResponse(booking, bookings))
                 .toList();
 
-        Set<Long> scheduledTaskIds = taskScheduleRepository.findAll().stream()
+        Set<Long> scheduledTaskIds = taskScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getTask().getId())
                 .collect(Collectors.toSet());
-        List<Task> unscheduledTasks = taskRepository.findAll().stream()
+        List<Task> unscheduledTasks = taskRepository.findByUserId(userId).stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
                 .filter(task -> !scheduledTaskIds.contains(task.getId()))
                 .toList();
         taskService.computeDerivedFieldsBatch(unscheduledTasks);
 
-        Set<Long> scheduledHabitIds = habitScheduleRepository.findAll().stream()
+        Set<Long> scheduledHabitIds = habitScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getHabit().getId())
                 .collect(Collectors.toSet());
-        List<Habit> unscheduledHabits = habitRepository.findAll().stream()
+        List<Habit> unscheduledHabits = habitRepository.findByUserId(userId).stream()
                 .filter(habit -> !habit.isDeleted())
                 .filter(habit -> !scheduledHabitIds.contains(habit.getId()))
                 .toList();
@@ -87,10 +92,14 @@ public class SchedulerService {
 
     @Transactional
     public ScheduledTaskResponse scheduleTask(Long taskId, ScheduleTaskRequest request) {
+        Long userId = currentUserService.requireUserId();
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + taskId + " not found"));
 
-        TaskSchedule schedule = taskScheduleRepository.findByTaskId(taskId).orElseGet(TaskSchedule::new);
+        TaskSchedule schedule = taskScheduleRepository.findByUserIdAndTaskId(userId, taskId).orElseGet(TaskSchedule::new);
+        if (schedule.getId() == null) {
+            schedule.setUserId(userId);
+        }
         schedule.setTask(task);
         schedule.setScheduledDate(request.scheduledDate());
         schedule.setStartTime(request.startTime());
@@ -104,15 +113,20 @@ public class SchedulerService {
 
     @Transactional
     public void unschedule(Long taskId) {
-        taskScheduleRepository.deleteByTaskId(taskId);
+        Long userId = currentUserService.requireUserId();
+        taskScheduleRepository.deleteByUserIdAndTaskId(userId, taskId);
     }
 
     @Transactional
     public ScheduledHabitResponse scheduleHabit(Long habitId, ScheduleHabitRequest request) {
+        Long userId = currentUserService.requireUserId();
         Habit habit = habitRepository.findById(habitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + habitId + " not found"));
 
-        HabitSchedule schedule = habitScheduleRepository.findByHabitId(habitId).orElseGet(HabitSchedule::new);
+        HabitSchedule schedule = habitScheduleRepository.findByUserIdAndHabitId(userId, habitId).orElseGet(HabitSchedule::new);
+        if (schedule.getId() == null) {
+            schedule.setUserId(userId);
+        }
         schedule.setHabit(habit);
         schedule.setScheduledDate(request.scheduledDate());
         schedule.setStartTime(request.startTime());
@@ -126,15 +140,17 @@ public class SchedulerService {
 
     @Transactional
     public void unscheduleHabit(Long habitId) {
-        habitScheduleRepository.deleteByHabitId(habitId);
+        Long userId = currentUserService.requireUserId();
+        habitScheduleRepository.deleteByUserIdAndHabitId(userId, habitId);
     }
 
     List<Booking> bookingsForDate(LocalDate date) {
+        Long userId = currentUserService.requireUserId();
         List<Booking> bookings = new ArrayList<>();
-        for (TaskSchedule schedule : taskScheduleRepository.findByScheduledDate(date)) {
+        for (TaskSchedule schedule : taskScheduleRepository.findByUserIdAndScheduledDate(userId, date)) {
             bookings.add(Booking.ofTask(schedule));
         }
-        for (HabitSchedule schedule : habitScheduleRepository.findByScheduledDate(date)) {
+        for (HabitSchedule schedule : habitScheduleRepository.findByUserIdAndScheduledDate(userId, date)) {
             bookings.add(Booking.ofHabit(schedule));
         }
         return bookings;

@@ -1,5 +1,6 @@
 package com.taskpriority.task.application;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.RecurrenceRule;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
@@ -11,9 +12,11 @@ import java.time.LocalDate;
 @Service
 public class RecurrenceService {
     private final TaskScheduleRepository taskScheduleRepository;
+    private final CurrentUserService currentUserService;
 
-    public RecurrenceService(TaskScheduleRepository taskScheduleRepository) {
+    public RecurrenceService(TaskScheduleRepository taskScheduleRepository, CurrentUserService currentUserService) {
         this.taskScheduleRepository = taskScheduleRepository;
+        this.currentUserService = currentUserService;
     }
 
     public void applyRecurrenceDefaults(Task task) {
@@ -47,7 +50,8 @@ public class RecurrenceService {
         if (task.getId() == null) {
             return;
         }
-        taskScheduleRepository.findByTaskId(task.getId()).ifPresent(schedule -> {
+        Long userId = currentUserService.requireUserId();
+        taskScheduleRepository.findByUserIdAndTaskId(userId, task.getId()).ifPresent(schedule -> {
             schedule.setScheduledDate(nextDueDate);
             taskScheduleRepository.save(schedule);
         });

@@ -17,6 +17,9 @@ public class HabitSchedule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "habit_id", nullable = false)
     private Habit habit;
@@ -39,6 +42,8 @@ public class HabitSchedule {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public Habit getHabit() { return habit; }
     public void setHabit(Habit habit) { this.habit = habit; }
     public LocalDate getScheduledDate() { return scheduledDate; }

@@ -1,5 +1,7 @@
 package com.taskpriority.service;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.PriorityScoringSettingRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +22,10 @@ class PriorityEngineTest {
     @BeforeEach
     void setUp() {
         repo = mock(PriorityScoringSettingRepository.class);
-        when(repo.findBySettingName(org.mockito.ArgumentMatchers.anyString())).thenReturn(Optional.empty());
-        engine = new PriorityEngine(repo);
+        when(repo.findByUserIdAndSettingName(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString())).thenReturn(Optional.empty());
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(1L);
+        engine = new PriorityEngine(repo, currentUserService);
     }
 
     @Test

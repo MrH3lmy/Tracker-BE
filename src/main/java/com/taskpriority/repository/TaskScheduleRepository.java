@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TaskScheduleRepository extends JpaRepository<TaskSchedule, Long> {
-    Optional<TaskSchedule> findByTaskId(Long taskId);
-    List<TaskSchedule> findByScheduledDate(LocalDate scheduledDate);
-    void deleteByTaskId(Long taskId);
+    List<TaskSchedule> findByUserId(Long userId);
+    Optional<TaskSchedule> findByUserIdAndTaskId(Long userId, Long taskId);
+    List<TaskSchedule> findByUserIdAndScheduledDate(Long userId, LocalDate scheduledDate);
+    void deleteByUserIdAndTaskId(Long userId, Long taskId);
 }

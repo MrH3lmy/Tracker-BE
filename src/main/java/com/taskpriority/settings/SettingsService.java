@@ -3,7 +3,9 @@ package com.taskpriority.settings;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.AppSetting;
+import com.taskpriority.model.AppSettingId;
 import com.taskpriority.repository.AppSettingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,16 +46,19 @@ public class SettingsService {
 
     private final AppSettingRepository appSettingRepository;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
 
-    public SettingsService(AppSettingRepository appSettingRepository, ObjectMapper objectMapper) {
+    public SettingsService(AppSettingRepository appSettingRepository, ObjectMapper objectMapper, CurrentUserService currentUserService) {
         this.appSettingRepository = appSettingRepository;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> getAll() {
+        Long userId = currentUserService.requireUserId();
         Map<String, Object> settings = defaultSettings();
-        appSettingRepository.findAll().stream()
+        appSettingRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(AppSetting::getKey))
                 .forEach(setting -> settings.put(setting.getKey(), parseSettingValue(setting.getKey(), setting.getValue())));
         normalizeCalendarSettings(settings);
@@ -63,9 +68,11 @@ public class SettingsService {
     @Transactional
     public Map<String, Object> update(Map<String, Object> updates) {
         if (updates == null) throw new IllegalArgumentException("Settings payload must be an object.");
+        Long userId = currentUserService.requireUserId();
         for (Map.Entry<String, Object> entry : updates.entrySet()) {
             validateSetting(entry.getKey(), entry.getValue());
-            AppSetting setting = appSettingRepository.findById(entry.getKey()).orElseGet(AppSetting::new);
+            AppSetting setting = appSettingRepository.findById(new AppSettingId(userId, entry.getKey())).orElseGet(AppSetting::new);
+            setting.setUserId(userId);
             setting.setKey(entry.getKey());
             setting.setValue(serializeSettingValue(entry.getValue()));
             appSettingRepository.save(setting);

@@ -1,5 +1,6 @@
 package com.taskpriority.dashboard;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.repository.TaskRepository;
@@ -17,17 +18,23 @@ import java.util.stream.Collectors;
 public class DashboardService {
     private final TaskRepository taskRepository;
     private final PriorityEngine priorityEngine;
-    public DashboardService(TaskRepository taskRepository, PriorityEngine priorityEngine) { this.taskRepository = taskRepository; this.priorityEngine = priorityEngine; }
+    private final CurrentUserService currentUserService;
+    public DashboardService(TaskRepository taskRepository, PriorityEngine priorityEngine, CurrentUserService currentUserService) {
+        this.taskRepository = taskRepository;
+        this.priorityEngine = priorityEngine;
+        this.currentUserService = currentUserService;
+    }
 
     @Transactional(readOnly = true)
     public TaskService.DashboardSummary getDashboardSummary() {
-        List<Task> tasks = taskRepository.findAll();
+        Long userId = currentUserService.requireUserId();
+        List<Task> tasks = taskRepository.findByUserId(userId);
         int total = tasks.size();
         int completed = (int) tasks.stream().filter(t -> t.getStatus() == Status.DONE).count();
         int active = (int) tasks.stream().filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED).count();
-        int overdue = taskRepository.findOverdueTasks(LocalDate.now(), Status.DONE).size();
-        int dueToday = taskRepository.findByDueDate(LocalDate.now()).size();
-        int dueThisWeek = taskRepository.findByDueDateBetween(LocalDate.now(), LocalDate.now().plusDays(6)).size();
+        int overdue = taskRepository.findOverdueTasks(userId, LocalDate.now(), Status.DONE).size();
+        int dueToday = taskRepository.findByUserIdAndDueDate(userId, LocalDate.now()).size();
+        int dueThisWeek = taskRepository.findByUserIdAndDueDateBetween(userId, LocalDate.now(), LocalDate.now().plusDays(6)).size();
         int important = (int) tasks.stream().filter(Task::isImportant).count();
         int deleted = (int) tasks.stream().filter(Task::isDeleted).count();
         int blocked = (int) tasks.stream().filter(t -> t.getStatus() == Status.BLOCKED).count();

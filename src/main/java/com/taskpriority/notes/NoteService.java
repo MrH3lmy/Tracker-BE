@@ -2,6 +2,7 @@ package com.taskpriority.notes;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
@@ -76,6 +77,7 @@ public class NoteService {
     private final NoteVersionRepository noteVersionRepository;
     private final NoteTaskLinkMapper noteTaskLinkMapper;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
@@ -86,6 +88,7 @@ public class NoteService {
 
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
+                       CurrentUserService currentUserService,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
@@ -97,6 +100,7 @@ public class NoteService {
         this.noteVersionRepository = noteVersionRepository;
         this.noteTaskLinkMapper = noteTaskLinkMapper;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 

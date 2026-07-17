@@ -8,6 +8,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BoardColumnRepository extends JpaRepository<BoardColumn, Long> {
-    Optional<BoardColumn> findFirstByStatusOrderByPositionAsc(Status status);
-    List<BoardColumn> findAllByOrderByPositionAsc();
+    Optional<BoardColumn> findFirstByUserIdAndStatusOrderByPositionAsc(Long userId, Status status);
+    List<BoardColumn> findAllByUserIdOrderByPositionAsc(Long userId);
 }

@@ -33,6 +33,10 @@ services:
       DB_URL: jdbc:postgresql://db:5432/taskpriority
       DB_USERNAME: taskpriority
       DB_PASSWORD: taskpriority
+      # Local-dev-only JWT signing secret. This file is local Docker Compose infrastructure,
+      # not application config - never reuse this value in a real deployment; override
+      # JWT_SECRET with a real random secret there instead.
+      JWT_SECRET: local-docker-compose-dev-only-jwt-secret-do-not-use-in-prod
     ports:
       - "8080:8080"
 

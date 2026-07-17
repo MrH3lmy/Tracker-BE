@@ -1,5 +1,6 @@
 package com.taskpriority.service;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.PriorityScoringSettingRepository;
 import org.springframework.stereotype.Service;
@@ -14,9 +15,11 @@ import java.util.List;
 public class PriorityEngine {
 
     private final PriorityScoringSettingRepository scoringSettingRepository;
+    private final CurrentUserService currentUserService;
 
-    public PriorityEngine(PriorityScoringSettingRepository scoringSettingRepository) {
+    public PriorityEngine(PriorityScoringSettingRepository scoringSettingRepository, CurrentUserService currentUserService) {
         this.scoringSettingRepository = scoringSettingRepository;
+        this.currentUserService = currentUserService;
     }
 
     public PriorityComputation compute(Task task) {
@@ -138,7 +141,7 @@ public class PriorityEngine {
     }
 
     private int get(String key, int defaultValue) {
-        return scoringSettingRepository.findBySettingName(key)
+        return scoringSettingRepository.findByUserIdAndSettingName(currentUserService.requireUserId(), key)
                 .map(PriorityScoringSetting::getSettingValue)
                 .orElse(defaultValue);
     }

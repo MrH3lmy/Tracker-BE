@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface HabitScheduleRepository extends JpaRepository<HabitSchedule, Long> {
-    Optional<HabitSchedule> findByHabitId(Long habitId);
-    List<HabitSchedule> findByScheduledDate(LocalDate scheduledDate);
-    void deleteByHabitId(Long habitId);
+    List<HabitSchedule> findByUserId(Long userId);
+    Optional<HabitSchedule> findByUserIdAndHabitId(Long userId, Long habitId);
+    List<HabitSchedule> findByUserIdAndScheduledDate(Long userId, LocalDate scheduledDate);
+    void deleteByUserIdAndHabitId(Long userId, Long habitId);
 }

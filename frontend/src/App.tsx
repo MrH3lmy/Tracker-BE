@@ -5,7 +5,10 @@ import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/use
 import { useHabitReminders } from './hooks/useHabitReminders';
 import type { HabitRecord } from './components/habits/habitTypes';
 import { AnnouncementContext } from './announcementContext';
+import { AuthProvider, useAuth } from './authContext';
 import { ThemeContext } from './themeContext';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import {
   applyDocumentTheme,
   DEFAULT_THEME,
@@ -14,7 +17,7 @@ import {
   readStoredTheme,
   readThemeFromSettings,
 } from './theme';
-import { Button, cn } from './components/ui';
+import { Badge, Button, cn } from './components/ui';
 import {
   AlertTriangle,
   Calendar,
@@ -26,6 +29,7 @@ import {
   Import,
   LayoutDashboard,
   ListTodo,
+  Loader2,
   MenuIcon,
   Plus,
   Settings,
@@ -33,6 +37,8 @@ import {
   Wrench,
   X,
 } from './components/ui/icons';
+
+const UNAUTHENTICATED_PATHS = new Set(['/login', '/register']);
 
 const isDevMode = import.meta.env.DEV;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'tracker.sidebar.collapsed';

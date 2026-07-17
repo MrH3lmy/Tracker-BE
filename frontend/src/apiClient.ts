@@ -36,6 +36,97 @@ const API_HISTORY_LIMIT = 50;
 const apiHistory: ApiCallResult<unknown>[] = [];
 const apiHistoryListeners = new Set<() => void>();
 
+// --- Auth token handling -----------------------------------------------
+// Access token lives only in memory (module-level, not React state) since it
+// is short-lived and must never touch localStorage. The refresh token is
+// longer-lived and is persisted to localStorage so a session survives a
+// page reload. `authContext.tsx` owns the React-facing state; this module
+// just holds the tokens and lets interested parties (authContext) subscribe
+// to "the stored session is no longer valid" via the same
+// Set<() => void>-listener pattern used by apiHistoryListeners above.
+const REFRESH_TOKEN_STORAGE_KEY = 'tracker.auth.refreshToken';
+const AUTH_PATH_PREFIX = '/api/v1/auth/';
+
+let accessToken: string | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
+const authFailureListeners = new Set<() => void>();
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function getRefreshToken(): string | null {
+  try {
+    return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAuthTokens(nextAccessToken: string, nextRefreshToken: string): void {
+  accessToken = nextAccessToken;
+  try {
+    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, nextRefreshToken);
+  } catch {
+    // Ignore storage failures (e.g. private browsing); the access token still
+    // works in-memory for the rest of this page load.
+  }
+}
+
+export function clearAuthTokens(): void {
+  accessToken = null;
+  try {
+    window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function onAuthFailure(listener: () => void): () => void {
+  authFailureListeners.add(listener);
+  return () => authFailureListeners.delete(listener);
+}
+
+export function notifyAuthFailure(): void {
+  authFailureListeners.forEach((listener) => listener());
+}
+
+interface RefreshTokenResponseBody {
+  accessToken: string;
+  refreshToken: string;
+}
+
+// Performs the silent refresh with a plain fetch (not apiRequest) so it never
+// recurses into the 401-retry logic below. Concurrent callers share a single
+// in-flight request instead of firing one refresh per failed call.
+async function refreshAccessToken(): Promise<boolean> {
+  const storedRefreshToken = getRefreshToken();
+  if (!storedRefreshToken) return false;
+
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const normalizedBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const response = await fetch(`${normalizedBaseUrl}${AUTH_PATH_PREFIX}refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: storedRefreshToken }),
+        });
+        if (!response.ok) return false;
+        const body = (await response.json()) as RefreshTokenResponseBody;
+        setAuthTokens(body.accessToken, body.refreshToken);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+
+  return refreshInFlight;
+}
+
 function recordApiCall<T>(result: ApiCallResult<T>): ApiCallResult<T> {
   apiHistory.unshift(result as ApiCallResult<unknown>);
   if (apiHistory.length > API_HISTORY_LIMIT) apiHistory.length = API_HISTORY_LIMIT;
@@ -101,13 +192,14 @@ async function readResponseBody(response: Response, downloadFileName?: string): 
   return { data: text, rawBody: text, contentType };
 }
 
-async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequestOptions): Promise<ApiCallResult<T>> {
+async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequestOptions, isRetryAfterRefresh = false): Promise<ApiCallResult<T>> {
   const normalizedBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${normalizedBaseUrl}${normalizedPath}`;
   const startedAt = performance.now();
   const headers: Record<string, string> = {};
   if (options?.contentType) headers['Content-Type'] = options.contentType;
+  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
   const timeoutController = options?.timeoutMs ? new AbortController() : undefined;
   const requestController = new AbortController();
@@ -143,6 +235,15 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
     };
 
     if (!response.ok) {
+      if (response.status === 401 && !isRetryAfterRefresh && !normalizedPath.startsWith(AUTH_PATH_PREFIX)) {
+        const refreshed = await refreshAccessToken();
+        if (refreshed) {
+          return apiRequest<T>(method, path, options, true);
+        }
+        clearAuthTokens();
+        notifyAuthFailure();
+      }
+
       return recordApiCall({
         ...baseResult,
         error: {

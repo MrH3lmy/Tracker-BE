@@ -103,7 +103,7 @@ export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKe
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
-export const useHabitsQuery = () => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits') });
+export const useHabitsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits'), enabled });
 export const useHabitHistoryQuery = (from: string, to: string, enabled = true) => useQuery({
   queryKey: queryKeys.habitHistory(from, to),
   queryFn: () => apiJson<HabitHistoryEntry[]>('GET', `/api/v1/habits/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),

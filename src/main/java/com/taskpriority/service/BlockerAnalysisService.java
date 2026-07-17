@@ -1,5 +1,6 @@
 package com.taskpriority.service;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskDependency;
@@ -22,20 +23,23 @@ public class BlockerAnalysisService {
     private final TaskRepository taskRepository;
     private final TaskDependencyRepository taskDependencyRepository;
     private final TaskService taskService;
+    private final CurrentUserService currentUserService;
 
-    public BlockerAnalysisService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService) {
+    public BlockerAnalysisService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.taskService = taskService;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public BlockerAnalysis analyze() {
+        Long userId = currentUserService.requireUserId();
         LocalDate today = LocalDate.now();
-        List<Task> tasks = taskRepository.findAll();
+        List<Task> tasks = taskRepository.findByUserId(userId);
         taskService.computeDerivedFieldsBatch(tasks);
         Map<Long, Task> byId = tasks.stream().filter(task -> task.getId() != null).collect(Collectors.toMap(Task::getId, Function.identity()));
-        List<TaskDependency> dependencies = taskDependencyRepository.findAll();
+        List<TaskDependency> dependencies = taskDependencyRepository.findByUserId(userId);
         Map<Long, List<Long>> blockedBy = dependencies.stream().collect(Collectors.groupingBy(
                 dependency -> dependency.getTask().getId(),
                 Collectors.mapping(dependency -> dependency.getBlocksTask().getId(), Collectors.toList())));

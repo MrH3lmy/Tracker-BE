@@ -23,6 +23,7 @@ public final class NoteSpecifications {
     }
 
     public static Specification<Note> matching(
+            Long userId,
             Long taskId,
             Long collectionId,
             String query,
@@ -37,12 +38,17 @@ public final class NoteSpecifications {
             List<String> tags,
             String tagMode
     ) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required to build a Note specification");
+        }
         return (root, criteriaQuery, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             if (criteriaQuery != null) {
                 criteriaQuery.distinct(true);
             }
+
+            predicates.add(criteriaBuilder.equal(root.get("userId"), userId));
 
             if (taskId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("task").get("id"), taskId));

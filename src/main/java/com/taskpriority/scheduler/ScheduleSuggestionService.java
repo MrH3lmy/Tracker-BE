@@ -1,5 +1,6 @@
 package com.taskpriority.scheduler;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Habit;
@@ -54,11 +55,12 @@ public class ScheduleSuggestionService {
     private final TaskScheduleRepository taskScheduleRepository;
     private final HabitScheduleRepository habitScheduleRepository;
     private final TaskService taskService;
+    private final CurrentUserService currentUserService;
 
     public ScheduleSuggestionService(SettingsService settingsService, WorkingCalendarService workingCalendarService,
                                       TaskRepository taskRepository, HabitRepository habitRepository,
                                       TaskScheduleRepository taskScheduleRepository, HabitScheduleRepository habitScheduleRepository,
-                                      TaskService taskService) {
+                                      TaskService taskService, CurrentUserService currentUserService) {
         this.settingsService = settingsService;
         this.workingCalendarService = workingCalendarService;
         this.taskRepository = taskRepository;
@@ -66,6 +68,7 @@ public class ScheduleSuggestionService {
         this.taskScheduleRepository = taskScheduleRepository;
         this.habitScheduleRepository = habitScheduleRepository;
         this.taskService = taskService;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
@@ -126,9 +129,10 @@ public class ScheduleSuggestionService {
     }
 
     private List<Task> candidateTasks() {
-        Set<Long> scheduledIds = taskScheduleRepository.findAll().stream()
+        Long userId = currentUserService.requireUserId();
+        Set<Long> scheduledIds = taskScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getTask().getId()).collect(Collectors.toSet());
-        List<Task> candidates = taskRepository.findAll().stream()
+        List<Task> candidates = taskRepository.findByUserId(userId).stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
                 .filter(task -> !scheduledIds.contains(task.getId()))
@@ -142,9 +146,10 @@ public class ScheduleSuggestionService {
     }
 
     private List<Habit> candidateHabits() {
-        Set<Long> scheduledIds = habitScheduleRepository.findAll().stream()
+        Long userId = currentUserService.requireUserId();
+        Set<Long> scheduledIds = habitScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getHabit().getId()).collect(Collectors.toSet());
-        List<Habit> candidates = habitRepository.findAll().stream()
+        List<Habit> candidates = habitRepository.findByUserId(userId).stream()
                 .filter(habit -> !habit.isDeleted())
                 .filter(habit -> !scheduledIds.contains(habit.getId()))
                 .toList();
@@ -164,7 +169,11 @@ public class ScheduleSuggestionService {
     }
 
     private void persistTaskSlot(Task task, SuggestedSlot slot) {
-        TaskSchedule schedule = taskScheduleRepository.findByTaskId(task.getId()).orElseGet(TaskSchedule::new);
+        Long userId = currentUserService.requireUserId();
+        TaskSchedule schedule = taskScheduleRepository.findByUserIdAndTaskId(userId, task.getId()).orElseGet(TaskSchedule::new);
+        if (schedule.getId() == null) {
+            schedule.setUserId(userId);
+        }
         schedule.setTask(task);
         schedule.setScheduledDate(slot.scheduledDate());
         schedule.setStartTime(slot.startTime());
@@ -174,7 +183,11 @@ public class ScheduleSuggestionService {
     }
 
     private void persistHabitSlot(Habit habit, SuggestedSlot slot) {
-        HabitSchedule schedule = habitScheduleRepository.findByHabitId(habit.getId()).orElseGet(HabitSchedule::new);
+        Long userId = currentUserService.requireUserId();
+        HabitSchedule schedule = habitScheduleRepository.findByUserIdAndHabitId(userId, habit.getId()).orElseGet(HabitSchedule::new);
+        if (schedule.getId() == null) {
+            schedule.setUserId(userId);
+        }
         schedule.setHabit(habit);
         schedule.setScheduledDate(slot.scheduledDate());
         schedule.setStartTime(slot.startTime());
@@ -216,12 +229,13 @@ public class ScheduleSuggestionService {
     }
 
     private List<int[]> busyIntervalsForDate(LocalDate date) {
+        Long userId = currentUserService.requireUserId();
         List<int[]> busy = new ArrayList<>();
-        for (TaskSchedule schedule : taskScheduleRepository.findByScheduledDate(date)) {
+        for (TaskSchedule schedule : taskScheduleRepository.findByUserIdAndScheduledDate(userId, date)) {
             int start = minutesOf(schedule.getStartTime());
             busy.add(new int[]{start, start + schedule.getDurationMinutes()});
         }
-        for (HabitSchedule schedule : habitScheduleRepository.findByScheduledDate(date)) {
+        for (HabitSchedule schedule : habitScheduleRepository.findByUserIdAndScheduledDate(userId, date)) {
             int start = minutesOf(schedule.getStartTime());
             busy.add(new int[]{start, start + schedule.getDurationMinutes()});
         }

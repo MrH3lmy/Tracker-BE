@@ -1,5 +1,6 @@
 package com.taskpriority.common.exception;
 
+import com.taskpriority.entitlement.EntitlementException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,12 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         logException(HttpStatus.BAD_REQUEST, request, ex);
         return build(HttpStatus.BAD_REQUEST, message, request.getRequestURI());
+    }
+
+    @ExceptionHandler(EntitlementException.class)
+    public ResponseEntity<ApiErrorResponse> handleEntitlement(EntitlementException ex, HttpServletRequest request) {
+        logException(HttpStatus.FORBIDDEN, request, ex);
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

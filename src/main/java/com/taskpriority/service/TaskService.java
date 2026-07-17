@@ -1,5 +1,6 @@
 package com.taskpriority.service;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.BoardColumnRepository;
@@ -30,18 +31,24 @@ public class TaskService {
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
+    private final CurrentUserService currentUserService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
         this.taskApiMapper = taskApiMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
     public Task save(Task task) {
+        Long userId = currentUserService.requireUserId();
+        if (task.getId() == null) {
+            task.setUserId(userId);
+        }
         validateParentTask(task);
         if (task.getStatus() == Status.DONE) {
             validateCanComplete(task);
@@ -71,7 +78,8 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public List<Task> findAll() {
-        List<Task> tasks = taskRepository.findAll();
+        Long userId = currentUserService.requireUserId();
+        List<Task> tasks = taskRepository.findByUserId(userId);
         computeDerivedFieldsBatch(tasks);
         return tasks;
     }
@@ -88,7 +96,8 @@ public class TaskService {
         if (!taskRepository.existsById(parentTaskId)) {
             throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
         }
-        List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(parentTaskId);
+        Long userId = currentUserService.requireUserId();
+        List<Task> subtasks = taskRepository.findByUserIdAndParentTaskIdOrderByPositionAscIdAsc(userId, parentTaskId);
         computeDerivedFieldsBatch(subtasks);
         return subtasks;
     }
@@ -115,6 +124,7 @@ public class TaskService {
 
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
+        Long userId = currentUserService.requireUserId();
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
         Task blocksTask = taskRepository.findById(request.blocksTaskId())
@@ -122,8 +132,9 @@ public class TaskService {
         if (task.getId().equals(blocksTask.getId())) {
             throw new IllegalArgumentException("A task cannot depend on itself");
         }
-        if (!taskDependencyRepository.existsByTaskIdAndBlocksTaskId(task.getId(), blocksTask.getId())) {
+        if (!taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
             TaskDependency dependency = new TaskDependency();
+            dependency.setUserId(userId);
             dependency.setTask(task);
             dependency.setBlocksTask(blocksTask);
             dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
@@ -135,18 +146,20 @@ public class TaskService {
 
     @Transactional
     public Task removeDependency(Long id, Long blocksTaskId) {
+        Long userId = currentUserService.requireUserId();
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
-        taskDependencyRepository.deleteByTaskIdAndBlocksTaskId(id, blocksTaskId);
+        taskDependencyRepository.deleteByUserIdAndTaskIdAndBlocksTaskId(userId, id, blocksTaskId);
         computeDerivedFields(task);
         return task;
     }
 
     @Transactional
     public Task replaceDependencies(Long id, List<Long> dependencyIds) {
+        Long userId = currentUserService.requireUserId();
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
-        for (TaskDependency existing : taskDependencyRepository.findByTaskId(id)) {
+        for (TaskDependency existing : taskDependencyRepository.findByUserIdAndTaskId(userId, id)) {
             taskDependencyRepository.delete(existing);
         }
         for (Long blocksTaskId : dependencyIds.stream().distinct().toList()) {
@@ -173,6 +186,7 @@ public class TaskService {
 
     @Transactional
     public Task moveTask(Long id, Status targetStatus, Long targetBoardColumnId, Integer targetPosition) {
+        Long userId = currentUserService.requireUserId();
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
 
@@ -186,7 +200,7 @@ public class TaskService {
                 resolvedStatus = column.getStatus();
             }
         } else if (resolvedStatus != null) {
-            resolvedColumnId = boardColumnRepository.findFirstByStatusOrderByPositionAsc(resolvedStatus)
+            resolvedColumnId = boardColumnRepository.findFirstByUserIdAndStatusOrderByPositionAsc(userId, resolvedStatus)
                     .map(BoardColumn::getId)
                     .orElse(null);
         }
@@ -218,14 +232,16 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public List<Task> getArchive() {
-        List<Task> archived = taskRepository.findAll().stream().filter(t -> t.getStatus()==Status.DONE||t.getStatus()==Status.CANCELLED).toList();
+        Long userId = currentUserService.requireUserId();
+        List<Task> archived = taskRepository.findByUserId(userId).stream().filter(t -> t.getStatus()==Status.DONE||t.getStatus()==Status.CANCELLED).toList();
         computeDerivedFieldsBatch(archived);
         return archived;
     }
 
     @Transactional(readOnly = true)
     public Map<PriorityCategory, List<Task>> getMatrixView() {
-        List<Task> active = taskRepository.findAll().stream()
+        Long userId = currentUserService.requireUserId();
+        List<Task> active = taskRepository.findByUserId(userId).stream()
                 .filter(t -> t.getStatus()!=Status.DONE && t.getStatus()!=Status.CANCELLED)
                 .filter(t -> Area.WORK_AREAS.contains(t.getArea()))
                 .toList();
@@ -257,7 +273,8 @@ public class TaskService {
         if (task.getId() == null) {
             return;
         }
-        if (taskRepository.existsByParentTaskIdAndStatusNotIn(task.getId(), List.of(Status.DONE, Status.CANCELLED))) {
+        Long userId = currentUserService.requireUserId();
+        if (taskRepository.existsByUserIdAndParentTaskIdAndStatusNotIn(userId, task.getId(), List.of(Status.DONE, Status.CANCELLED))) {
             throw new IllegalArgumentException("Complete or cancel all subtasks before completing the parent task");
         }
     }
@@ -266,15 +283,16 @@ public class TaskService {
         if (task.getStatus() == null) {
             return;
         }
+        Long userId = currentUserService.requireUserId();
         if (task.getBoardColumnId() == null) {
-            boardColumnRepository.findFirstByStatusOrderByPositionAsc(task.getStatus())
+            boardColumnRepository.findFirstByUserIdAndStatusOrderByPositionAsc(userId, task.getStatus())
                     .map(BoardColumn::getId)
                     .ifPresent(task::setBoardColumnId);
             return;
         }
         boardColumnRepository.findById(task.getBoardColumnId())
                 .filter(column -> column.getStatus() == task.getStatus())
-                .or(() -> boardColumnRepository.findFirstByStatusOrderByPositionAsc(task.getStatus()))
+                .or(() -> boardColumnRepository.findFirstByUserIdAndStatusOrderByPositionAsc(userId, task.getStatus()))
                 .map(BoardColumn::getId)
                 .ifPresent(task::setBoardColumnId);
     }
@@ -285,10 +303,11 @@ public class TaskService {
     }
 
     private List<Task> tasksForColumn(Long boardColumnId, Status status) {
+        Long userId = currentUserService.requireUserId();
         if (boardColumnId != null) {
-            return taskRepository.findByBoardColumnIdOrderByPositionAscIdAsc(boardColumnId);
+            return taskRepository.findByUserIdAndBoardColumnIdOrderByPositionAscIdAsc(userId, boardColumnId);
         }
-        return taskRepository.findByStatusOrderByPositionAscIdAsc(status);
+        return taskRepository.findByUserIdAndStatusOrderByPositionAscIdAsc(userId, status);
     }
 
     private void renumber(List<Task> tasks) {
@@ -299,13 +318,14 @@ public class TaskService {
 
     public void computeDerivedFields(Task task) {
         if (task.getId() != null) {
-            task.setDependencyIds(taskDependencyRepository.findByTaskId(task.getId()).stream()
+            Long userId = currentUserService.requireUserId();
+            task.setDependencyIds(taskDependencyRepository.findByUserIdAndTaskId(userId, task.getId()).stream()
                     .map(dependency -> dependency.getBlocksTask().getId())
                     .toList());
-            task.setBlockingTaskIds(taskDependencyRepository.findByBlocksTaskId(task.getId()).stream()
+            task.setBlockingTaskIds(taskDependencyRepository.findByUserIdAndBlocksTaskId(userId, task.getId()).stream()
                     .map(dependency -> dependency.getTask().getId())
                     .toList());
-            List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(task.getId());
+            List<Task> subtasks = taskRepository.findByUserIdAndParentTaskIdOrderByPositionAscIdAsc(userId, task.getId());
             task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
             task.setSubtaskCount(subtasks.size());
             task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
@@ -317,15 +337,16 @@ public class TaskService {
         if (tasks.isEmpty()) {
             return;
         }
+        Long userId = currentUserService.requireUserId();
         List<Long> ids = tasks.stream().map(Task::getId).filter(Objects::nonNull).toList();
 
-        Map<Long, List<Long>> dependencyIdsByTask = taskDependencyRepository.findByTaskIdIn(ids).stream()
+        Map<Long, List<Long>> dependencyIdsByTask = taskDependencyRepository.findByUserIdAndTaskIdIn(userId, ids).stream()
                 .collect(Collectors.groupingBy(dependency -> dependency.getTask().getId(),
                         Collectors.mapping(dependency -> dependency.getBlocksTask().getId(), Collectors.toList())));
-        Map<Long, List<Long>> blockingTaskIdsByTask = taskDependencyRepository.findByBlocksTaskIdIn(ids).stream()
+        Map<Long, List<Long>> blockingTaskIdsByTask = taskDependencyRepository.findByUserIdAndBlocksTaskIdIn(userId, ids).stream()
                 .collect(Collectors.groupingBy(dependency -> dependency.getBlocksTask().getId(),
                         Collectors.mapping(dependency -> dependency.getTask().getId(), Collectors.toList())));
-        Map<Long, List<Task>> subtasksByParent = taskRepository.findByParentTaskIdInOrderByPositionAscIdAsc(ids).stream()
+        Map<Long, List<Task>> subtasksByParent = taskRepository.findByUserIdAndParentTaskIdInOrderByPositionAscIdAsc(userId, ids).stream()
                 .collect(Collectors.groupingBy(Task::getParentTaskId));
 
         for (Task task : tasks) {

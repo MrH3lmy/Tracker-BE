@@ -12,6 +12,9 @@ public class BoardColumn {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "board_id", nullable = false)
     private Board board;
@@ -27,6 +30,8 @@ public class BoardColumn {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public Board getBoard() { return board; }
     public void setBoard(Board board) { this.board = board; }
     public String getName() { return name; }
