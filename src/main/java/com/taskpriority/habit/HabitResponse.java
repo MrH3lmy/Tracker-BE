@@ -6,6 +6,7 @@ import com.taskpriority.model.RecurrenceRule;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.MonthDay;
 import java.util.List;
 
@@ -17,6 +18,8 @@ public record HabitResponse(
         boolean important,
         Integer estimatedMinutes,
         int dailyTargetCount,
+        boolean reminderEnabled,
+        LocalTime reminderTime,
         LocalDateTime createdDate,
         int todayCheckInCount,
         boolean todayTargetMet,

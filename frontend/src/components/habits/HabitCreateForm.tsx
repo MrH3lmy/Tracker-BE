@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useReducer, useRef } from 'react';
 import { DAY_OF_WEEK_VALUES, RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type DayOfWeekValue, type RecurrenceFrequency } from '../../validation/recurrence';
 import { AREA_VALUES } from '../tasks/taskUtils';
-import type { CreateHabitPayload, HabitRecord, HabitRecurrenceRecord } from './habitTypes';
+import { HABIT_PRESETS, type CreateHabitPayload, type HabitPreset, type HabitRecord, type HabitRecurrenceRecord } from './habitTypes';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../ui';
 
 const formatAnnualDate = (month: string, day: string): string | undefined => {
@@ -24,6 +24,8 @@ interface HabitFormState {
   important: boolean;
   estimatedMinutes: string;
   dailyTargetCount: string;
+  reminderEnabled: boolean;
+  reminderTime: string;
   recurrenceFrequency: '' | RecurrenceFrequency;
   recurrenceInterval: string;
   recurrenceDaysOfWeek: DayOfWeekValue[];
@@ -35,7 +37,8 @@ interface HabitFormState {
 type HabitFormAction =
   | { type: 'field'; field: keyof HabitFormState; value: string | boolean }
   | { type: 'reset'; initialState: HabitFormState }
-  | { type: 'toggleDay'; day: DayOfWeekValue };
+  | { type: 'toggleDay'; day: DayOfWeekValue }
+  | { type: 'applyPreset'; preset: HabitPreset };
 
 const emptyState: HabitFormState = {
   title: '',
@@ -44,6 +47,8 @@ const emptyState: HabitFormState = {
   important: false,
   estimatedMinutes: '',
   dailyTargetCount: '1',
+  reminderEnabled: false,
+  reminderTime: '',
   recurrenceFrequency: 'DAILY',
   recurrenceInterval: '1',
   recurrenceDaysOfWeek: [],
@@ -65,6 +70,8 @@ const mapRecordToFormState = (habit: HabitRecord | undefined): HabitFormState =>
     important: Boolean(habit.important),
     estimatedMinutes: toFormNumber(habit.estimatedMinutes),
     dailyTargetCount: toFormNumber(habit.dailyTargetCount) || '1',
+    reminderEnabled: Boolean(habit.reminderEnabled),
+    reminderTime: habit.reminderTime ?? '',
     recurrenceFrequency: recurrence && isRecurrenceFrequency(recurrence.frequency) ? recurrence.frequency : 'DAILY',
     recurrenceInterval: toFormNumber(recurrence?.interval) || '1',
     recurrenceDaysOfWeek: recurrence?.daysOfWeek ?? [],
@@ -87,6 +94,15 @@ const reducer = (state: HabitFormState, action: HabitFormAction): HabitFormState
       };
     case 'reset':
       return action.initialState;
+    case 'applyPreset':
+      return {
+        ...state,
+        title: action.preset.title,
+        description: action.preset.description ?? state.description,
+        area: action.preset.area ?? state.area,
+        estimatedMinutes: action.preset.estimatedMinutes !== undefined ? String(action.preset.estimatedMinutes) : state.estimatedMinutes,
+        dailyTargetCount: action.preset.dailyTargetCount !== undefined ? String(action.preset.dailyTargetCount) : state.dailyTargetCount,
+      };
     default:
       return state;
   }
@@ -139,6 +155,8 @@ export const HabitCreateForm = forwardRef<HabitCreateFormHandle, HabitCreateForm
       important: form.important,
       estimatedMinutes: toOptionalNumber(form.estimatedMinutes),
       dailyTargetCount: toOptionalNumber(form.dailyTargetCount) ?? 1,
+      reminderEnabled: form.reminderEnabled && Boolean(form.reminderTime),
+      reminderTime: form.reminderEnabled && form.reminderTime ? form.reminderTime : undefined,
       recurrence: {
         frequency: form.recurrenceFrequency,
         interval: toOptionalNumber(form.recurrenceInterval) ?? 1,
@@ -152,6 +170,24 @@ export const HabitCreateForm = forwardRef<HabitCreateFormHandle, HabitCreateForm
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4">
+        {mode === 'create' && (
+          <Field label="Quick start" hint="Prefill from a common habit, then adjust as needed">
+            <div className="flex flex-wrap gap-2">
+              {HABIT_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => dispatch({ type: 'applyPreset', preset })}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-medium text-fg-muted transition-colors duration-(--duration-fast) hover:border-brand hover:text-brand disabled:opacity-50"
+                >
+                  <span aria-hidden>{preset.icon}</span>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
         <Field label="Title" htmlFor="habitTitle">
           <Input id="habitTitle" ref={titleRef} placeholder="Drink water, meditate, read..." value={form.title} onChange={(e) => setField('title', e.target.value)} disabled={busy} aria-invalid={!form.title.trim()} />
         </Field>
@@ -179,6 +215,28 @@ export const HabitCreateForm = forwardRef<HabitCreateFormHandle, HabitCreateForm
           onChange={(e) => setField('important', e.target.checked)}
           disabled={busy}
         />
+        <div className="flex flex-col gap-3 border-t border-line pt-4">
+          <Checkbox
+            id="habitReminderEnabled"
+            label="Remind me"
+            checked={form.reminderEnabled}
+            onChange={(e) => setField('reminderEnabled', e.target.checked)}
+            disabled={busy}
+          />
+          {form.reminderEnabled && (
+            <Field label="Reminder time" htmlFor="habitReminderTime" hint="Shown as an in-app notification while Tracker is open">
+              <Input
+                id="habitReminderTime"
+                type="time"
+                value={form.reminderTime}
+                onChange={(e) => setField('reminderTime', e.target.value)}
+                disabled={busy}
+                aria-invalid={form.reminderEnabled && !form.reminderTime}
+                className="w-40"
+              />
+            </Field>
+          )}
+        </div>
         <div className="flex flex-col gap-3 border-t border-line pt-4">
           <Field label="Repeats" htmlFor="habitRecurrenceFrequency">
             <Select

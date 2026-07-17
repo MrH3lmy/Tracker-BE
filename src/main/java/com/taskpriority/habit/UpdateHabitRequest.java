@@ -2,11 +2,14 @@ package com.taskpriority.habit;
 
 import com.taskpriority.model.Area;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+
+import java.time.LocalTime;
 
 public record UpdateHabitRequest(
         @NotBlank(message = "is required")
@@ -19,7 +22,11 @@ public record UpdateHabitRequest(
         Integer estimatedMinutes,
         @Positive(message = "dailyTargetCount must be greater than 0")
         Integer dailyTargetCount,
+        boolean reminderEnabled,
+        LocalTime reminderTime,
         @NotNull(message = "recurrence is required for a habit")
         @Valid CreateHabitRequest.HabitRecurrenceRequest recurrence
 ) {
+    @AssertTrue(message = "reminderTime is required when reminderEnabled is true")
+    boolean isReminderValid() { return !reminderEnabled || reminderTime != null; }
 }

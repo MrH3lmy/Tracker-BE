@@ -5,8 +5,17 @@ import { HabitCard } from '../components/habits/HabitCard';
 import { HabitCreateForm, type HabitCreateFormHandle } from '../components/habits/HabitCreateForm';
 import type { CreateHabitPayload, HabitRecord } from '../components/habits/habitTypes';
 import { useHabitMutations, useHabitsQuery } from '../hooks/useApiQueries';
-import { Button, Drawer, PageHeader } from '../components/ui';
+import { Button, Card, Drawer, PageHeader } from '../components/ui';
 import { Plus } from '../components/ui/icons';
+
+function StatTile({ label, value }: { label: string; value: string | number }) {
+  return (
+    <Card padded={false} className="flex flex-1 flex-col gap-1 px-4 py-3">
+      <span className="text-xs font-medium text-fg-muted">{label}</span>
+      <span className="text-xl font-semibold text-fg">{value}</span>
+    </Card>
+  );
+}
 
 export function HabitsPage() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -50,6 +59,13 @@ export function HabitsPage() {
   const isLoading = habitsQuery.isLoading;
   const hasError = isQueryError(habitsQuery.data);
 
+  const stats = useMemo(() => {
+    const completedToday = habits.filter((habit) => habit.todayTargetMet ?? (habit.todayCheckInCount ?? 0) >= (habit.dailyTargetCount ?? 1)).length;
+    const activeStreaks = habits.filter((habit) => (habit.recurrence?.currentStreak ?? 0) > 0).length;
+    const bestStreak = habits.reduce((max, habit) => Math.max(max, habit.recurrence?.currentStreak ?? 0), 0);
+    return { total: habits.length, completedToday, activeStreaks, bestStreak };
+  }, [habits]);
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -63,6 +79,15 @@ export function HabitsPage() {
         }
         className="mb-0"
       />
+
+      {habits.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <StatTile label="Habits" value={stats.total} />
+          <StatTile label="Done today" value={`${stats.completedToday}/${stats.total}`} />
+          <StatTile label="Active streaks" value={stats.activeStreaks} />
+          <StatTile label="Best streak" value={stats.bestStreak > 0 ? `🔥 ${stats.bestStreak}` : '—'} />
+        </div>
+      )}
 
       <QueryState
         isLoading={isLoading}
