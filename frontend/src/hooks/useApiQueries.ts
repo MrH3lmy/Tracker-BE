@@ -3,7 +3,7 @@ import { apiFormData, apiJson, apiText, type ApiCallResult } from '../apiClient'
 import type { NoteAiGenerationRecord, NoteAttachmentRecord, NoteCollectionRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteVersionRecord } from '../components/notes/noteTypes';
 import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
-import type { CreateHabitPayload, HabitRecord } from '../components/habits/habitTypes';
+import type { CreateHabitPayload, HabitHistoryEntry, HabitRecord } from '../components/habits/habitTypes';
 import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
@@ -53,6 +53,7 @@ export const queryKeys = {
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
   schedulerDay: (date: string) => ['scheduler', 'day', date] as const,
   habits: ['habits'] as const,
+  habitHistory: (from: string, to: string) => ['habits', 'history', from, to] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -103,6 +104,11 @@ export const useCalendarMonthQuery = (year: string, month: string, enabled: bool
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
 export const useHabitsQuery = () => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits') });
+export const useHabitHistoryQuery = (from: string, to: string, enabled = true) => useQuery({
+  queryKey: queryKeys.habitHistory(from, to),
+  queryFn: () => apiJson<HabitHistoryEntry[]>('GET', `/api/v1/habits/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  enabled,
+});
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -194,7 +200,11 @@ export function useSchedulerMutations() {
 
 export function useHabitMutations() {
   const qc = useQueryClient();
-  const onSuccess = () => { qc.invalidateQueries({ queryKey: queryKeys.habits }); qc.invalidateQueries({ queryKey: ['scheduler'] }); };
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.habits });
+    qc.invalidateQueries({ queryKey: ['habits', 'history'] });
+    qc.invalidateQueries({ queryKey: ['scheduler'] });
+  };
   return {
     createHabit: useMutation({ mutationFn: (body: CreateHabitPayload) => apiJson('POST', '/api/v1/habits', body), onSuccess }),
     updateHabit: useMutation({ mutationFn: ({ id, body }: { id: number; body: CreateHabitPayload }) => apiJson('PUT', `/api/v1/habits/${id}`, body), onSuccess }),

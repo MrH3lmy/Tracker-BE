@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
-import { useSettingsQuery } from './hooks/useApiQueries';
+import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
+import { useHabitReminders } from './hooks/useHabitReminders';
+import type { HabitRecord } from './components/habits/habitTypes';
 import { AnnouncementContext } from './announcementContext';
 import { ThemeContext } from './themeContext';
 import {
@@ -17,7 +19,9 @@ import {
   AlertTriangle,
   Calendar,
   CalendarDays,
+  Check,
   ChevronsLeft,
+  Clock,
   Grid2x2,
   Import,
   LayoutDashboard,
@@ -102,6 +106,35 @@ function DeveloperNavSection({ isActive, collapsed, tabs }: { isActive: boolean;
   );
 }
 
+function HabitReminderToasts({ habits, onCheckIn, onDismiss }: { habits: HabitRecord[]; onCheckIn: (id: number) => void; onDismiss: (id: number) => void }) {
+  if (habits.length === 0) return null;
+
+  return (
+    <div className="fixed right-4 bottom-4 z-(--z-toast) flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2" role="region" aria-label="Habit reminders">
+      {habits.map((habit) => (
+        <div
+          key={habit.id}
+          className="flex items-start gap-3 rounded-xl border border-line bg-glass p-3.5 shadow-lg backdrop-blur-(--blur-panel)"
+        >
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-fg">{habit.title}</p>
+            <p className="text-xs text-fg-muted">Reminder: time to check in</p>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <Button variant="primary" size="sm" iconOnly aria-label={`Check in ${habit.title}`} title="Check in" onClick={() => onCheckIn(habit.id)}>
+              <Check className="h-4 w-4" aria-hidden />
+            </Button>
+            <Button variant="ghost" size="sm" iconOnly aria-label={`Dismiss reminder for ${habit.title}`} title="Dismiss" onClick={() => onDismiss(habit.id)}>
+              <X className="h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -110,6 +143,13 @@ export default function App() {
   const [announcement, setAnnouncement] = useState('');
   const settingsQuery = useSettingsQuery(true);
   const hasSyncedSavedTheme = useRef(false);
+  const habitsQuery = useHabitsQuery();
+  const { checkIn: checkInHabit } = useHabitMutations();
+  const habits = useMemo<HabitRecord[]>(() => {
+    const data = habitsQuery.data?.data;
+    return Array.isArray(data) ? (data as HabitRecord[]) : [];
+  }, [habitsQuery.data]);
+  const { dueHabits, dismiss: dismissReminder } = useHabitReminders(habits);
 
   const setTheme = useCallback((nextTheme: AppTheme) => {
     setThemeState(nextTheme);
@@ -145,6 +185,7 @@ export default function App() {
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
+  const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
   const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
 
   return (
@@ -210,7 +251,7 @@ export default function App() {
               </Button>
               <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
               <div className="ml-auto flex items-center gap-2">
-                {!routeOwnsPageLayout && (
+                {!hideGlobalQuickAdd && (
                   <NavLink
                     to="/tasks"
                     className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"
@@ -251,6 +292,11 @@ export default function App() {
             <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
           </div>
         </div>
+        <HabitReminderToasts
+          habits={dueHabits}
+          onCheckIn={(id) => { checkInHabit.mutate(id); dismissReminder(id); }}
+          onDismiss={dismissReminder}
+        />
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>
   );

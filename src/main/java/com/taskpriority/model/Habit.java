@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "habits", indexes = {
@@ -39,6 +40,12 @@ public class Habit {
     @Column(nullable = false)
     private boolean deleted;
 
+    @Column(name = "reminder_enabled", nullable = false)
+    private boolean reminderEnabled;
+
+    @Column(name = "reminder_time")
+    private LocalTime reminderTime;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
 
@@ -71,6 +78,10 @@ public class Habit {
     public void setDailyTargetCount(int dailyTargetCount) { this.dailyTargetCount = dailyTargetCount; }
     public boolean isDeleted() { return deleted; }
     public void setDeleted(boolean deleted) { this.deleted = deleted; }
+    public boolean isReminderEnabled() { return reminderEnabled; }
+    public void setReminderEnabled(boolean reminderEnabled) { this.reminderEnabled = reminderEnabled; }
+    public LocalTime getReminderTime() { return reminderTime; }
+    public void setReminderTime(LocalTime reminderTime) { this.reminderTime = reminderTime; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
     public RecurrenceRule getRecurrenceRule() { return recurrenceRule; }

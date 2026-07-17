@@ -1,5 +1,6 @@
 package com.taskpriority.habit;
 
+import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitCheckIn;
 import com.taskpriority.model.RecurrenceRule;
@@ -88,6 +89,20 @@ class HabitServiceTest {
     }
 
     @Test
+    void checkInSucceedsWhenHabitHasNoRecurrenceRule() {
+        Habit habit = new Habit("No recurrence");
+        habit.setId(70L);
+        habit.setDailyTargetCount(1);
+        when(habitRepository.findById(70L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(70L), any(LocalDate.class))).thenReturn(1);
+
+        Habit result = habitService.checkIn(70L);
+
+        assertNull(result.getRecurrenceRule());
+        assertTrue(result.isTodayTargetMet());
+    }
+
+    @Test
     void undoCheckInDeletesMostRecentCheckInForToday() {
         Habit habit = recurringHabit(5L, 1);
         when(habitRepository.findById(5L)).thenReturn(Optional.of(habit));
@@ -99,6 +114,146 @@ class HabitServiceTest {
         habitService.undoCheckIn(5L);
 
         verify(habitCheckInRepository).delete(latest);
+    }
+
+    @Test
+    void saveAppliesTodayProgressAfterPersisting() {
+        Habit habit = recurringHabit(10L, 2);
+        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(10L), any(LocalDate.class))).thenReturn(1);
+
+        Habit result = habitService.save(habit);
+
+        assertEquals(1, result.getTodayCheckInCount());
+        assertFalse(result.isTodayTargetMet());
+        verify(habitRepository).save(habit);
+    }
+
+    @Test
+    void saveSkipsCheckInLookupWhenPersistedHabitHasNoIdYet() {
+        Habit unpersisted = new Habit("Not yet saved");
+        when(habitRepository.save(any(Habit.class))).thenReturn(unpersisted);
+
+        Habit result = habitService.save(unpersisted);
+
+        assertEquals(0, result.getTodayCheckInCount());
+        assertFalse(result.isTodayTargetMet());
+        verify(habitCheckInRepository, never()).countByHabitIdAndCheckInDate(any(), any());
+    }
+
+    @Test
+    void updateHabitDelegatesToSave() {
+        Habit habit = recurringHabit(11L, 1);
+        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(11L), any(LocalDate.class))).thenReturn(0);
+
+        Habit result = habitService.updateHabit(11L, habit);
+
+        assertSame(habit, result);
+        verify(habitRepository).save(habit);
+    }
+
+    @Test
+    void findAllExcludesDeletedHabitsAndAppliesBatchProgress() {
+        Habit active = recurringHabit(20L, 1);
+        Habit deleted = recurringHabit(21L, 1);
+        deleted.setDeleted(true);
+        when(habitRepository.findAll()).thenReturn(List.of(active, deleted));
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(List.of(20L)), any(LocalDate.class)))
+                .thenReturn(List.of());
+
+        List<Habit> result = habitService.findAll();
+
+        assertEquals(List.of(active), result);
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(List.of(20L)), any(LocalDate.class));
+    }
+
+    @Test
+    void findByIdReturnsHabitWithTodayProgressApplied() {
+        Habit habit = recurringHabit(30L, 4);
+        when(habitRepository.findById(30L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(30L), any(LocalDate.class))).thenReturn(4);
+
+        Habit result = habitService.findById(30L);
+
+        assertEquals(4, result.getTodayCheckInCount());
+        assertTrue(result.isTodayTargetMet());
+    }
+
+    @Test
+    void findByIdThrowsWhenHabitMissing() {
+        when(habitRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> habitService.findById(99L));
+    }
+
+    @Test
+    void deleteDelegatesToRepository() {
+        habitService.delete(40L);
+
+        verify(habitRepository).deleteById(40L);
+    }
+
+    @Test
+    void checkInThrowsWhenHabitMissing() {
+        when(habitRepository.findById(50L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> habitService.checkIn(50L));
+    }
+
+    @Test
+    void undoCheckInThrowsWhenHabitMissing() {
+        when(habitRepository.findById(51L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> habitService.undoCheckIn(51L));
+    }
+
+    @Test
+    void applyTodayProgressBatchReturnsEarlyWhenAllHabitsLackIds() {
+        Habit unpersisted = new Habit("Not saved");
+
+        habitService.applyTodayProgressBatch(List.of(unpersisted));
+
+        assertEquals(0, unpersisted.getTodayCheckInCount());
+        verifyNoInteractions(habitCheckInRepository);
+    }
+
+    @Test
+    void applyTodayProgressBatchSkipsHabitsWithNullId() {
+        Habit withId = recurringHabit(60L, 1);
+        Habit withoutId = new Habit("Not saved");
+        withoutId.setDailyTargetCount(0); // would trivially satisfy targetMet if the null-id guard were removed
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(List.of(60L)), any(LocalDate.class)))
+                .thenReturn(List.of());
+
+        habitService.applyTodayProgressBatch(List.of(withId, withoutId));
+
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(List.of(60L)), any(LocalDate.class));
+        assertFalse(withoutId.isTodayTargetMet());
+    }
+
+    @Test
+    void historyExcludesDeletedHabitsAndQueriesActiveIdsOnly() {
+        Habit active = recurringHabit(8L, 1);
+        Habit deleted = recurringHabit(9L, 1);
+        deleted.setDeleted(true);
+        when(habitRepository.findAll()).thenReturn(List.of(active, deleted));
+        LocalDate from = LocalDate.now().minusDays(6);
+        LocalDate to = LocalDate.now();
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to)))
+                .thenReturn(List.of());
+
+        habitService.history(from, to);
+
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to));
+    }
+
+    @Test
+    void historyReturnsEmptyListWhenNoActiveHabits() {
+        when(habitRepository.findAll()).thenReturn(List.of());
+
+        List<HabitCheckInRepository.HabitCheckInDailyCount> result = habitService.history(LocalDate.now().minusDays(6), LocalDate.now());
+
+        assertTrue(result.isEmpty());
+        verify(habitCheckInRepository, org.mockito.Mockito.never()).countByHabitIdInAndCheckInDateBetween(any(), any(), any());
     }
 
     @Test

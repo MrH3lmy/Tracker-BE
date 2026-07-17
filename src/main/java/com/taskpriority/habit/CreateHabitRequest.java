@@ -12,6 +12,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.time.MonthDay;
 import java.util.List;
 
@@ -26,9 +27,14 @@ public record CreateHabitRequest(
         Integer estimatedMinutes,
         @Positive(message = "dailyTargetCount must be greater than 0")
         Integer dailyTargetCount,
+        boolean reminderEnabled,
+        LocalTime reminderTime,
         @NotNull(message = "recurrence is required for a habit")
         @Valid HabitRecurrenceRequest recurrence
 ) {
+    @AssertTrue(message = "reminderTime is required when reminderEnabled is true")
+    boolean isReminderValid() { return !reminderEnabled || reminderTime != null; }
+
     public record HabitRecurrenceRequest(
             @NotNull(message = "frequency is required")
             RecurrenceRule.Frequency frequency,

@@ -10,12 +10,14 @@ export interface DrawerProps {
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
   description?: ReactNode;
+  /** Pinned section rendered between the header and the scrollable body (e.g. a template picker). */
+  topSlot?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
 }
 
-export function Drawer({ open, onOpenChange, title, description, children, footer, wide = false }: DrawerProps) {
+export function Drawer({ open, onOpenChange, title, description, topSlot, children, footer, wide = false }: DrawerProps) {
   const returnFocus = useReturnFocus();
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -45,6 +47,7 @@ export function Drawer({ open, onOpenChange, title, description, children, foote
               </Button>
             </RadixDialog.Close>
           </div>
+          {topSlot && <div className="shrink-0 border-b border-line px-5 py-4">{topSlot}</div>}
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
           {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3.5">{footer}</div>}
         </RadixDialog.Content>

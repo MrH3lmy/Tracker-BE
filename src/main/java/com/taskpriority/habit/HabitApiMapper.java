@@ -5,19 +5,23 @@ import com.taskpriority.model.Habit;
 import com.taskpriority.model.RecurrenceRule;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalTime;
+
 @Component
 public class HabitApiMapper {
 
     public Habit fromCreateRequest(CreateHabitRequest request) {
         Habit habit = new Habit();
         applyCommonFields(habit, request.title(), request.description(), request.area(), request.important(),
-                request.estimatedMinutes(), request.dailyTargetCount(), request.recurrence());
+                request.estimatedMinutes(), request.dailyTargetCount(), request.reminderEnabled(), request.reminderTime(),
+                request.recurrence());
         return habit;
     }
 
     public void applyUpdateRequest(Habit existing, UpdateHabitRequest request) {
         applyCommonFields(existing, request.title(), request.description(), request.area(), request.important(),
-                request.estimatedMinutes(), request.dailyTargetCount(), request.recurrence());
+                request.estimatedMinutes(), request.dailyTargetCount(), request.reminderEnabled(), request.reminderTime(),
+                request.recurrence());
     }
 
     public HabitResponse toResponse(Habit habit) {
@@ -29,6 +33,8 @@ public class HabitApiMapper {
                 habit.isImportant(),
                 habit.getEstimatedMinutes(),
                 habit.getDailyTargetCount(),
+                habit.isReminderEnabled(),
+                habit.getReminderTime(),
                 habit.getCreatedDate(),
                 habit.getTodayCheckInCount(),
                 habit.isTodayTargetMet(),
@@ -55,6 +61,7 @@ public class HabitApiMapper {
 
     private void applyCommonFields(Habit habit, String title, String description, Area area, boolean important,
                                     Integer estimatedMinutes, Integer dailyTargetCount,
+                                    boolean reminderEnabled, LocalTime reminderTime,
                                     CreateHabitRequest.HabitRecurrenceRequest recurrence) {
         habit.setTitle(title);
         habit.setDescription(description);
@@ -62,6 +69,8 @@ public class HabitApiMapper {
         habit.setImportant(important);
         habit.setEstimatedMinutes(estimatedMinutes);
         if (dailyTargetCount != null) habit.setDailyTargetCount(dailyTargetCount);
+        habit.setReminderEnabled(reminderEnabled);
+        habit.setReminderTime(reminderEnabled ? reminderTime : null);
 
         RecurrenceRule recurrenceRule = habit.getRecurrenceRule() != null ? habit.getRecurrenceRule() : new RecurrenceRule();
         recurrenceRule.setFrequency(recurrence.frequency());
