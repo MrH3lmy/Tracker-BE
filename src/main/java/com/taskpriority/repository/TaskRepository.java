@@ -8,31 +8,38 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    List<Task> findByStatus(Status status);
+    List<Task> findByUserId(Long userId);
 
-    @Query("select t from Task t where t.dueDate <= :date and t.status <> :status")
-    List<Task> findOverdueTasks(LocalDate date, Status status);
+    Optional<Task> findByUserIdAndId(Long userId, Long id);
 
-    List<Task> findByDueDate(LocalDate date);
+    boolean existsByUserIdAndId(Long userId, Long id);
 
-    List<Task> findByDueDateBetween(LocalDate start, LocalDate end);
+    List<Task> findByUserIdAndStatus(Long userId, Status status);
 
-    List<Task> findByBoardColumnIdOrderByPositionAscIdAsc(Long boardColumnId);
+    @Query("select t from Task t where t.userId = :userId and t.dueDate <= :date and t.status <> :status")
+    List<Task> findOverdueTasks(Long userId, LocalDate date, Status status);
 
-    List<Task> findByStatusOrderByPositionAscIdAsc(Status status);
+    List<Task> findByUserIdAndDueDate(Long userId, LocalDate date);
 
-    List<Task> findByParentTaskIdOrderByPositionAscIdAsc(Long parentTaskId);
+    List<Task> findByUserIdAndDueDateBetween(Long userId, LocalDate start, LocalDate end);
 
-    List<Task> findByParentTaskIdInOrderByPositionAscIdAsc(Collection<Long> parentTaskIds);
+    List<Task> findByUserIdAndBoardColumnIdOrderByPositionAscIdAsc(Long userId, Long boardColumnId);
 
-    List<Task> findByParentTaskIdIsNullOrderByPositionAscIdAsc();
+    List<Task> findByUserIdAndStatusOrderByPositionAscIdAsc(Long userId, Status status);
 
-    long countByParentTaskId(Long parentTaskId);
+    List<Task> findByUserIdAndParentTaskIdOrderByPositionAscIdAsc(Long userId, Long parentTaskId);
 
-    long countByParentTaskIdAndStatus(Long parentTaskId, Status status);
+    List<Task> findByUserIdAndParentTaskIdInOrderByPositionAscIdAsc(Long userId, Collection<Long> parentTaskIds);
 
-    boolean existsByParentTaskIdAndStatusNotIn(Long parentTaskId, List<Status> statuses);
+    List<Task> findByUserIdAndParentTaskIdIsNullOrderByPositionAscIdAsc(Long userId);
+
+    long countByUserIdAndParentTaskId(Long userId, Long parentTaskId);
+
+    long countByUserIdAndParentTaskIdAndStatus(Long userId, Long parentTaskId, Status status);
+
+    boolean existsByUserIdAndParentTaskIdAndStatusNotIn(Long userId, Long parentTaskId, List<Status> statuses);
 }

@@ -1,10 +1,14 @@
 package com.taskpriority.scheduler;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.habit.HabitApiMapper;
 import com.taskpriority.habit.HabitService;
+import com.taskpriority.model.Role;
 import com.taskpriority.model.SchedulePriority;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskSchedule;
+import com.taskpriority.model.Tier;
 import com.taskpriority.repository.HabitRepository;
 import com.taskpriority.repository.HabitScheduleRepository;
 import com.taskpriority.repository.TaskRepository;
@@ -21,9 +25,11 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class SchedulerServiceTest {
+    private static final Long USER_ID = 1L;
 
     private TaskRepository taskRepository;
     private HabitRepository habitRepository;
@@ -41,9 +47,12 @@ class SchedulerServiceTest {
         habitScheduleRepository = mock(HabitScheduleRepository.class);
         taskService = mock(TaskService.class);
         habitService = mock(HabitService.class);
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(USER_ID);
+        when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
         doNothing().when(taskService).computeDerivedFields(any(Task.class));
         schedulerService = new SchedulerService(taskRepository, habitRepository, taskScheduleRepository, habitScheduleRepository,
-                taskService, habitService, new TaskApiMapper(), new HabitApiMapper());
+                taskService, habitService, new TaskApiMapper(), new HabitApiMapper(), currentUserService);
     }
 
     private Task task(Long id, String title) {
@@ -66,9 +75,9 @@ class SchedulerServiceTest {
     void scheduleTaskCreatesANewScheduleWhenNoneExists() {
         Task task = task(1L, "Gym");
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
-        when(taskScheduleRepository.findByTaskId(1L)).thenReturn(Optional.empty());
+        when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 1L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taskScheduleRepository.findByScheduledDate(LocalDate.of(2026, 7, 20))).thenReturn(List.of());
+        when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, LocalDate.of(2026, 7, 20))).thenReturn(List.of());
 
         ScheduleTaskRequest request = new ScheduleTaskRequest(LocalDate.of(2026, 7, 20), LocalTime.of(6, 0), 45, SchedulePriority.HIGH);
         ScheduledTaskResponse response = schedulerService.scheduleTask(1L, request);
@@ -84,9 +93,9 @@ class SchedulerServiceTest {
         Task task = task(2L, "Deep work block");
         task.setEstimatedMinutes(90);
         when(taskRepository.findById(2L)).thenReturn(Optional.of(task));
-        when(taskScheduleRepository.findByTaskId(2L)).thenReturn(Optional.empty());
+        when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 2L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taskScheduleRepository.findByScheduledDate(any())).thenReturn(List.of());
+        when(taskScheduleRepository.findByUserIdAndScheduledDate(eq(USER_ID), any())).thenReturn(List.of());
 
         ScheduleTaskRequest request = new ScheduleTaskRequest(LocalDate.of(2026, 7, 20), LocalTime.of(9, 0), null, null);
         ScheduledTaskResponse response = schedulerService.scheduleTask(2L, request);
@@ -103,9 +112,9 @@ class SchedulerServiceTest {
 
         Task newTask = task(4L, "Focus block");
         when(taskRepository.findById(4L)).thenReturn(Optional.of(newTask));
-        when(taskScheduleRepository.findByTaskId(4L)).thenReturn(Optional.empty());
+        when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 4L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taskScheduleRepository.findByScheduledDate(date)).thenReturn(List.of(existingSchedule));
+        when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, date)).thenReturn(List.of(existingSchedule));
 
         ScheduleTaskRequest request = new ScheduleTaskRequest(date, LocalTime.of(9, 15), 30, null);
         ScheduledTaskResponse response = schedulerService.scheduleTask(4L, request);
@@ -117,6 +126,6 @@ class SchedulerServiceTest {
     void unscheduleDeletesTheScheduleForTheTask() {
         schedulerService.unschedule(9L);
 
-        verify(taskScheduleRepository).deleteByTaskId(9L);
+        verify(taskScheduleRepository).deleteByUserIdAndTaskId(USER_ID, 9L);
     }
 }

@@ -3,6 +3,10 @@ package com.taskpriority.repository;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitCheckIn;
+import com.taskpriority.model.Role;
+import com.taskpriority.model.Tier;
+import com.taskpriority.model.User;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,8 +39,24 @@ class HabitCheckInRepositoryTest {
     @Autowired
     private HabitCheckInRepository habitCheckInRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private Long userId;
+
+    @BeforeEach
+    void setUp() {
+        User user = new User();
+        user.setEmail("habit-checkin-test-" + System.nanoTime() + "@example.com");
+        user.setPasswordHash("irrelevant");
+        user.setTier(Tier.FREE);
+        user.setRole(Role.USER);
+        userId = userRepository.save(user).getId();
+    }
+
     private Habit persistHabit(String title) {
         Habit habit = new Habit(title);
+        habit.setUserId(userId);
         habit.setArea(Area.HEALTH);
         return habitRepository.save(habit);
     }
@@ -44,6 +64,7 @@ class HabitCheckInRepositoryTest {
     private void checkIn(Habit habit, LocalDate date, int times) {
         for (int i = 0; i < times; i++) {
             HabitCheckIn checkIn = new HabitCheckIn();
+            checkIn.setUserId(userId);
             checkIn.setHabit(habit);
             checkIn.setCheckInDate(date);
             habitCheckInRepository.save(checkIn);
@@ -60,7 +81,7 @@ class HabitCheckInRepositoryTest {
         checkIn(water, today.minusDays(1), 5); // different day, must not be counted
 
         List<HabitCheckInRepository.HabitCheckInCount> rows =
-                habitCheckInRepository.countByHabitIdInAndCheckInDate(List.of(water.getId(), training.getId()), today);
+                habitCheckInRepository.countByHabitIdInAndCheckInDate(userId, List.of(water.getId(), training.getId()), today);
 
         Map<Long, Long> byHabit = rows.stream()
                 .collect(Collectors.toMap(HabitCheckInRepository.HabitCheckInCount::getHabitId, HabitCheckInRepository.HabitCheckInCount::getCheckInCount));
@@ -77,7 +98,7 @@ class HabitCheckInRepositoryTest {
         // training has no check-ins today at all - must not appear in the grouped result
 
         List<HabitCheckInRepository.HabitCheckInCount> rows =
-                habitCheckInRepository.countByHabitIdInAndCheckInDate(List.of(water.getId(), training.getId()), today);
+                habitCheckInRepository.countByHabitIdInAndCheckInDate(userId, List.of(water.getId(), training.getId()), today);
 
         assertEquals(1, rows.size());
         assertEquals(water.getId(), rows.get(0).getHabitId());
@@ -94,7 +115,7 @@ class HabitCheckInRepositoryTest {
         checkIn(water, nextMonday, 9); // outside the requested range, must be excluded
 
         List<HabitCheckInRepository.HabitCheckInDailyCount> rows =
-                habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(List.of(water.getId()), monday, monday.plusDays(6));
+                habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(userId, List.of(water.getId()), monday, monday.plusDays(6));
 
         Map<LocalDate, Long> byDate = rows.stream()
                 .collect(Collectors.toMap(HabitCheckInRepository.HabitCheckInDailyCount::getCheckInDate, HabitCheckInRepository.HabitCheckInDailyCount::getCheckInCount));
@@ -110,7 +131,7 @@ class HabitCheckInRepositoryTest {
         checkIn(water, LocalDate.now(), 1);
 
         List<HabitCheckInRepository.HabitCheckInDailyCount> rows =
-                habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(List.of(water.getId()), farFuture, farFuture.plusDays(6));
+                habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(userId, List.of(water.getId()), farFuture, farFuture.plusDays(6));
 
         assertTrue(rows.isEmpty());
     }

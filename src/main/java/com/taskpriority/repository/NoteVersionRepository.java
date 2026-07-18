@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface NoteVersionRepository extends JpaRepository<NoteVersion, Long> {
-    List<NoteVersion> findByNoteIdOrderByCreatedAtDescIdDesc(Long noteId);
-    Optional<NoteVersion> findTopByNoteIdOrderByCreatedAtDescIdDesc(Long noteId);
-    Optional<NoteVersion> findByIdAndNoteId(Long id, Long noteId);
+    List<NoteVersion> findByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(Long userId, Long noteId);
+    Optional<NoteVersion> findTopByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(Long userId, Long noteId);
+    Optional<NoteVersion> findByUserIdAndIdAndNoteId(Long userId, Long id, Long noteId);
 }

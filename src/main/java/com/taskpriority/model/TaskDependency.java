@@ -16,6 +16,9 @@ public class TaskDependency {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "task_id", nullable = false)
     private Task task;
@@ -33,6 +36,8 @@ public class TaskDependency {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public Task getTask() { return task; }
     public void setTask(Task task) { this.task = task; }
     public Task getBlocksTask() { return blocksTask; }

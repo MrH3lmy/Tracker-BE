@@ -1,8 +1,12 @@
 package com.taskpriority.service;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
+import com.taskpriority.model.Role;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskDependency;
+import com.taskpriority.model.Tier;
 import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class BlockerAnalysisServiceTest {
+    private static final Long USER_ID = 1L;
 
     private TaskRepository taskRepository;
     private TaskDependencyRepository taskDependencyRepository;
@@ -28,9 +33,12 @@ class BlockerAnalysisServiceTest {
         taskRepository = mock(TaskRepository.class);
         taskDependencyRepository = mock(TaskDependencyRepository.class);
         taskService = mock(TaskService.class);
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(USER_ID);
+        when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
         // computeDerivedFields normally mutates priorityScore/etc; tests set those fields directly on the fixtures.
         doNothing().when(taskService).computeDerivedFields(any(Task.class));
-        analysisService = new BlockerAnalysisService(taskRepository, taskDependencyRepository, taskService);
+        analysisService = new BlockerAnalysisService(taskRepository, taskDependencyRepository, taskService, currentUserService);
     }
 
     private Task task(Long id, String title, Status status) {
@@ -52,8 +60,8 @@ class BlockerAnalysisServiceTest {
     @Test
     void returnsNoWarningsForCleanTasks() {
         Task task = task(1L, "Clean task", Status.NOT_STARTED);
-        when(taskRepository.findAll()).thenReturn(List.of(task));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(task));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -67,8 +75,8 @@ class BlockerAnalysisServiceTest {
         task.setCreatedDate(LocalDateTime.now().minusDays(10));
         task.setWaitingOn("vendor response");
         task.setFollowUpDate(LocalDate.now().plusDays(1));
-        when(taskRepository.findAll()).thenReturn(List.of(task));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(task));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -80,8 +88,8 @@ class BlockerAnalysisServiceTest {
     void flagsMissingWaitingOnAndMissingFollowUp() {
         Task task = task(1L, "Waiting task", Status.WAITING);
         task.setCreatedDate(LocalDateTime.now());
-        when(taskRepository.findAll()).thenReturn(List.of(task));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(task));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -98,8 +106,8 @@ class BlockerAnalysisServiceTest {
         waiting.setFollowUpDate(LocalDate.now().minusDays(2));
         Task blocked = task(2L, "Blocked", Status.BLOCKED);
         blocked.setFollowUpDate(LocalDate.now().minusDays(1));
-        when(taskRepository.findAll()).thenReturn(List.of(waiting, blocked));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(waiting, blocked));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -114,8 +122,8 @@ class BlockerAnalysisServiceTest {
         Task waiting = task(1L, "Waiting", Status.WAITING);
         waiting.setWaitingOn("someone");
         waiting.setFollowUpDate(LocalDate.now().plusDays(3));
-        when(taskRepository.findAll()).thenReturn(List.of(waiting));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(waiting));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -129,8 +137,8 @@ class BlockerAnalysisServiceTest {
         blockedHighPriority.setImportant(true);
         TaskDependency dependency = dependency(blockedHighPriority, blocker);
 
-        when(taskRepository.findAll()).thenReturn(List.of(blocker, blockedHighPriority));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of(dependency));
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(blocker, blockedHighPriority));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of(dependency));
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -148,8 +156,8 @@ class BlockerAnalysisServiceTest {
         Task blockedLowPriority = task(2L, "Ordinary blocked task", Status.NOT_STARTED);
         TaskDependency dependency = dependency(blockedLowPriority, blocker);
 
-        when(taskRepository.findAll()).thenReturn(List.of(blocker, blockedLowPriority));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of(dependency));
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(blocker, blockedLowPriority));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of(dependency));
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 
@@ -164,8 +172,8 @@ class BlockerAnalysisServiceTest {
         TaskDependency aBlockedByB = dependency(taskA, taskB);
         TaskDependency bBlockedByA = dependency(taskB, taskA);
 
-        when(taskRepository.findAll()).thenReturn(List.of(taskA, taskB));
-        when(taskDependencyRepository.findAll()).thenReturn(List.of(aBlockedByB, bBlockedByA));
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(taskA, taskB));
+        when(taskDependencyRepository.findByUserId(USER_ID)).thenReturn(List.of(aBlockedByB, bBlockedByA));
 
         BlockerAnalysisService.BlockerAnalysis analysis = analysisService.analyze();
 

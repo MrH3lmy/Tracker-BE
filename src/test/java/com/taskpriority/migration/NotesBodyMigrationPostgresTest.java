@@ -99,7 +99,7 @@ class NotesBodyMigrationPostgresTest {
         assertThat(jdbcTemplate.queryForObject("SELECT body FROM notes WHERE title = ?", String.class, "Migrated bytea note"))
                 .isEqualTo(BODY_TEXT);
 
-        List<Note> matches = noteRepository.findAllMatching(null, "café", null);
+        List<Note> matches = noteRepository.findAllMatching(1L, null, "café", null);
 
         assertThat(matches)
                 .extracting(Note::getBody)

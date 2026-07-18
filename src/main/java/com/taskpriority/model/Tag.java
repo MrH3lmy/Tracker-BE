@@ -17,13 +17,16 @@ import java.util.Set;
 
 @Entity
 @Table(name = "tags",
-        uniqueConstraints = @UniqueConstraint(name = "uk_tags_name", columnNames = "name"),
+        uniqueConstraints = @UniqueConstraint(name = "uk_tags_user_name", columnNames = {"user_id", "name"}),
         indexes = @Index(name = "idx_tags_name", columnList = "name"))
 public class Tag {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
 
     @NotBlank
     @Column(nullable = false, length = 80)
@@ -40,6 +43,8 @@ public class Tag {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public Set<Note> getNotes() { return notes; }
@@ -49,11 +54,11 @@ public class Tag {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Tag tag)) return false;
-        return Objects.equals(name, tag.name);
+        return Objects.equals(userId, tag.userId) && Objects.equals(name, tag.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name);
+        return Objects.hash(userId, name);
     }
 }

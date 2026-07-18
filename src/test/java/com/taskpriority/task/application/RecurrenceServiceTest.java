@@ -1,9 +1,13 @@
 package com.taskpriority.task.application;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.RecurrenceRule;
+import com.taskpriority.model.Role;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskSchedule;
+import com.taskpriority.model.Tier;
 import com.taskpriority.repository.TaskScheduleRepository;
 import org.junit.jupiter.api.Test;
 
@@ -19,9 +23,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RecurrenceServiceTest {
+    private static final Long USER_ID = 1L;
 
     private final TaskScheduleRepository taskScheduleRepository = mock(TaskScheduleRepository.class);
-    private final RecurrenceService recurrenceService = new RecurrenceService(taskScheduleRepository);
+    private final CurrentUserService currentUserService = mockCurrentUserService();
+    private final RecurrenceService recurrenceService = new RecurrenceService(taskScheduleRepository, currentUserService);
+
+    private static CurrentUserService mockCurrentUserService() {
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(USER_ID);
+        when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
+        return currentUserService;
+    }
 
     @Test
     void completesDailyRecurringTaskAndResetsTask() {
@@ -90,7 +103,7 @@ class RecurrenceServiceTest {
         task.setId(10L);
         TaskSchedule schedule = new TaskSchedule();
         schedule.setScheduledDate(LocalDate.of(2026, 5, 26));
-        when(taskScheduleRepository.findByTaskId(10L)).thenReturn(Optional.of(schedule));
+        when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 10L)).thenReturn(Optional.of(schedule));
 
         recurrenceService.completeRecurringTask(task, LocalDate.of(2026, 5, 26));
 

@@ -1,5 +1,6 @@
 package com.taskpriority.task.application;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Task;
 import com.taskpriority.repository.TaskRepository;
 import org.springframework.stereotype.Service;
@@ -13,12 +14,17 @@ import java.util.stream.Collectors;
 @Service
 public class DuplicateDetectionService {
     private final TaskRepository taskRepository;
+    private final CurrentUserService currentUserService;
 
-    public DuplicateDetectionService(TaskRepository taskRepository) { this.taskRepository = taskRepository; }
+    public DuplicateDetectionService(TaskRepository taskRepository, CurrentUserService currentUserService) {
+        this.taskRepository = taskRepository;
+        this.currentUserService = currentUserService;
+    }
 
     @Transactional(readOnly = true)
     public List<DuplicateGroup> findPotentialDuplicates() {
-        Map<String, List<Task>> byNormalizedTitle = taskRepository.findAll().stream()
+        Long userId = currentUserService.requireUserId();
+        Map<String, List<Task>> byNormalizedTitle = taskRepository.findByUserId(userId).stream()
                 .collect(Collectors.groupingBy(t -> normalize(t.getTitle())));
         List<DuplicateGroup> duplicates = new ArrayList<>();
         byNormalizedTitle.forEach((title, group) -> {

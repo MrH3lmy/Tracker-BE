@@ -5,7 +5,11 @@ import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/use
 import { useHabitReminders } from './hooks/useHabitReminders';
 import type { HabitRecord } from './components/habits/habitTypes';
 import { AnnouncementContext } from './announcementContext';
+import { AuthProvider } from './AuthProvider';
+import { useAuth } from './authContext';
 import { ThemeContext } from './themeContext';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import {
   applyDocumentTheme,
   DEFAULT_THEME,
@@ -14,7 +18,7 @@ import {
   readStoredTheme,
   readThemeFromSettings,
 } from './theme';
-import { Button, cn } from './components/ui';
+import { Badge, Button, cn } from './components/ui';
 import {
   AlertTriangle,
   Calendar,
@@ -26,6 +30,7 @@ import {
   Import,
   LayoutDashboard,
   ListTodo,
+  Loader2,
   MenuIcon,
   Plus,
   Settings,
@@ -33,6 +38,8 @@ import {
   Wrench,
   X,
 } from './components/ui/icons';
+
+const UNAUTHENTICATED_PATHS = new Set(['/login', '/register']);
 
 const isDevMode = import.meta.env.DEV;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'tracker.sidebar.collapsed';
@@ -136,14 +143,42 @@ function HabitReminderToasts({ habits, onCheckIn, onDismiss }: { habits: HabitRe
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoot />
+    </AuthProvider>
+  );
+}
+
+// Splits unauthenticated routes (login/register, no sidebar shell, no
+// authenticated data fetching) from the authenticated app. Kept outside
+// routes.tsx/appTabs since those drive the sidebar's tab list, which
+// login/register must never appear in.
+function AppRoot() {
+  const location = useLocation();
+
+  if (UNAUTHENTICATED_PATHS.has(location.pathname)) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+      </Routes>
+    );
+  }
+
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
-  const settingsQuery = useSettingsQuery(true);
+  const settingsQuery = useSettingsQuery(isAuthenticated);
   const hasSyncedSavedTheme = useRef(false);
-  const habitsQuery = useHabitsQuery();
+  const habitsQuery = useHabitsQuery(isAuthenticated);
   const { checkIn: checkInHabit } = useHabitMutations();
   const habits = useMemo<HabitRecord[]>(() => {
     const data = habitsQuery.data?.data;
@@ -187,6 +222,19 @@ export default function App() {
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
   const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
   const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center gap-2 bg-canvas text-fg-muted" role="status" aria-live="polite">
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+        <span>Restoring your session...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
@@ -259,6 +307,17 @@ export default function App() {
                     <Plus className="h-4 w-4" aria-hidden />
                     Quick add
                   </NavLink>
+                )}
+                {user && (
+                  <div className="flex items-center gap-2 border-l border-line pl-2">
+                    <span className="hidden max-w-[10rem] truncate text-xs text-fg-muted sm:inline" title={user.email}>
+                      {user.displayName || user.email}
+                    </span>
+                    {user.tier === 'PREMIUM' && <Badge variant="brand">Premium</Badge>}
+                    <Button variant="ghost" size="sm" onClick={() => void logout()}>
+                      Log out
+                    </Button>
+                  </div>
                 )}
               </div>
             </header>

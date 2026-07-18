@@ -2,6 +2,7 @@ package com.taskpriority.notes;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteBlock;
@@ -13,8 +14,6 @@ import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.NoteTemplateResponse;
 import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteTemplateRepository;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,35 +23,45 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class NoteTemplateService implements ApplicationRunner {
+public class NoteTemplateService {
     private final NoteTemplateRepository noteTemplateRepository;
     private final NoteBlockRepository noteBlockRepository;
     private final NoteService noteService;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
 
-    public NoteTemplateService(NoteTemplateRepository noteTemplateRepository, NoteBlockRepository noteBlockRepository, NoteService noteService, ObjectMapper objectMapper) {
+    public NoteTemplateService(NoteTemplateRepository noteTemplateRepository, NoteBlockRepository noteBlockRepository, NoteService noteService, ObjectMapper objectMapper, CurrentUserService currentUserService) {
         this.noteTemplateRepository = noteTemplateRepository;
         this.noteBlockRepository = noteBlockRepository;
         this.noteService = noteService;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
     }
 
-    @Override
+    /**
+     * Called once per new user right after registration (see AuthService.register) - templates
+     * are per-user now, so there's no single global set to seed at application startup anymore.
+     */
     @Transactional
-    public void run(ApplicationArguments args) {
+    public void seedDefaultTemplatesForUser(Long userId) {
         defaultTemplates().forEach(template -> {
-            if (!noteTemplateRepository.existsByName(template.getName())) noteTemplateRepository.save(template);
+            if (!noteTemplateRepository.existsByUserIdAndName(userId, template.getName())) {
+                template.setUserId(userId);
+                noteTemplateRepository.save(template);
+            }
         });
     }
 
     @Transactional(readOnly = true)
     public List<NoteTemplateResponse> findAll() {
-        return noteTemplateRepository.findAllByOrderByCategoryAscNameAsc().stream().map(this::toResponse).toList();
+        Long userId = currentUserService.requireUserId();
+        return noteTemplateRepository.findByUserIdOrderByCategoryAscNameAsc(userId).stream().map(this::toResponse).toList();
     }
 
     @Transactional
     public NoteResponse createNoteFromTemplate(CreateNoteFromTemplateRequest request) {
-        NoteTemplate template = noteTemplateRepository.findById(request.templateId())
+        Long userId = currentUserService.requireUserId();
+        NoteTemplate template = noteTemplateRepository.findByUserIdAndId(userId, request.templateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Note template with id " + request.templateId() + " not found"));
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("date", LocalDate.now().toString());
@@ -65,11 +74,11 @@ public class NoteTemplateService implements ApplicationRunner {
         String title = request.title() == null || request.title().isBlank() ? render(template.getName(), variables) : render(request.title(), variables);
         String body = render(template.getContent(), variables);
         NoteResponse created = noteService.create(new CreateNoteRequest(title, body, NoteContentType.MARKDOWN, request.taskId(), null, null, null, null, null, null, null, null, request.tags()));
-        createBlocks(created.id(), template.getBlocksJson(), variables);
+        createBlocks(userId, created.id(), template.getBlocksJson(), variables);
         return noteService.findById(created.id());
     }
 
-    private void createBlocks(Long noteId, String blocksJson, Map<String, String> variables) {
+    private void createBlocks(Long userId, Long noteId, String blocksJson, Map<String, String> variables) {
         if (blocksJson == null || blocksJson.isBlank()) return;
         try {
             List<Map<String, Object>> blocks = objectMapper.readValue(blocksJson, new TypeReference<>() {});
@@ -78,6 +87,7 @@ public class NoteTemplateService implements ApplicationRunner {
             for (int i = 0; i < blocks.size(); i++) {
                 Map<String, Object> source = blocks.get(i);
                 NoteBlock block = new NoteBlock();
+                block.setUserId(userId);
                 block.setNote(note);
                 block.setType(String.valueOf(source.getOrDefault("type", "paragraph")));
                 block.setContent(render(String.valueOf(source.getOrDefault("content", "")), variables));

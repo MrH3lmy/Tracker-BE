@@ -7,12 +7,11 @@ import java.util.Collection;
 import java.util.List;
 
 public interface NoteTaskLinkRepository extends JpaRepository<NoteTaskLink, Long> {
-    List<NoteTaskLink> findByNoteId(Long noteId);
-    List<NoteTaskLink> findByNoteIdIn(Collection<Long> noteIds);
-    List<NoteTaskLink> findByNoteBlockId(Long noteBlockId);
-    List<NoteTaskLink> findByNoteBlockIdIn(Collection<Long> noteBlockIds);
-    List<NoteTaskLink> findByTaskId(Long taskId);
-    boolean existsByNoteIdAndTaskIdAndNoteBlockId(Long noteId, Long taskId, Long noteBlockId);
-    boolean existsByNoteIdAndTaskIdAndNoteBlockIsNull(Long noteId, Long taskId);
+    List<NoteTaskLink> findByUserIdAndNoteId(Long userId, Long noteId);
+    List<NoteTaskLink> findByUserIdAndNoteIdIn(Long userId, Collection<Long> noteIds);
+    List<NoteTaskLink> findByUserIdAndNoteBlockId(Long userId, Long noteBlockId);
+    List<NoteTaskLink> findByUserIdAndNoteBlockIdIn(Long userId, Collection<Long> noteBlockIds);
+    List<NoteTaskLink> findByUserIdAndTaskId(Long userId, Long taskId);
+    boolean existsByUserIdAndNoteIdAndTaskIdAndNoteBlockId(Long userId, Long noteId, Long taskId, Long noteBlockId);
+    boolean existsByUserIdAndNoteIdAndTaskIdAndNoteBlockIsNull(Long userId, Long noteId, Long taskId);
 }
-

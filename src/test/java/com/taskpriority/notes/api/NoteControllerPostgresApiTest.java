@@ -1,7 +1,10 @@
 package com.taskpriority.notes.api;
 
 import com.taskpriority.model.Note;
+import com.taskpriority.model.User;
 import com.taskpriority.repository.NoteRepository;
+import com.taskpriority.repository.UserRepository;
+import com.taskpriority.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,9 +58,15 @@ class NoteControllerPostgresApiTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private User testUser;
+
     @BeforeEach
     void seedNotes() {
         jdbcTemplate.execute("TRUNCATE TABLE notes RESTART IDENTITY CASCADE");
+        testUser = TestAuthSupport.loginAsNewUser(userRepository);
 
         Note oldNote = saveNote("Old note");
         Note middleNote = saveNote("Middle note");
@@ -146,6 +155,7 @@ class NoteControllerPostgresApiTest {
 
     private Note saveNote(String title) {
         Note note = new Note(title);
+        note.setUserId(testUser.getId());
         note.setBody(title + " body");
         return noteRepository.saveAndFlush(note);
     }

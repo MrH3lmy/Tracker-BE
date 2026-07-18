@@ -7,5 +7,5 @@ import java.util.Collection;
 import java.util.List;
 
 public interface TagRepository extends JpaRepository<Tag, Long> {
-    List<Tag> findByNameIn(Collection<String> names);
+    List<Tag> findByUserIdAndNameIn(Long userId, Collection<String> names);
 }

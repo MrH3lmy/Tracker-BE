@@ -1,12 +1,16 @@
 package com.taskpriority.scheduler;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitSchedule;
 import com.taskpriority.model.RecurrenceRule;
+import com.taskpriority.model.Role;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskSchedule;
+import com.taskpriority.model.Tier;
 import com.taskpriority.planning.WorkingCalendarService;
 import com.taskpriority.repository.HabitRepository;
 import com.taskpriority.repository.HabitScheduleRepository;
@@ -29,9 +33,11 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class ScheduleSuggestionServiceTest {
+    private static final Long USER_ID = 1L;
 
     private static final LocalDate MONDAY = LocalDate.of(2026, 1, 1).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
 
@@ -59,15 +65,19 @@ class ScheduleSuggestionServiceTest {
         taskService = mock(TaskService.class);
         doNothing().when(taskService).computeDerivedFieldsBatch(any());
 
-        when(taskScheduleRepository.findByScheduledDate(any())).thenReturn(List.of());
-        when(habitScheduleRepository.findByScheduledDate(any())).thenReturn(List.of());
-        when(taskScheduleRepository.findAll()).thenReturn(List.of());
-        when(habitScheduleRepository.findAll()).thenReturn(List.of());
+        when(taskScheduleRepository.findByUserIdAndScheduledDate(eq(USER_ID), any())).thenReturn(List.of());
+        when(habitScheduleRepository.findByUserIdAndScheduledDate(eq(USER_ID), any())).thenReturn(List.of());
+        when(taskScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(habitScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(habitScheduleRepository.save(any(HabitSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(USER_ID);
+        when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
+
         suggestionService = new ScheduleSuggestionService(settingsService, workingCalendarService, taskRepository,
-                habitRepository, taskScheduleRepository, habitScheduleRepository, taskService);
+                habitRepository, taskScheduleRepository, habitScheduleRepository, taskService, currentUserService);
     }
 
     private Map<DayOfWeek, TimeWindow> workingHoursNineToFive() {
@@ -143,7 +153,7 @@ class ScheduleSuggestionServiceTest {
         existing.setTask(existingTask);
         existing.setStartTime(LocalTime.of(9, 0));
         existing.setDurationMinutes(30);
-        when(taskScheduleRepository.findByScheduledDate(MONDAY)).thenReturn(List.of(existing));
+        when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, MONDAY)).thenReturn(List.of(existing));
 
         Optional<SuggestedSlot> slot = suggestionService.suggestForTask(3L, MONDAY);
 
@@ -160,8 +170,8 @@ class ScheduleSuggestionServiceTest {
         Task second = task(11L, Area.WORK, 60);
         first.setPriorityScore(50);
         second.setPriorityScore(40);
-        when(taskRepository.findAll()).thenReturn(List.of(first, second));
-        when(habitRepository.findAll()).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of(first, second));
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         AutoScheduleResult result = suggestionService.autoSchedule(MONDAY, MONDAY, AutoScheduleScope.TASKS_ONLY);
 

@@ -2,6 +2,9 @@ package com.taskpriority.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.taskpriority.repository.UserRepository;
+import com.taskpriority.support.TestAuthSupport;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -22,6 +25,13 @@ class ApiV1IntegrationTest {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     @Autowired MockMvc mockMvc;
+
+    @Autowired UserRepository userRepository;
+
+    @BeforeEach
+    void loginTestUser() {
+        TestAuthSupport.loginAsNewUser(userRepository);
+    }
 
     @Test
     void allowsLocalFrontendCorsPreflight() throws Exception {

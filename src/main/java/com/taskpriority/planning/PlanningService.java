@@ -1,5 +1,6 @@
 package com.taskpriority.planning;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.RiskLevel;
 import com.taskpriority.model.Status;
@@ -28,22 +29,25 @@ public class PlanningService {
     private final TaskDependencyRepository taskDependencyRepository;
     private final TaskService taskService;
     private final WorkingCalendarService workingCalendarService;
+    private final CurrentUserService currentUserService;
 
-    public PlanningService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService, WorkingCalendarService workingCalendarService) {
+    public PlanningService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, TaskService taskService, WorkingCalendarService workingCalendarService, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.taskService = taskService;
         this.workingCalendarService = workingCalendarService;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public TaskService.TodayView getTodayView() {
+        Long userId = currentUserService.requireUserId();
         LocalDate today = LocalDate.now();
-        List<Task> overdue = taskRepository.findOverdueTasks(today.minusDays(1), Status.DONE).stream()
+        List<Task> overdue = taskRepository.findOverdueTasks(userId, today.minusDays(1), Status.DONE).stream()
                 .filter(this::isWorkPlanningScope).toList();
-        List<Task> dueToday = taskRepository.findByDueDate(today).stream()
+        List<Task> dueToday = taskRepository.findByUserIdAndDueDate(userId, today).stream()
                 .filter(this::isWorkPlanningScope).toList();
-        List<Task> active = taskRepository.findAll().stream()
+        List<Task> active = taskRepository.findByUserId(userId).stream()
                 .filter(t -> t.getStatus() != Status.DONE && t.getStatus() != Status.CANCELLED)
                 .filter(this::isWorkPlanningScope)
                 .toList();
@@ -55,12 +59,13 @@ public class PlanningService {
 
     @Transactional(readOnly = true)
     public List<TaskService.DailyPlan> getWeeklyPlan() {
+        Long userId = currentUserService.requireUserId();
         LocalDate start = LocalDate.now();
         WorkingCalendarService.CalendarSettings calendarSettings = workingCalendarService.getCalendarSettings();
         List<LocalDate> planningDates = workingCalendarService.nextWorkingDays(start, 7, calendarSettings);
         if (planningDates.isEmpty()) return List.of();
         LocalDate end = planningDates.get(planningDates.size() - 1);
-        List<Task> tasks = taskRepository.findByDueDateBetween(planningDates.get(0), end).stream()
+        List<Task> tasks = taskRepository.findByUserIdAndDueDateBetween(userId, planningDates.get(0), end).stream()
                 .filter(task -> workingCalendarService.isWorkingDay(task.getDueDate(), calendarSettings))
                 .filter(this::isWorkPlanningScope)
                 .toList();
@@ -73,8 +78,9 @@ public class PlanningService {
 
     @Transactional(readOnly = true)
     public ProjectPlanResponse getProjectBoard() {
+        Long userId = currentUserService.requireUserId();
         LocalDate today = LocalDate.now();
-        List<Task> tasks = taskRepository.findAll().stream()
+        List<Task> tasks = taskRepository.findByUserId(userId).stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
                 .filter(this::isWorkPlanningScope)
@@ -88,7 +94,7 @@ public class PlanningService {
 
         Map<Long, List<Long>> dependencyIdsByTask = new LinkedHashMap<>();
         Map<Long, List<Long>> blockingTaskIdsByTask = new LinkedHashMap<>();
-        for (TaskDependency dependency : taskDependencyRepository.findAll()) {
+        for (TaskDependency dependency : taskDependencyRepository.findByUserId(userId)) {
             Long taskId = dependency.getTask().getId();
             Long blocksTaskId = dependency.getBlocksTask().getId();
             dependencyIdsByTask.computeIfAbsent(blocksTaskId, ignored -> new ArrayList<>()).add(taskId);
@@ -145,7 +151,8 @@ public class PlanningService {
         List<Long> dependencyIds = sortedIds(dependencyIdsByTask.get(task.getId()));
         List<Long> blockingTaskIds = sortedIds(blockingTaskIdsByTask.get(task.getId()));
         List<String> blockers = blockersFor(task, dependencyIds);
-        List<Task> subtasks = taskRepository.findByParentTaskIdOrderByPositionAscIdAsc(task.getId());
+        Long userId = currentUserService.requireUserId();
+        List<Task> subtasks = taskRepository.findByUserIdAndParentTaskIdOrderByPositionAscIdAsc(userId, task.getId());
         PlannerRiskResponse risk = taskRisk(task, columnRisk, blockers, subtasks, today, calendarSettings);
         int aggregateEstimatedMinutes = aggregateEstimatedMinutes(task, subtasks);
         int completedSubtaskCount = (int) subtasks.stream()

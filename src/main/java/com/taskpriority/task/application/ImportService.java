@@ -1,5 +1,6 @@
 package com.taskpriority.task.application;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Task;
 import com.taskpriority.repository.TaskRepository;
 import org.springframework.stereotype.Service;
@@ -20,18 +21,24 @@ import java.util.stream.Collectors;
 public class ImportService {
     private static final List<String> REQUIRED_COLUMNS = List.of("title", "description", "dueDate", "status", "important", "area", "effort");
     private final TaskRepository taskRepository;
-    public ImportService(TaskRepository taskRepository) { this.taskRepository = taskRepository; }
+    private final CurrentUserService currentUserService;
+    public ImportService(TaskRepository taskRepository, CurrentUserService currentUserService) {
+        this.taskRepository = taskRepository;
+        this.currentUserService = currentUserService;
+    }
 
     public record ImportResult(int importedCount, int skippedCount, List<String> validationErrors) {}
 
     @Transactional
     public List<Task> importCsv(String csv) {
+        Long userId = currentUserService.requireUserId();
         List<Task> imported = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new StringReader(csv))) {
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.isBlank() || line.toLowerCase().startsWith("title")) continue;
                 Task t = new Task();
+                t.setUserId(userId);
                 t.setTitle(line.split(",")[0].trim());
                 imported.add(taskRepository.save(t));
             }
@@ -43,6 +50,7 @@ public class ImportService {
 
     @Transactional
     public ImportResult importTasksCsv(String csv) {
+        Long userId = currentUserService.requireUserId();
         List<String> errors = new ArrayList<>();
         int importedCount = 0;
         int skippedCount = 0;
@@ -69,6 +77,7 @@ public class ImportService {
                 }
                 try {
                     Task t = new Task();
+                    t.setUserId(userId);
                     String title = cols[idx.get("title")].trim();
                     if (title.isBlank()) throw new IllegalArgumentException("title is required");
                     t.setTitle(title);

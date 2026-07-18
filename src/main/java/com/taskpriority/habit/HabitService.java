@@ -1,5 +1,6 @@
 package com.taskpriority.habit;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitCheckIn;
@@ -20,14 +21,19 @@ import java.util.stream.Collectors;
 public class HabitService {
     private final HabitRepository habitRepository;
     private final HabitCheckInRepository habitCheckInRepository;
+    private final CurrentUserService currentUserService;
 
-    public HabitService(HabitRepository habitRepository, HabitCheckInRepository habitCheckInRepository) {
+    public HabitService(HabitRepository habitRepository, HabitCheckInRepository habitCheckInRepository, CurrentUserService currentUserService) {
         this.habitRepository = habitRepository;
         this.habitCheckInRepository = habitCheckInRepository;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
     public Habit save(Habit habit) {
+        if (habit.getId() == null) {
+            habit.setUserId(currentUserService.requireUserId());
+        }
         Habit saved = habitRepository.save(habit);
         applyTodayProgress(saved);
         return saved;
@@ -40,14 +46,16 @@ public class HabitService {
 
     @Transactional(readOnly = true)
     public List<Habit> findAll() {
-        List<Habit> habits = habitRepository.findAll().stream().filter(habit -> !habit.isDeleted()).toList();
+        Long userId = currentUserService.requireUserId();
+        List<Habit> habits = habitRepository.findByUserId(userId).stream().filter(habit -> !habit.isDeleted()).toList();
         applyTodayProgressBatch(habits);
         return habits;
     }
 
     @Transactional(readOnly = true)
     public Habit findById(Long id) {
-        Habit habit = habitRepository.findById(id)
+        Long userId = currentUserService.requireUserId();
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
         applyTodayProgress(habit);
         return habit;
@@ -55,21 +63,23 @@ public class HabitService {
 
     @Transactional
     public void delete(Long id) {
-        habitRepository.deleteById(id);
+        habitRepository.deleteByUserIdAndId(currentUserService.requireUserId(), id);
     }
 
     @Transactional
     public Habit checkIn(Long id) {
-        Habit habit = habitRepository.findById(id)
+        Long userId = currentUserService.requireUserId();
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
         LocalDate today = LocalDate.now();
 
         HabitCheckIn checkIn = new HabitCheckIn();
+        checkIn.setUserId(userId);
         checkIn.setHabit(habit);
         checkIn.setCheckInDate(today);
         habitCheckInRepository.save(checkIn);
 
-        int todayCount = habitCheckInRepository.countByHabitIdAndCheckInDate(id, today);
+        int todayCount = habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(userId, id, today);
         RecurrenceRule rule = habit.getRecurrenceRule();
         boolean alreadyRolledOverToday = rule != null && today.equals(rule.getLastCompletedDate());
 
@@ -83,9 +93,10 @@ public class HabitService {
 
     @Transactional
     public Habit undoCheckIn(Long id) {
-        Habit habit = habitRepository.findById(id)
+        Long userId = currentUserService.requireUserId();
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
-        habitCheckInRepository.findTopByHabitIdAndCheckInDateOrderByCheckedInAtDesc(id, LocalDate.now())
+        habitCheckInRepository.findTopByUserIdAndHabitIdAndCheckInDateOrderByCheckedInAtDesc(userId, id, LocalDate.now())
                 .ifPresent(habitCheckInRepository::delete);
         applyTodayProgress(habit);
         return habitRepository.save(habit);
@@ -106,21 +117,23 @@ public class HabitService {
             habit.setTodayTargetMet(false);
             return;
         }
-        int todayCount = habitCheckInRepository.countByHabitIdAndCheckInDate(habit.getId(), LocalDate.now());
+        Long userId = currentUserService.requireUserId();
+        int todayCount = habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(userId, habit.getId(), LocalDate.now());
         habit.setTodayCheckInCount(todayCount);
         habit.setTodayTargetMet(todayCount >= habit.getDailyTargetCount());
     }
 
     @Transactional(readOnly = true)
     public List<HabitCheckInRepository.HabitCheckInDailyCount> history(LocalDate from, LocalDate to) {
-        List<Long> ids = habitRepository.findAll().stream()
+        Long userId = currentUserService.requireUserId();
+        List<Long> ids = habitRepository.findByUserId(userId).stream()
                 .filter(habit -> !habit.isDeleted())
                 .map(Habit::getId)
                 .toList();
         if (ids.isEmpty()) {
             return List.of();
         }
-        return habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(ids, from, to);
+        return habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(userId, ids, from, to);
     }
 
     public void applyTodayProgressBatch(List<Habit> habits) {
@@ -128,7 +141,8 @@ public class HabitService {
         if (ids.isEmpty()) {
             return;
         }
-        Map<Long, Integer> countsByHabit = habitCheckInRepository.countByHabitIdInAndCheckInDate(ids, LocalDate.now()).stream()
+        Long userId = currentUserService.requireUserId();
+        Map<Long, Integer> countsByHabit = habitCheckInRepository.countByHabitIdInAndCheckInDate(userId, ids, LocalDate.now()).stream()
                 .collect(Collectors.toMap(HabitCheckInRepository.HabitCheckInCount::getHabitId, row -> row.getCheckInCount().intValue()));
         for (Habit habit : habits) {
             if (habit.getId() == null) {

@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.Task;
+import com.taskpriority.model.User;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.repository.UserRepository;
+import com.taskpriority.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,13 +68,19 @@ class NoteControllerApiTest {
     private TaskRepository taskRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private Environment environment;
+
+    private User testUser;
 
     @BeforeEach
     void cleanDatabase() {
         noteAttachmentRepository.deleteAll();
         noteRepository.deleteAll();
         taskRepository.deleteAll();
+        testUser = TestAuthSupport.loginAsNewUser(userRepository);
     }
 
     @Test
@@ -636,7 +645,9 @@ class NoteControllerApiTest {
     }
 
     private Task saveTask(String title) {
-        return taskRepository.save(new Task(title));
+        Task task = new Task(title);
+        task.setUserId(testUser.getId());
+        return taskRepository.save(task);
     }
 
     private long createNote(String title, String body, Long taskId) throws Exception {

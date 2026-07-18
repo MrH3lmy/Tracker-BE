@@ -1,5 +1,6 @@
 package com.taskpriority.planning;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.model.Area;
 import com.taskpriority.model.Effort;
 import com.taskpriority.model.Status;
@@ -23,17 +24,20 @@ public class TaskRecommendationService {
     private final TaskRepository taskRepository;
     private final PriorityEngine priorityEngine;
     private final TaskApiMapper taskApiMapper;
+    private final CurrentUserService currentUserService;
 
-    public TaskRecommendationService(TaskRepository taskRepository, PriorityEngine priorityEngine, TaskApiMapper taskApiMapper) {
+    public TaskRecommendationService(TaskRepository taskRepository, PriorityEngine priorityEngine, TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.priorityEngine = priorityEngine;
         this.taskApiMapper = taskApiMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public List<TaskRecommendationResponse> getRecommendations() {
+        Long userId = currentUserService.requireUserId();
         LocalDate today = LocalDate.now();
-        List<RecommendationCandidate> candidates = taskRepository.findAll().stream()
+        List<RecommendationCandidate> candidates = taskRepository.findByUserId(userId).stream()
                 .filter(task -> !task.isDeleted())
                 .filter(task -> task.getStatus() != Status.DONE && task.getStatus() != Status.CANCELLED)
                 .filter(task -> Area.WORK_AREAS.contains(task.getArea()))

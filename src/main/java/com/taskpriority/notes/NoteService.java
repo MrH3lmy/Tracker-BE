@@ -2,7 +2,9 @@ package com.taskpriority.notes;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
+import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteAttachmentKind;
@@ -76,6 +78,8 @@ public class NoteService {
     private final NoteVersionRepository noteVersionRepository;
     private final NoteTaskLinkMapper noteTaskLinkMapper;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
+    private final EntitlementService entitlementService;
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
@@ -86,6 +90,7 @@ public class NoteService {
 
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
+                       CurrentUserService currentUserService, EntitlementService entitlementService,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
@@ -97,6 +102,8 @@ public class NoteService {
         this.noteVersionRepository = noteVersionRepository;
         this.noteTaskLinkMapper = noteTaskLinkMapper;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
+        this.entitlementService = entitlementService;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 
@@ -105,23 +112,24 @@ public class NoteService {
                                       Boolean hasAttachments, Boolean linkedTask, String createdFrom, String createdTo,
                                       String updatedFrom, String updatedTo, Boolean untagged, String tagMode,
                                       String sortBy, String sortDirection, Integer page, Integer size) {
-        if (taskId != null && !taskRepository.existsById(taskId)) {
+        Long userId = currentUserService.requireUserId();
+        if (taskId != null && !taskRepository.existsByUserIdAndId(userId, taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        if (collectionId != null && !noteCollectionRepository.existsById(collectionId)) {
+        if (collectionId != null && !noteCollectionRepository.existsByUserIdAndId(userId, collectionId)) {
             throw new ResourceNotFoundException("Note collection with id " + collectionId + " not found");
         }
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
-        List<Long> noteIds = noteRepository.findIds(NoteSpecifications.matching(taskId, collectionId, normalizedQuery, contentType,
+        List<Long> noteIds = noteRepository.findIds(NoteSpecifications.matching(userId, taskId, collectionId, normalizedQuery, contentType,
                         hasAttachments, linkedTask, parseStartDateTime(createdFrom), parseEndDateTime(createdTo),
                         parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode), pageable);
         if (noteIds.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, Note> notesById = noteRepository.findAllWithAssociationsByIdIn(noteIds).stream()
+        Map<Long, Note> notesById = noteRepository.findAllWithAssociationsByUserIdAndIdIn(userId, noteIds).stream()
                 .collect(Collectors.toMap(Note::getId, Function.identity()));
         List<Note> notes = noteIds.stream()
                 .map(notesById::get)
@@ -132,19 +140,21 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteResponse> findByTaskId(Long taskId) {
-        if (!taskRepository.existsById(taskId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!taskRepository.existsByUserIdAndId(userId, taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return toResponseBatch(noteRepository.findByTaskIdOrderByDisplayOrderAscIdAsc(taskId));
+        return toResponseBatch(noteRepository.findByUserIdAndTaskIdOrderByDisplayOrderAscIdAsc(userId, taskId));
     }
 
 
     @Transactional(readOnly = true)
     public List<TaskScreenshotResponse> findTaskScreenshots(Long taskId) {
-        if (!taskRepository.existsById(taskId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!taskRepository.existsByUserIdAndId(userId, taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return noteAttachmentRepository.findTaskAttachmentsByKindInNavigationOrder(taskId, NoteAttachmentKind.SCREENSHOT)
+        return noteAttachmentRepository.findTaskAttachmentsByKindInNavigationOrder(userId, taskId, NoteAttachmentKind.SCREENSHOT)
                 .stream()
                 .map(this::toTaskScreenshotResponse)
                 .toList();
@@ -152,33 +162,36 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteTaskLinkResponse> findLinkedNotesForTask(Long taskId) {
-        if (!taskRepository.existsById(taskId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!taskRepository.existsByUserIdAndId(userId, taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
         }
-        return noteTaskLinkRepository.findByTaskId(taskId).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return noteTaskLinkRepository.findByUserIdAndTaskId(userId, taskId).stream().map(noteTaskLinkMapper::toResponse).toList();
     }
 
 
     @Transactional(readOnly = true)
     public List<NoteTaskLinkResponse> findLinksForNote(Long noteId) {
-        if (!noteRepository.existsById(noteId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!noteRepository.existsByUserIdAndId(userId, noteId)) {
             throw new ResourceNotFoundException("Note with id " + noteId + " not found");
         }
-        return noteTaskLinkRepository.findByNoteId(noteId).stream().map(noteTaskLinkMapper::toResponse).toList();
+        return noteTaskLinkRepository.findByUserIdAndNoteId(userId, noteId).stream().map(noteTaskLinkMapper::toResponse).toList();
     }
 
     @Transactional
     public NoteTaskLinkResponse createTaskLink(Long noteId, CreateNoteTaskLinkRequest request) {
+        Long userId = currentUserService.requireUserId();
         Note note = getNote(noteId);
         Task task = resolveTask(request.taskId());
         NoteBlock block = null;
         if (request.blockId() != null) {
-            block = noteBlockRepository.findByIdAndNoteId(request.blockId(), noteId)
+            block = noteBlockRepository.findByUserIdAndIdAndNoteId(userId, request.blockId(), noteId)
                     .orElseThrow(() -> new ResourceNotFoundException("Block with id " + request.blockId() + " not found for note " + noteId));
         }
         boolean exists = block == null
-                ? noteTaskLinkRepository.existsByNoteIdAndTaskIdAndNoteBlockIsNull(noteId, task.getId())
-                : noteTaskLinkRepository.existsByNoteIdAndTaskIdAndNoteBlockId(noteId, task.getId(), block.getId());
+                ? noteTaskLinkRepository.existsByUserIdAndNoteIdAndTaskIdAndNoteBlockIsNull(userId, noteId, task.getId())
+                : noteTaskLinkRepository.existsByUserIdAndNoteIdAndTaskIdAndNoteBlockId(userId, noteId, task.getId(), block.getId());
         if (exists) {
             Long blockId = block == null ? null : block.getId();
             return findLinksForNote(noteId).stream()
@@ -187,6 +200,7 @@ public class NoteService {
                     .orElseThrow();
         }
         NoteTaskLink link = new NoteTaskLink();
+        link.setUserId(userId);
         link.setNote(note);
         link.setNoteBlock(block);
         link.setTask(task);
@@ -197,9 +211,10 @@ public class NoteService {
 
     @Transactional
     public void deleteTaskLink(Long noteId, Long linkId) {
+        Long userId = currentUserService.requireUserId();
         NoteTaskLink link = noteTaskLinkRepository.findById(linkId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task link with id " + linkId + " not found"));
-        if (!link.getNote().getId().equals(noteId)) {
+        if (!link.getUserId().equals(userId) || !link.getNote().getId().equals(noteId)) {
             throw new ResourceNotFoundException("Task link with id " + linkId + " not found for note " + noteId);
         }
         noteTaskLinkRepository.delete(link);
@@ -212,9 +227,11 @@ public class NoteService {
 
     @Transactional
     public NoteResponse create(CreateNoteRequest request) {
+        Long userId = currentUserService.requireUserId();
         NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
 
         Note note = new Note();
+        note.setUserId(userId);
         note.setTitle(request.title().trim());
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
@@ -224,23 +241,24 @@ public class NoteService {
         // assign the same displayOrder. Accepted for a single-user app - worst case is cosmetic
         // duplicate sticky-note numbers, not data loss. A true fix would need a DB sequence, but
         // that would require Flyway (disabled in the local-test H2 profile) to create it.
-        note.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : noteRepository.findMaxDisplayOrder() + 1);
+        note.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : noteRepository.findMaxDisplayOrder(userId) + 1);
         note.setPositionX(request.positionX());
         note.setPositionY(request.positionY());
         note.setWidth(request.width());
         note.setHeight(request.height());
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
-        note.setTags(resolveTags(request.tags()));
+        note.setTags(resolveTags(userId, request.tags()));
         return toResponse(noteRepository.save(note));
     }
 
     @Transactional
     public NoteResponse update(Long id, UpdateNoteRequest request) {
+        Long userId = currentUserService.requireUserId();
         NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
 
         Note note = getNote(id);
-        createVersionBeforeEdit(note, request.title(), request.body(), request.contentType(), request.tags(), "note-update");
+        createVersionBeforeEdit(userId, note, request.title(), request.body(), request.contentType(), request.tags(), "note-update");
         note.setTitle(request.title().trim());
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
@@ -255,34 +273,37 @@ public class NoteService {
         note.setHeight(request.height());
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
-        note.setTags(resolveTags(request.tags()));
+        note.setTags(resolveTags(userId, request.tags()));
         return toResponse(noteRepository.save(note));
     }
 
 
     @Transactional(readOnly = true)
     public List<NoteVersionResponse> findVersions(Long noteId) {
-        if (!noteRepository.existsById(noteId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!noteRepository.existsByUserIdAndId(userId, noteId)) {
             throw new ResourceNotFoundException("Note with id " + noteId + " not found");
         }
-        return noteVersionRepository.findByNoteIdOrderByCreatedAtDescIdDesc(noteId).stream().map(this::toVersionResponse).toList();
+        return noteVersionRepository.findByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(userId, noteId).stream().map(this::toVersionResponse).toList();
     }
 
     @Transactional(readOnly = true)
     public NoteVersionResponse findVersion(Long noteId, Long versionId) {
-        return toVersionResponse(getVersion(noteId, versionId));
+        Long userId = currentUserService.requireUserId();
+        return toVersionResponse(getVersion(userId, noteId, versionId));
     }
 
     @Transactional
     public NoteResponse restoreVersion(Long noteId, Long versionId) {
+        Long userId = currentUserService.requireUserId();
         Note note = getNote(noteId);
-        NoteVersion version = getVersion(noteId, versionId);
-        createSnapshot(note, "pre-restore");
+        NoteVersion version = getVersion(userId, noteId, versionId);
+        createSnapshot(userId, note, "pre-restore");
         note.setTitle(version.getTitle());
         note.setBody(version.getBody());
         note.setContentType(version.getContentType());
-        note.setTags(resolveTags(parseTags(version.getTags())));
-        restoreBlocks(note, version.getBlocksJson());
+        note.setTags(resolveTags(userId, parseTags(version.getTags())));
+        restoreBlocks(userId, note, version.getBlocksJson());
         return toResponse(noteRepository.save(note));
     }
 
@@ -304,6 +325,7 @@ public class NoteService {
 
     @Transactional
     public NoteAttachmentResponse uploadScreenshot(Long noteId, CreateScreenshotRequest request) {
+        Long userId = currentUserService.requireUserId();
         Note note = getNote(noteId);
         if (request == null) {
             throw new IllegalArgumentException("Screenshot upload request is required");
@@ -311,6 +333,7 @@ public class NoteService {
         MultipartFile file = request.getFile();
         validateScreenshot(file);
         validateDimensions(request.getWidth(), request.getHeight());
+        entitlementService.assertWithinStorageQuota(file.getSize());
 
         String fileName = cleanFileName(file.getOriginalFilename());
         String caption = trimToNull(request.getCaption());
@@ -320,6 +343,7 @@ public class NoteService {
         validateMaxLength(source, MAX_ATTACHMENT_SOURCE_LENGTH, "Screenshot source");
 
         NoteAttachment attachment = new NoteAttachment();
+        attachment.setUserId(userId);
         attachment.setNote(note);
         attachment.setFileName(fileName);
         attachment.setContentType(file.getContentType());
@@ -340,10 +364,11 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public NoteAttachment getScreenshot(Long noteId, Long attachmentId) {
-        if (!noteRepository.existsById(noteId)) {
+        Long userId = currentUserService.requireUserId();
+        if (!noteRepository.existsByUserIdAndId(userId, noteId)) {
             throw new ResourceNotFoundException("Note with id " + noteId + " not found");
         }
-        return noteAttachmentRepository.findByIdAndNoteIdAndKind(attachmentId, noteId, NoteAttachmentKind.SCREENSHOT)
+        return noteAttachmentRepository.findByUserIdAndIdAndNoteIdAndKind(userId, attachmentId, noteId, NoteAttachmentKind.SCREENSHOT)
                 .orElseThrow(() -> new ResourceNotFoundException("Screenshot attachment with id " + attachmentId + " not found for note " + noteId));
     }
 
@@ -360,45 +385,47 @@ public class NoteService {
     }
 
     public void createVersionForNoteEdit(Long noteId, String reason) {
-        createSnapshot(getNote(noteId), reason);
+        Long userId = currentUserService.requireUserId();
+        createSnapshot(userId, getNote(noteId), reason);
     }
 
-    private NoteVersion getVersion(Long noteId, Long versionId) {
-        return noteVersionRepository.findByIdAndNoteId(versionId, noteId)
+    private NoteVersion getVersion(Long userId, Long noteId, Long versionId) {
+        return noteVersionRepository.findByUserIdAndIdAndNoteId(userId, versionId, noteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Version with id " + versionId + " not found for note " + noteId));
     }
 
-    private void createVersionBeforeEdit(Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, String reason) {
-        if (shouldCreateVersion(note, nextTitle, nextBody, nextContentType, nextTags)) {
-            createSnapshot(note, reason);
+    private void createVersionBeforeEdit(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, String reason) {
+        if (shouldCreateVersion(userId, note, nextTitle, nextBody, nextContentType, nextTags)) {
+            createSnapshot(userId, note, reason);
         }
     }
 
-    private boolean shouldCreateVersion(Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags) {
+    private boolean shouldCreateVersion(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags) {
         boolean major = !java.util.Objects.equals(note.getTitle(), nextTitle == null ? null : nextTitle.trim())
                 || !java.util.Objects.equals(note.getContentType(), nextContentType == null ? NoteContentType.PLAIN_TEXT : nextContentType)
                 || Math.abs((note.getBody() == null ? 0 : note.getBody().length()) - (nextBody == null ? 0 : nextBody.length())) >= MAJOR_EDIT_BODY_DELTA
                 || !normalizeTags(nextTags).equals(note.getTags().stream().map(Tag::getName).sorted().toList());
         if (major) return true;
-        return noteVersionRepository.findTopByNoteIdOrderByCreatedAtDescIdDesc(note.getId())
+        return noteVersionRepository.findTopByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(userId, note.getId())
                 .map(version -> Duration.between(version.getCreatedAt(), LocalDateTime.now()).compareTo(VERSION_DEBOUNCE) >= 0)
                 .orElse(true);
     }
 
-    private void createSnapshot(Note note, String reason) {
+    private void createSnapshot(Long userId, Note note, String reason) {
         NoteVersion version = new NoteVersion();
+        version.setUserId(userId);
         version.setNote(note);
         version.setTitle(note.getTitle());
         version.setBody(note.getBody());
         version.setContentType(note.getContentType());
-        version.setBlocksJson(blocksJson(note.getId()));
+        version.setBlocksJson(blocksJson(userId, note.getId()));
         version.setTags(tagsJson(note));
         version.setEditorMetadata("{\"reason\":\"" + reason + "\"}");
         noteVersionRepository.save(version);
     }
 
-    private String blocksJson(Long noteId) {
-        try { return objectMapper.writeValueAsString(noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(noteId).stream().map(block -> Map.of(
+    private String blocksJson(Long userId, Long noteId) {
+        try { return objectMapper.writeValueAsString(noteBlockRepository.findByUserIdAndNoteIdOrderByPositionAscIdAsc(userId, noteId).stream().map(block -> Map.of(
                 "type", block.getType(), "content", block.getContent() == null ? "" : block.getContent(), "position", block.getPosition(), "checked", Boolean.TRUE.equals(block.getChecked()), "metadata", block.getMetadata() == null ? "" : block.getMetadata()
         )).toList()); } catch (JsonProcessingException ex) { throw new IllegalStateException("Unable to snapshot note blocks", ex); }
     }
@@ -412,13 +439,14 @@ public class NoteService {
         try { return objectMapper.readValue(tagsJson, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}); } catch (JsonProcessingException ex) { return List.of(); }
     }
 
-    private void restoreBlocks(Note note, String blocksJson) {
-        noteBlockRepository.deleteAll(noteBlockRepository.findByNoteIdOrderByPositionAscIdAsc(note.getId()));
+    private void restoreBlocks(Long userId, Note note, String blocksJson) {
+        noteBlockRepository.deleteAll(noteBlockRepository.findByUserIdAndNoteIdOrderByPositionAscIdAsc(userId, note.getId()));
         if (blocksJson == null || blocksJson.isBlank()) return;
         try {
             List<Map<String, Object>> blocks = objectMapper.readValue(blocksJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
             for (Map<String, Object> item : blocks) {
                 NoteBlock block = new NoteBlock();
+                block.setUserId(userId);
                 block.setNote(note);
                 block.setType(String.valueOf(item.getOrDefault("type", "paragraph")));
                 block.setContent((String) item.get("content"));
@@ -435,7 +463,7 @@ public class NoteService {
     }
 
     private Note getNote(Long id) {
-        return noteRepository.findById(id)
+        return noteRepository.findByUserIdAndId(currentUserService.requireUserId(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Note with id " + id + " not found"));
     }
 
@@ -443,7 +471,7 @@ public class NoteService {
         if (collectionId == null) {
             return null;
         }
-        return noteCollectionRepository.findById(collectionId)
+        return noteCollectionRepository.findByUserIdAndId(currentUserService.requireUserId(), collectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Note collection with id " + collectionId + " not found"));
     }
 
@@ -451,23 +479,27 @@ public class NoteService {
         if (taskId == null) {
             return null;
         }
-        return taskRepository.findById(taskId)
+        return taskRepository.findByUserIdAndId(currentUserService.requireUserId(), taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + taskId + " not found"));
     }
 
 
-    private Set<Tag> resolveTags(List<String> rawTags) {
+    private Set<Tag> resolveTags(Long userId, List<String> rawTags) {
         List<String> tagNames = normalizeTags(rawTags);
         if (tagNames.isEmpty()) {
             return new LinkedHashSet<>();
         }
 
-        Map<String, Tag> existingTags = tagRepository.findByNameIn(tagNames)
+        Map<String, Tag> existingTags = tagRepository.findByUserIdAndNameIn(userId, tagNames)
                 .stream()
                 .collect(Collectors.toMap(Tag::getName, Function.identity()));
         List<Tag> tagsToCreate = tagNames.stream()
                 .filter(tagName -> !existingTags.containsKey(tagName))
-                .map(Tag::new)
+                .map(tagName -> {
+                    Tag tag = new Tag(tagName);
+                    tag.setUserId(userId);
+                    return tag;
+                })
                 .toList();
         if (!tagsToCreate.isEmpty()) {
             tagRepository.saveAll(tagsToCreate)
@@ -697,11 +729,12 @@ public class NoteService {
     }
 
     private NoteResponse toResponse(Note note) {
-        List<NoteAttachmentResponse> attachments = noteAttachmentRepository.findByNoteIdAndKindOrderByCreatedAtAscIdAsc(note.getId(), NoteAttachmentKind.SCREENSHOT)
+        Long userId = note.getUserId();
+        List<NoteAttachmentResponse> attachments = noteAttachmentRepository.findByUserIdAndNoteIdAndKindOrderByCreatedAtAscIdAsc(userId, note.getId(), NoteAttachmentKind.SCREENSHOT)
                 .stream()
                 .map(this::toAttachmentResponse)
                 .toList();
-        List<NoteTaskLinkResponse> links = noteTaskLinkRepository.findByNoteId(note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
+        List<NoteTaskLinkResponse> links = noteTaskLinkRepository.findByUserIdAndNoteId(userId, note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
         return buildResponse(note, attachments, links);
     }
 
@@ -709,12 +742,13 @@ public class NoteService {
         if (notes.isEmpty()) {
             return List.of();
         }
+        Long userId = currentUserService.requireUserId();
         List<Long> noteIds = notes.stream().map(Note::getId).toList();
 
-        Map<Long, List<NoteAttachmentResponse>> attachmentsByNote = noteAttachmentRepository.findByNoteIdInAndKindOrderByCreatedAtAscIdAsc(noteIds, NoteAttachmentKind.SCREENSHOT).stream()
+        Map<Long, List<NoteAttachmentResponse>> attachmentsByNote = noteAttachmentRepository.findByUserIdAndNoteIdInAndKindOrderByCreatedAtAscIdAsc(userId, noteIds, NoteAttachmentKind.SCREENSHOT).stream()
                 .collect(Collectors.groupingBy(attachment -> attachment.getNote().getId(),
                         Collectors.mapping(this::toAttachmentResponse, Collectors.toList())));
-        Map<Long, List<NoteTaskLinkResponse>> linksByNote = noteTaskLinkRepository.findByNoteIdIn(noteIds).stream()
+        Map<Long, List<NoteTaskLinkResponse>> linksByNote = noteTaskLinkRepository.findByUserIdAndNoteIdIn(userId, noteIds).stream()
                 .collect(Collectors.groupingBy(link -> link.getNote().getId(),
                         Collectors.mapping(noteTaskLinkMapper::toResponse, Collectors.toList())));
 

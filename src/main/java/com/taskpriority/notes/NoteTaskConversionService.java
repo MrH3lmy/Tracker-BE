@@ -1,5 +1,6 @@
 package com.taskpriority.notes;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.notes.api.ConvertNoteToTaskRequest;
@@ -18,13 +19,15 @@ public class NoteTaskConversionService {
     private final TaskService taskService;
     private final TaskApiMapper taskApiMapper;
     private final NoteTaskLinkMapper linkMapper;
+    private final CurrentUserService currentUserService;
 
-    public NoteTaskConversionService(NoteRepository noteRepository, NoteTaskLinkRepository linkRepository, TaskService taskService, TaskApiMapper taskApiMapper, NoteTaskLinkMapper linkMapper) {
+    public NoteTaskConversionService(NoteRepository noteRepository, NoteTaskLinkRepository linkRepository, TaskService taskService, TaskApiMapper taskApiMapper, NoteTaskLinkMapper linkMapper, CurrentUserService currentUserService) {
         this.noteRepository = noteRepository;
         this.linkRepository = linkRepository;
         this.taskService = taskService;
         this.taskApiMapper = taskApiMapper;
         this.linkMapper = linkMapper;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional
@@ -47,6 +50,7 @@ public class NoteTaskConversionService {
         Task savedTask = taskService.save(task);
 
         NoteTaskLink link = new NoteTaskLink();
+        link.setUserId(currentUserService.requireUserId());
         link.setNote(note);
         link.setTask(savedTask);
         link.setSelectedText(sourceText);
@@ -59,7 +63,8 @@ public class NoteTaskConversionService {
     }
 
     private Note requireNote(Long noteId) {
-        return noteRepository.findById(noteId).orElseThrow(() -> new ResourceNotFoundException("Note with id " + noteId + " not found"));
+        return noteRepository.findByUserIdAndId(currentUserService.requireUserId(), noteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Note with id " + noteId + " not found"));
     }
 
     private String firstNonBlank(String... values) {

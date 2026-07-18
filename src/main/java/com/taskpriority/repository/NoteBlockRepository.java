@@ -7,6 +7,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface NoteBlockRepository extends JpaRepository<NoteBlock, Long> {
-    List<NoteBlock> findByNoteIdOrderByPositionAscIdAsc(Long noteId);
-    Optional<NoteBlock> findByIdAndNoteId(Long id, Long noteId);
+    List<NoteBlock> findByUserIdAndNoteIdOrderByPositionAscIdAsc(Long userId, Long noteId);
+    Optional<NoteBlock> findByUserIdAndIdAndNoteId(Long userId, Long id, Long noteId);
 }
