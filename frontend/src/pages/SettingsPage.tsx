@@ -8,10 +8,13 @@ import {
   AI_FEATURES_ENABLED_KEY,
   DEFAULT_DAILY_CAPACITY_HOURS_KEY,
   EXCLUDED_WEEKDAYS_KEY,
+  HABIT_REMINDER_STYLE_KEY,
   HOLIDAY_DATES_KEY,
+  readHabitReminderStyle,
   SLEEP_HOURS_KEY,
   WORKING_HOURS_KEY,
   validateSettingsPayload,
+  type HabitReminderStyle,
   type TimeWindow,
   type WeeklyHours,
 } from '../validation/settings';
@@ -26,6 +29,13 @@ const WEEKDAY_OPTIONS = [
   { value: 'FRIDAY', label: 'Fri' },
   { value: 'SATURDAY', label: 'Sat' },
   { value: 'SUNDAY', label: 'Sun' },
+];
+
+const HABIT_REMINDER_STYLE_OPTIONS: { value: HabitReminderStyle; label: string; description: string }[] = [
+  { value: 'silent', label: 'Silent', description: 'Track habits without interruption — no banner, no browser notification.' },
+  { value: 'gentle', label: 'Gentle', description: 'A quiet in-app banner once a day. No browser notifications.' },
+  { value: 'standard', label: 'Standard', description: 'An in-app banner plus one browser notification per day.' },
+  { value: 'persistent', label: 'Persistent', description: 'Keeps nagging every 15 minutes (banner + browser notification) until you check in.' },
 ];
 
 const asStringArray = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -111,6 +121,7 @@ export function SettingsPage() {
   const aiFeaturesEnabled = currentSettings[AI_FEATURES_ENABLED_KEY] === true;
   const workingHours = asWeeklyHours(currentSettings[WORKING_HOURS_KEY]);
   const sleepHours = asWeeklyHours(currentSettings[SLEEP_HOURS_KEY]);
+  const habitReminderStyle = readHabitReminderStyle(currentSettings);
 
   // Errors must stay visible even while the Advanced section is collapsed.
   const advancedOpen = advancedManuallyOpen || hasValidationErrors;
@@ -227,6 +238,38 @@ export function SettingsPage() {
                 onChangeDay={(day, window) => updateSettingBody({ [SLEEP_HOURS_KEY]: { ...sleepHours, [day]: window } })}
               />
             </div>
+          </section>
+
+          <section className="rounded-lg border border-line p-4" aria-label="Habit reminders">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Habits</p>
+            <h4 className="mt-1 text-sm font-semibold text-fg">Reminder style</h4>
+            <p className="mt-0.5 text-sm text-fg-muted">
+              Choose how habit reminders behave app-wide. Individual habits still need reminders turned on and a time set.
+            </p>
+            <div role="radiogroup" aria-label="Habit reminder style" className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {HABIT_REMINDER_STYLE_OPTIONS.map((option) => {
+                const selected = habitReminderStyle === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => updateSettingBody({ [HABIT_REMINDER_STYLE_KEY]: option.value })}
+                    className={cn(
+                      'flex flex-col gap-1 rounded-lg border p-3 text-left transition-[border-color,box-shadow] duration-(--duration-fast)',
+                      selected ? 'border-brand shadow-(--shadow-glow-brand)' : 'border-line hover:border-line-strong',
+                    )}
+                  >
+                    <span className="text-sm font-medium text-fg">{option.label}</span>
+                    <span className="text-xs text-fg-subtle">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-fg-subtle">
+              Saved as <code>{HABIT_REMINDER_STYLE_KEY}</code>.
+            </p>
           </section>
 
           <section className="rounded-lg border border-line p-4">

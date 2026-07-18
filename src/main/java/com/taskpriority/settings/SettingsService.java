@@ -30,8 +30,11 @@ public class SettingsService {
     public static final String AI_FEATURES_ENABLED_KEY = "aiFeaturesEnabled";
     public static final String WORKING_HOURS_KEY = "workingHours";
     public static final String SLEEP_HOURS_KEY = "sleepHours";
+    public static final String HABIT_REMINDER_STYLE_KEY = "habitReminders.style";
     public static final List<DayOfWeek> DEFAULT_EXCLUDED_WEEKDAYS = List.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
     public static final double DEFAULT_DAILY_CAPACITY_HOURS = 6.0;
+    public static final String DEFAULT_HABIT_REMINDER_STYLE = "standard";
+    private static final Set<String> HABIT_REMINDER_STYLES = Set.of("silent", "gentle", "standard", "persistent");
     private static final List<DayOfWeek> DEFAULT_WORKING_DAYS = List.of(
             DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY);
 
@@ -41,7 +44,8 @@ public class SettingsService {
             DEFAULT_DAILY_CAPACITY_HOURS_KEY,
             AI_FEATURES_ENABLED_KEY,
             WORKING_HOURS_KEY,
-            SLEEP_HOURS_KEY
+            SLEEP_HOURS_KEY,
+            HABIT_REMINDER_STYLE_KEY
     );
 
     private final AppSettingRepository appSettingRepository;
@@ -113,6 +117,7 @@ public class SettingsService {
         defaults.put(AI_FEATURES_ENABLED_KEY, false);
         defaults.put(WORKING_HOURS_KEY, serializeTimeWindowMap(defaultWorkingHours()));
         defaults.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(defaultSleepHours()));
+        defaults.put(HABIT_REMINDER_STYLE_KEY, DEFAULT_HABIT_REMINDER_STYLE);
         return defaults;
     }
 
@@ -141,6 +146,7 @@ public class SettingsService {
         settings.put(AI_FEATURES_ENABLED_KEY, parseBoolean(settings.get(AI_FEATURES_ENABLED_KEY), AI_FEATURES_ENABLED_KEY));
         settings.put(WORKING_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(WORKING_HOURS_KEY), WORKING_HOURS_KEY)));
         settings.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(SLEEP_HOURS_KEY), SLEEP_HOURS_KEY)));
+        settings.put(HABIT_REMINDER_STYLE_KEY, parseHabitReminderStyle(settings.get(HABIT_REMINDER_STYLE_KEY), HABIT_REMINDER_STYLE_KEY));
     }
 
     private Map<DayOfWeek, TimeWindow> parseTimeWindowMap(Object value, String key) {
@@ -239,8 +245,16 @@ public class SettingsService {
             case DEFAULT_DAILY_CAPACITY_HOURS_KEY -> parseCapacityHours(value, key);
             case AI_FEATURES_ENABLED_KEY -> parseBoolean(value, key);
             case WORKING_HOURS_KEY, SLEEP_HOURS_KEY -> parseTimeWindowMap(value, key);
+            case HABIT_REMINDER_STYLE_KEY -> parseHabitReminderStyle(value, key);
             default -> { }
         }
+    }
+
+    private String parseHabitReminderStyle(Object value, String key) {
+        if (!(value instanceof String text) || !HABIT_REMINDER_STYLES.contains(text.trim())) {
+            throw new IllegalArgumentException(key + " must be one of: " + String.join(", ", HABIT_REMINDER_STYLES) + ".");
+        }
+        return text.trim();
     }
 
     private List<DayOfWeek> parseWeekdays(Object value, String key) {
