@@ -2,7 +2,9 @@ package com.taskpriority.notes.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
+import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAiGeneration;
 import com.taskpriority.notes.api.NoteAiGenerationResponse;
@@ -27,27 +29,35 @@ public class NoteAiGenerationService {
     private final AiNoteActionProvider provider;
     private final SettingsService settingsService;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
+    private final EntitlementService entitlementService;
 
-    public NoteAiGenerationService(NoteRepository noteRepository, NoteAiGenerationRepository generationRepository, AiNoteActionProvider provider, SettingsService settingsService, ObjectMapper objectMapper) {
+    public NoteAiGenerationService(NoteRepository noteRepository, NoteAiGenerationRepository generationRepository, AiNoteActionProvider provider, SettingsService settingsService, ObjectMapper objectMapper, CurrentUserService currentUserService, EntitlementService entitlementService) {
         this.noteRepository = noteRepository;
         this.generationRepository = generationRepository;
         this.provider = provider;
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
+        this.entitlementService = entitlementService;
     }
 
     @Transactional(readOnly = true)
     public List<NoteAiGenerationResponse> findByNote(Long noteId) {
-        if (!noteRepository.existsById(noteId)) throw new ResourceNotFoundException("Note with id " + noteId + " not found");
-        return generationRepository.findByNoteIdOrderByCreatedAtDescIdDesc(noteId).stream().map(this::toResponse).toList();
+        Long userId = currentUserService.requireUserId();
+        if (!noteRepository.existsByUserIdAndId(userId, noteId)) throw new ResourceNotFoundException("Note with id " + noteId + " not found");
+        return generationRepository.findByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(userId, noteId).stream().map(this::toResponse).toList();
     }
 
     @Transactional
     public NoteAiGenerationResponse run(Long noteId, RunNoteAiActionRequest request) {
         if (!settingsService.isAiFeaturesEnabled()) throw new IllegalArgumentException("AI note features are disabled in settings.");
-        Note note = noteRepository.findById(noteId).orElseThrow(() -> new ResourceNotFoundException("Note with id " + noteId + " not found"));
+        Long userId = currentUserService.requireUserId();
+        entitlementService.assertWithinAiQuota();
+        Note note = noteRepository.findByUserIdAndId(userId, noteId).orElseThrow(() -> new ResourceNotFoundException("Note with id " + noteId + " not found"));
         String content = provider.generate(request.action(), note.getTitle(), note.getBody());
         NoteAiGeneration generation = new NoteAiGeneration();
+        generation.setUserId(userId);
         generation.setNote(note);
         generation.setAction(request.action());
         generation.setProvider(provider.providerName());

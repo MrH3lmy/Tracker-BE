@@ -14,10 +14,15 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificationExecutor<Note>, NoteRepositoryCustom {
+
+    Optional<Note> findByUserIdAndId(Long userId, Long id);
+
+    boolean existsByUserIdAndId(Long userId, Long id);
 
     List<Note> findByUserIdAndTaskIdOrderByDisplayOrderAscIdAsc(Long userId, Long taskId);
 

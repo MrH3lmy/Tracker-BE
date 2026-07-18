@@ -16,6 +16,7 @@ import {
   type WeeklyHours,
 } from '../validation/settings';
 import { Badge, Button, Card, CardHeader, Checkbox, Collapsible, cn, Field, Input, PageHeader, Textarea } from '../components/ui';
+import { PremiumGate } from '../components/PremiumGate';
 
 const WEEKDAY_OPTIONS = [
   { value: 'MONDAY', label: 'Mon' },
@@ -271,6 +272,19 @@ export function SettingsPage() {
             <p className="mt-3 text-xs text-fg-subtle">
               Saved as <code>{THEME_SETTING_KEY}</code>.
             </p>
+          </section>
+
+          <section className="rounded-lg border border-line p-4" aria-label="Premium features">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Premium</p>
+            <h4 className="mt-1 text-sm font-semibold text-fg">Advanced analytics</h4>
+            <p className="mt-0.5 text-sm text-fg-muted">A preview of a premium-gated feature; it unlocks automatically once your account is upgraded.</p>
+            <div className="mt-4">
+              <PremiumGate label="Advanced analytics" description="Unlock deeper priority insights and trend charts across your tasks.">
+                <div className="rounded-md border border-line bg-card p-4 text-sm text-fg">
+                  Advanced analytics preview placeholder.
+                </div>
+              </PremiumGate>
+            </div>
           </section>
 
           <Collapsible

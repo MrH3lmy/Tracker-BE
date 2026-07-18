@@ -1,9 +1,13 @@
 package com.taskpriority.habit;
 
+import com.taskpriority.auth.AuthenticatedUser;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitCheckIn;
 import com.taskpriority.model.RecurrenceRule;
+import com.taskpriority.model.Role;
+import com.taskpriority.model.Tier;
 import com.taskpriority.repository.HabitCheckInRepository;
 import com.taskpriority.repository.HabitRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,16 +23,21 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class HabitServiceTest {
+    private static final Long USER_ID = 1L;
 
     private HabitRepository habitRepository;
     private HabitCheckInRepository habitCheckInRepository;
+    private CurrentUserService currentUserService;
     private HabitService habitService;
 
     @BeforeEach
     void setUp() {
         habitRepository = mock(HabitRepository.class);
         habitCheckInRepository = mock(HabitCheckInRepository.class);
-        habitService = new HabitService(habitRepository, habitCheckInRepository);
+        currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireUserId()).thenReturn(USER_ID);
+        when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
+        habitService = new HabitService(habitRepository, habitCheckInRepository, currentUserService);
         when(habitRepository.save(any(Habit.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -48,8 +57,8 @@ class HabitServiceTest {
         Habit habit = recurringHabit(1L, 8);
         LocalDate previousDueDate = LocalDate.now().plusDays(1);
         habit.getRecurrenceRule().setNextDueDate(previousDueDate);
-        when(habitRepository.findById(1L)).thenReturn(Optional.of(habit));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(1L), any(LocalDate.class))).thenReturn(3);
+        when(habitRepository.findByUserIdAndId(USER_ID, 1L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(1L), any(LocalDate.class))).thenReturn(3);
 
         Habit result = habitService.checkIn(1L);
 
@@ -63,8 +72,8 @@ class HabitServiceTest {
         Habit habit = recurringHabit(2L, 8);
         LocalDate today = LocalDate.now();
         habit.getRecurrenceRule().setNextDueDate(today);
-        when(habitRepository.findById(2L)).thenReturn(Optional.of(habit));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(2L), any(LocalDate.class))).thenReturn(8);
+        when(habitRepository.findByUserIdAndId(USER_ID, 2L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(2L), any(LocalDate.class))).thenReturn(8);
 
         Habit result = habitService.checkIn(2L);
 
@@ -80,8 +89,8 @@ class HabitServiceTest {
         LocalDate today = LocalDate.now();
         habit.getRecurrenceRule().setLastCompletedDate(today);
         habit.getRecurrenceRule().setNextDueDate(today.plusDays(1));
-        when(habitRepository.findById(3L)).thenReturn(Optional.of(habit));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(3L), any(LocalDate.class))).thenReturn(9);
+        when(habitRepository.findByUserIdAndId(USER_ID, 3L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(3L), any(LocalDate.class))).thenReturn(9);
 
         Habit result = habitService.checkIn(3L);
 
@@ -93,8 +102,8 @@ class HabitServiceTest {
         Habit habit = new Habit("No recurrence");
         habit.setId(70L);
         habit.setDailyTargetCount(1);
-        when(habitRepository.findById(70L)).thenReturn(Optional.of(habit));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(70L), any(LocalDate.class))).thenReturn(1);
+        when(habitRepository.findByUserIdAndId(USER_ID, 70L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(70L), any(LocalDate.class))).thenReturn(1);
 
         Habit result = habitService.checkIn(70L);
 
@@ -105,11 +114,11 @@ class HabitServiceTest {
     @Test
     void undoCheckInDeletesMostRecentCheckInForToday() {
         Habit habit = recurringHabit(5L, 1);
-        when(habitRepository.findById(5L)).thenReturn(Optional.of(habit));
+        when(habitRepository.findByUserIdAndId(USER_ID, 5L)).thenReturn(Optional.of(habit));
         HabitCheckIn latest = new HabitCheckIn();
-        when(habitCheckInRepository.findTopByHabitIdAndCheckInDateOrderByCheckedInAtDesc(eq(5L), any(LocalDate.class)))
+        when(habitCheckInRepository.findTopByUserIdAndHabitIdAndCheckInDateOrderByCheckedInAtDesc(eq(USER_ID), eq(5L), any(LocalDate.class)))
                 .thenReturn(Optional.of(latest));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(5L), any(LocalDate.class))).thenReturn(0);
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(5L), any(LocalDate.class))).thenReturn(0);
 
         habitService.undoCheckIn(5L);
 
@@ -119,7 +128,7 @@ class HabitServiceTest {
     @Test
     void saveAppliesTodayProgressAfterPersisting() {
         Habit habit = recurringHabit(10L, 2);
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(10L), any(LocalDate.class))).thenReturn(1);
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(10L), any(LocalDate.class))).thenReturn(1);
 
         Habit result = habitService.save(habit);
 
@@ -137,13 +146,13 @@ class HabitServiceTest {
 
         assertEquals(0, result.getTodayCheckInCount());
         assertFalse(result.isTodayTargetMet());
-        verify(habitCheckInRepository, never()).countByHabitIdAndCheckInDate(any(), any());
+        verify(habitCheckInRepository, never()).countByUserIdAndHabitIdAndCheckInDate(any(), any(), any());
     }
 
     @Test
     void updateHabitDelegatesToSave() {
         Habit habit = recurringHabit(11L, 1);
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(11L), any(LocalDate.class))).thenReturn(0);
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(11L), any(LocalDate.class))).thenReturn(0);
 
         Habit result = habitService.updateHabit(11L, habit);
 
@@ -156,21 +165,21 @@ class HabitServiceTest {
         Habit active = recurringHabit(20L, 1);
         Habit deleted = recurringHabit(21L, 1);
         deleted.setDeleted(true);
-        when(habitRepository.findAll()).thenReturn(List.of(active, deleted));
-        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(List.of(20L)), any(LocalDate.class)))
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of(active, deleted));
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(USER_ID), eq(List.of(20L)), any(LocalDate.class)))
                 .thenReturn(List.of());
 
         List<Habit> result = habitService.findAll();
 
         assertEquals(List.of(active), result);
-        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(List.of(20L)), any(LocalDate.class));
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(USER_ID), eq(List.of(20L)), any(LocalDate.class));
     }
 
     @Test
     void findByIdReturnsHabitWithTodayProgressApplied() {
         Habit habit = recurringHabit(30L, 4);
-        when(habitRepository.findById(30L)).thenReturn(Optional.of(habit));
-        when(habitCheckInRepository.countByHabitIdAndCheckInDate(eq(30L), any(LocalDate.class))).thenReturn(4);
+        when(habitRepository.findByUserIdAndId(USER_ID, 30L)).thenReturn(Optional.of(habit));
+        when(habitCheckInRepository.countByUserIdAndHabitIdAndCheckInDate(eq(USER_ID), eq(30L), any(LocalDate.class))).thenReturn(4);
 
         Habit result = habitService.findById(30L);
 
@@ -180,7 +189,7 @@ class HabitServiceTest {
 
     @Test
     void findByIdThrowsWhenHabitMissing() {
-        when(habitRepository.findById(99L)).thenReturn(Optional.empty());
+        when(habitRepository.findByUserIdAndId(USER_ID, 99L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> habitService.findById(99L));
     }
@@ -189,19 +198,19 @@ class HabitServiceTest {
     void deleteDelegatesToRepository() {
         habitService.delete(40L);
 
-        verify(habitRepository).deleteById(40L);
+        verify(habitRepository).deleteByUserIdAndId(USER_ID, 40L);
     }
 
     @Test
     void checkInThrowsWhenHabitMissing() {
-        when(habitRepository.findById(50L)).thenReturn(Optional.empty());
+        when(habitRepository.findByUserIdAndId(USER_ID, 50L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> habitService.checkIn(50L));
     }
 
     @Test
     void undoCheckInThrowsWhenHabitMissing() {
-        when(habitRepository.findById(51L)).thenReturn(Optional.empty());
+        when(habitRepository.findByUserIdAndId(USER_ID, 51L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> habitService.undoCheckIn(51L));
     }
@@ -221,12 +230,12 @@ class HabitServiceTest {
         Habit withId = recurringHabit(60L, 1);
         Habit withoutId = new Habit("Not saved");
         withoutId.setDailyTargetCount(0); // would trivially satisfy targetMet if the null-id guard were removed
-        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(List.of(60L)), any(LocalDate.class)))
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(USER_ID), eq(List.of(60L)), any(LocalDate.class)))
                 .thenReturn(List.of());
 
         habitService.applyTodayProgressBatch(List.of(withId, withoutId));
 
-        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(List.of(60L)), any(LocalDate.class));
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDate(eq(USER_ID), eq(List.of(60L)), any(LocalDate.class));
         assertFalse(withoutId.isTodayTargetMet());
     }
 
@@ -235,25 +244,25 @@ class HabitServiceTest {
         Habit active = recurringHabit(8L, 1);
         Habit deleted = recurringHabit(9L, 1);
         deleted.setDeleted(true);
-        when(habitRepository.findAll()).thenReturn(List.of(active, deleted));
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of(active, deleted));
         LocalDate from = LocalDate.now().minusDays(6);
         LocalDate to = LocalDate.now();
-        when(habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to)))
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDateBetween(eq(USER_ID), eq(List.of(8L)), eq(from), eq(to)))
                 .thenReturn(List.of());
 
         habitService.history(from, to);
 
-        verify(habitCheckInRepository).countByHabitIdInAndCheckInDateBetween(eq(List.of(8L)), eq(from), eq(to));
+        verify(habitCheckInRepository).countByHabitIdInAndCheckInDateBetween(eq(USER_ID), eq(List.of(8L)), eq(from), eq(to));
     }
 
     @Test
     void historyReturnsEmptyListWhenNoActiveHabits() {
-        when(habitRepository.findAll()).thenReturn(List.of());
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of());
 
         List<HabitCheckInRepository.HabitCheckInDailyCount> result = habitService.history(LocalDate.now().minusDays(6), LocalDate.now());
 
         assertTrue(result.isEmpty());
-        verify(habitCheckInRepository, org.mockito.Mockito.never()).countByHabitIdInAndCheckInDateBetween(any(), any(), any());
+        verify(habitCheckInRepository, never()).countByHabitIdInAndCheckInDateBetween(any(), any(), any(), any());
     }
 
     @Test
@@ -263,7 +272,7 @@ class HabitServiceTest {
         HabitCheckInRepository.HabitCheckInCount rowA = mock(HabitCheckInRepository.HabitCheckInCount.class);
         when(rowA.getHabitId()).thenReturn(6L);
         when(rowA.getCheckInCount()).thenReturn(2L);
-        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(List.of(6L, 7L)), any(LocalDate.class)))
+        when(habitCheckInRepository.countByHabitIdInAndCheckInDate(eq(USER_ID), eq(List.of(6L, 7L)), any(LocalDate.class)))
                 .thenReturn(List.of(rowA));
 
         habitService.applyTodayProgressBatch(List.of(habitA, habitB));

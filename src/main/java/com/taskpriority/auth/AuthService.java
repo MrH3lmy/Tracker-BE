@@ -5,6 +5,7 @@ import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
 import com.taskpriority.model.User;
 import com.taskpriority.model.UserSession;
+import com.taskpriority.notes.NoteTemplateService;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.repository.UserSessionRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EntitlementService entitlementService;
+    private final NoteTemplateService noteTemplateService;
     private final long refreshTokenTtlDays;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -37,6 +39,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             EntitlementService entitlementService,
+            NoteTemplateService noteTemplateService,
             @Value("${app.security.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays
     ) {
         this.userRepository = userRepository;
@@ -44,6 +47,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.entitlementService = entitlementService;
+        this.noteTemplateService = noteTemplateService;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
     }
 
@@ -59,6 +63,7 @@ public class AuthService {
         user.setTier(Tier.FREE);
         user.setRole(Role.USER);
         user = userRepository.save(user);
+        noteTemplateService.seedDefaultTemplatesForUser(user.getId());
         return issueSession(user, request.deviceLabel());
     }
 

@@ -2,7 +2,10 @@ package com.taskpriority.task.api;
 
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
+import com.taskpriority.model.User;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.repository.UserRepository;
+import com.taskpriority.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,9 +32,15 @@ class TaskControllerV1UpdateRegressionTest {
     @Autowired
     private TaskRepository taskRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private User testUser;
+
     @BeforeEach
     void cleanDatabase() {
         taskRepository.deleteAll();
+        testUser = TestAuthSupport.loginAsNewUser(userRepository);
     }
 
     @Test
@@ -39,6 +48,7 @@ class TaskControllerV1UpdateRegressionTest {
         LocalDateTime createdDate = LocalDateTime.of(2026, 5, 1, 9, 30);
         LocalDateTime completedDate = LocalDateTime.of(2026, 5, 2, 10, 45);
         Task existing = new Task("Original title");
+        existing.setUserId(testUser.getId());
         existing.setCreatedDate(createdDate);
         existing.setCompletedDate(completedDate);
         existing.setDeleted(true);

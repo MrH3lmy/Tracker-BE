@@ -8,10 +8,15 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
     List<Task> findByUserId(Long userId);
+
+    Optional<Task> findByUserIdAndId(Long userId, Long id);
+
+    boolean existsByUserIdAndId(Long userId, Long id);
 
     List<Task> findByUserIdAndStatus(Long userId, Status status);
 

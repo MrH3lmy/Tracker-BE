@@ -2,7 +2,9 @@ package com.taskpriority.notes;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
+import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.NoteSavedView;
 import com.taskpriority.notes.api.NoteSavedViewRequest;
 import com.taskpriority.notes.api.NoteSavedViewResponse;
@@ -18,35 +20,50 @@ public class NoteSavedViewService {
     private static final java.util.List<String> SUPPORTED_VIEW_TYPES = java.util.List.of("sticky", "list", "table", "timeline");
     private final NoteSavedViewRepository repository;
     private final ObjectMapper objectMapper;
+    private final CurrentUserService currentUserService;
+    private final EntitlementService entitlementService;
 
-    public NoteSavedViewService(NoteSavedViewRepository repository, ObjectMapper objectMapper) {
+    public NoteSavedViewService(NoteSavedViewRepository repository, ObjectMapper objectMapper, CurrentUserService currentUserService, EntitlementService entitlementService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.currentUserService = currentUserService;
+        this.entitlementService = entitlementService;
     }
 
     @Transactional(readOnly = true)
     public java.util.List<NoteSavedViewResponse> findAll() {
-        return repository.findAllByOrderByNameAscIdAsc().stream().map(this::toResponse).toList();
+        return repository.findByUserIdOrderByNameAscIdAsc(currentUserService.requireUserId()).stream().map(this::toResponse).toList();
     }
 
     @Transactional
     public NoteSavedViewResponse create(NoteSavedViewRequest request) {
+        entitlementService.assertWithinSavedViewCap();
         NoteSavedView view = new NoteSavedView();
+        view.setUserId(currentUserService.requireUserId());
         apply(view, request);
         return toResponse(repository.save(view));
     }
 
     @Transactional
     public NoteSavedViewResponse update(Long id, NoteSavedViewRequest request) {
-        NoteSavedView view = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Note saved view with id " + id + " not found"));
+        NoteSavedView view = findOwned(id);
         apply(view, request);
         return toResponse(repository.save(view));
     }
 
     @Transactional
     public void delete(Long id) {
-        if (!repository.existsById(id)) throw new ResourceNotFoundException("Note saved view with id " + id + " not found");
-        repository.deleteById(id);
+        NoteSavedView view = findOwned(id);
+        repository.delete(view);
+    }
+
+    private NoteSavedView findOwned(Long id) {
+        NoteSavedView view = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Note saved view with id " + id + " not found"));
+        if (!view.getUserId().equals(currentUserService.requireUserId())) {
+            throw new ResourceNotFoundException("Note saved view with id " + id + " not found");
+        }
+        return view;
     }
 
     private void apply(NoteSavedView view, NoteSavedViewRequest request) {

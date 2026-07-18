@@ -1,7 +1,9 @@
 package com.taskpriority.calendar;
 
 import com.taskpriority.auth.CurrentUserService;
+import com.taskpriority.entitlement.RequiresTier;
 import com.taskpriority.model.Task;
+import com.taskpriority.model.Tier;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.service.PriorityEngine;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,7 @@ public class CalendarService {
     public record DaySummary(int taskCount, boolean hasOverdue, boolean hasImportant) {}
 
     @Transactional(readOnly = true)
+    @RequiresTier(Tier.PREMIUM)
     public String exportCalendar() {
         Long userId = currentUserService.requireUserId();
         StringBuilder sb = new StringBuilder("BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//TaskPriorityTracker//EN\n");

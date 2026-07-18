@@ -5,6 +5,7 @@ import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
 import com.taskpriority.model.User;
 import com.taskpriority.model.UserSession;
+import com.taskpriority.notes.NoteTemplateService;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.repository.UserSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ class AuthServiceTest {
     private PasswordEncoder passwordEncoder;
     private JwtService jwtService;
     private EntitlementService entitlementService;
+    private NoteTemplateService noteTemplateService;
     private AuthService authService;
 
     @BeforeEach
@@ -39,7 +41,8 @@ class AuthServiceTest {
         passwordEncoder = new BCryptPasswordEncoder();
         jwtService = mock(JwtService.class);
         entitlementService = mock(EntitlementService.class);
-        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, 30);
+        noteTemplateService = mock(NoteTemplateService.class);
+        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, 30);
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);

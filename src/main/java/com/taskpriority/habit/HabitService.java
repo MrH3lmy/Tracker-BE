@@ -54,7 +54,8 @@ public class HabitService {
 
     @Transactional(readOnly = true)
     public Habit findById(Long id) {
-        Habit habit = habitRepository.findById(id)
+        Long userId = currentUserService.requireUserId();
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
         applyTodayProgress(habit);
         return habit;
@@ -62,13 +63,13 @@ public class HabitService {
 
     @Transactional
     public void delete(Long id) {
-        habitRepository.deleteById(id);
+        habitRepository.deleteByUserIdAndId(currentUserService.requireUserId(), id);
     }
 
     @Transactional
     public Habit checkIn(Long id) {
         Long userId = currentUserService.requireUserId();
-        Habit habit = habitRepository.findById(id)
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
         LocalDate today = LocalDate.now();
 
@@ -93,7 +94,7 @@ public class HabitService {
     @Transactional
     public Habit undoCheckIn(Long id) {
         Long userId = currentUserService.requireUserId();
-        Habit habit = habitRepository.findById(id)
+        Habit habit = habitRepository.findByUserIdAndId(userId, id)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + id + " not found"));
         habitCheckInRepository.findTopByUserIdAndHabitIdAndCheckInDateOrderByCheckedInAtDesc(userId, id, LocalDate.now())
                 .ifPresent(habitCheckInRepository::delete);

@@ -1,5 +1,6 @@
 package com.taskpriority.notes;
 
+import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.NoteCollection;
 import com.taskpriority.notes.api.CreateNoteCollectionRequest;
@@ -14,26 +15,29 @@ import java.util.List;
 @Service
 public class NoteCollectionService {
     private final NoteCollectionRepository repository;
+    private final CurrentUserService currentUserService;
 
-    public NoteCollectionService(NoteCollectionRepository repository) {
+    public NoteCollectionService(NoteCollectionRepository repository, CurrentUserService currentUserService) {
         this.repository = repository;
+        this.currentUserService = currentUserService;
     }
 
     @Transactional(readOnly = true)
     public List<NoteCollectionResponse> findAll() {
-        return repository.findAllByOrderByNameAscIdAsc().stream().map(this::toResponse).toList();
+        return repository.findByUserIdOrderByNameAscIdAsc(currentUserService.requireUserId()).stream().map(this::toResponse).toList();
     }
 
     @Transactional
     public NoteCollectionResponse create(CreateNoteCollectionRequest request) {
         NoteCollection collection = new NoteCollection();
+        collection.setUserId(currentUserService.requireUserId());
         apply(collection, request.name(), request.description(), request.color(), request.icon());
         return toResponse(repository.save(collection));
     }
 
     @Transactional
     public NoteCollectionResponse update(Long id, UpdateNoteCollectionRequest request) {
-        NoteCollection collection = repository.findById(id)
+        NoteCollection collection = repository.findByUserIdAndId(currentUserService.requireUserId(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Note collection with id " + id + " not found"));
         apply(collection, request.name(), request.description(), request.color(), request.icon());
         return toResponse(repository.save(collection));
@@ -41,7 +45,7 @@ public class NoteCollectionService {
 
     @Transactional
     public void delete(Long id) {
-        NoteCollection collection = repository.findById(id)
+        NoteCollection collection = repository.findByUserIdAndId(currentUserService.requireUserId(), id)
                 .orElseThrow(() -> new ResourceNotFoundException("Note collection with id " + id + " not found"));
         repository.delete(collection);
     }
