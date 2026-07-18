@@ -4,7 +4,7 @@ import type { HabitRecord } from '../components/habits/habitTypes';
 const CHECK_INTERVAL_MS = 20_000;
 
 const currentHHMM = (date: Date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-const todayKey = (date: Date) => date.toISOString().slice(0, 10);
+const todayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export function useHabitReminders(habits: HabitRecord[]) {
   const [dueHabits, setDueHabits] = useState<HabitRecord[]>([]);
@@ -24,12 +24,12 @@ export function useHabitReminders(habits: HabitRecord[]) {
 
       for (const habit of habits) {
         if (!habit.reminderEnabled || !habit.reminderTime) continue;
-        if (habit.reminderTime.slice(0, 5) !== currentTime) continue;
+        if (habit.reminderTime.slice(0, 5) > currentTime) continue;
 
         const targetMet = habit.todayTargetMet ?? (habit.todayCheckInCount ?? 0) >= (habit.dailyTargetCount ?? 1);
         if (targetMet) continue;
 
-        const fireKey = `${habit.id}-${dateKey}-${currentTime}`;
+        const fireKey = `${habit.id}-${dateKey}`;
         if (firedRef.current.has(fireKey)) continue;
         firedRef.current.add(fireKey);
 
