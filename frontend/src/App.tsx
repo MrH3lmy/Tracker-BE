@@ -18,6 +18,7 @@ import {
   readStoredTheme,
   readThemeFromSettings,
 } from './theme';
+import { readHabitReminderStyle } from './validation/settings';
 import { Badge, Button, cn } from './components/ui';
 import {
   AlertTriangle,
@@ -184,7 +185,11 @@ function AuthenticatedApp() {
     const data = habitsQuery.data?.data;
     return Array.isArray(data) ? (data as HabitRecord[]) : [];
   }, [habitsQuery.data]);
-  const { dueHabits, dismiss: dismissReminder } = useHabitReminders(habits);
+  const habitReminderStyle = useMemo(
+    () => readHabitReminderStyle(settingsQuery.data?.ok ? settingsQuery.data.data : undefined),
+    [settingsQuery.data],
+  );
+  const { dueHabits, dismiss: dismissReminder } = useHabitReminders(habits, habitReminderStyle);
 
   const setTheme = useCallback((nextTheme: AppTheme) => {
     setThemeState(nextTheme);

@@ -6,6 +6,20 @@ export const DEFAULT_DAILY_CAPACITY_HOURS_KEY = 'defaultDailyCapacityHours';
 export const AI_FEATURES_ENABLED_KEY = 'aiFeaturesEnabled';
 export const WORKING_HOURS_KEY = 'workingHours';
 export const SLEEP_HOURS_KEY = 'sleepHours';
+export const HABIT_REMINDER_STYLE_KEY = 'habitReminders.style';
+
+export const HABIT_REMINDER_STYLES = ['silent', 'gentle', 'standard', 'persistent'] as const;
+export type HabitReminderStyle = (typeof HABIT_REMINDER_STYLES)[number];
+export const DEFAULT_HABIT_REMINDER_STYLE: HabitReminderStyle = 'standard';
+
+export const isHabitReminderStyle = (value: unknown): value is HabitReminderStyle =>
+  typeof value === 'string' && (HABIT_REMINDER_STYLES as readonly string[]).includes(value);
+
+export function readHabitReminderStyle(settings: unknown): HabitReminderStyle {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return DEFAULT_HABIT_REMINDER_STYLE;
+  const value = (settings as Record<string, unknown>)[HABIT_REMINDER_STYLE_KEY];
+  return isHabitReminderStyle(value) ? value : DEFAULT_HABIT_REMINDER_STYLE;
+}
 
 const weekdays = new Set(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']);
 const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -92,6 +106,11 @@ export function validateSettingsPayload(text: string): ValidationResult<Record<s
 
   validateWeeklyHours(result.parsed[WORKING_HOURS_KEY], WORKING_HOURS_KEY, errors);
   validateWeeklyHours(result.parsed[SLEEP_HOURS_KEY], SLEEP_HOURS_KEY, errors);
+
+  const habitReminderStyle = result.parsed[HABIT_REMINDER_STYLE_KEY];
+  if (habitReminderStyle !== undefined && !isHabitReminderStyle(habitReminderStyle)) {
+    errors.push(`${HABIT_REMINDER_STYLE_KEY} must be one of ${HABIT_REMINDER_STYLES.join(', ')}.`);
+  }
 
   return { parsed: result.parsed, errors };
 }
