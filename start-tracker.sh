@@ -47,6 +47,10 @@ export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-dev}"
 export DB_URL="${DB_URL:-jdbc:postgresql://localhost:5432/taskpriority}"
 export DB_USERNAME="${DB_USERNAME:-taskpriority}"
 export DB_PASSWORD="${DB_PASSWORD:-taskpriority}"
+# Local-dev-only JWT signing secret. Never reuse this value outside local
+# development - set a real random JWT_SECRET (32+ bytes) for any shared or
+# production environment instead.
+export JWT_SECRET="${JWT_SECRET:-local-start-tracker-dev-only-jwt-secret-do-not-use-in-prod}"
 
 echo "Starting Tracker backend (backend-only launcher)..."
 echo "WARNING: PostgreSQL must already be running and reachable via DB_URL."

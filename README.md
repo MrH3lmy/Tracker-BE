@@ -59,6 +59,10 @@ or JVM arg:
 
 Flyway is enabled by default and runs migrations at startup from `classpath:db/migration`.
 
+### Auth configuration
+
+- `JWT_SECRET` (**required**, no default) — random string of at least 32 bytes used to sign access/refresh tokens. If unset (or too short), the app fails to start with `app.security.jwt.secret must be set to a random string of at least 32 bytes` and nothing binds to port 8080 — this is a common cause of `ERR_CONNECTION_REFUSED` from the frontend. `docker-compose.yml` and `start-tracker.sh`/`start-tracker.bat` set a local-dev-only default for you; if you run `mvn spring-boot:run` directly, set it yourself, e.g. `export JWT_SECRET=$(openssl rand -base64 48)`.
+
 ---
 
 ## One-click / easy start
@@ -124,6 +128,14 @@ export DB_USERNAME=taskpriority
 export DB_PASSWORD=taskpriority
 ```
 
+### 2b) Set JWT_SECRET (required for `mvn spring-boot:run`)
+
+`start-tracker.sh`/`start-tracker.bat` set a local-dev-only `JWT_SECRET` for you automatically. If you run Maven directly instead (step 4 below), set it yourself first — the app refuses to start without it:
+
+```bash
+export JWT_SECRET=$(openssl rand -base64 48)
+```
+
 ### 3) Run the backend-only startup scripts
 
 The repository includes simple backend-only startup scripts that verify Java 21, build `target/taskpriority-0.0.1-SNAPSHOT.jar` when it is missing, set the `dev` Spring profile, apply the default DB environment values, and start only the Spring Boot backend.
@@ -156,7 +168,7 @@ If Maven wrapper is unavailable in your environment:
 mvn spring-boot:run
 ```
 
-The app starts on `http://localhost:8080`.
+The app starts on `http://localhost:8080`. Make sure `JWT_SECRET` is set first (see step 2b) — without it the app fails to start and the frontend will show `ERR_CONNECTION_REFUSED` when it tries to reach the backend.
 
 ---
 
@@ -266,12 +278,13 @@ scripts\package\package.bat msi
 
 ### Running a packaged launcher
 
-Before launching the packaged backend, make sure PostgreSQL is running and reachable with the expected environment variables:
+Before launching the packaged backend, make sure PostgreSQL is running and reachable, and that `JWT_SECRET` is set, with the expected environment variables:
 
 ```bash
 export DB_URL=jdbc:postgresql://localhost:5432/taskpriority
 export DB_USERNAME=taskpriority
 export DB_PASSWORD=taskpriority
+export JWT_SECRET=$(openssl rand -base64 48)
 ```
 
 The Docker starter remains the easiest local option if you want the app, frontend, and PostgreSQL started together without installing PostgreSQL separately.

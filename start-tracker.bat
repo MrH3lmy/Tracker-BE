@@ -58,6 +58,10 @@ if not defined SPRING_PROFILES_ACTIVE set "SPRING_PROFILES_ACTIVE=dev"
 if not defined DB_URL set "DB_URL=jdbc:postgresql://localhost:5432/taskpriority"
 if not defined DB_USERNAME set "DB_USERNAME=taskpriority"
 if not defined DB_PASSWORD set "DB_PASSWORD=taskpriority"
+rem Local-dev-only JWT signing secret. Never reuse this value outside local
+rem development - set a real random JWT_SECRET (32+ bytes) for any shared or
+rem production environment instead.
+if not defined JWT_SECRET set "JWT_SECRET=local-start-tracker-dev-only-jwt-secret-do-not-use-in-prod"
 
 echo Starting Tracker backend (backend-only launcher)...
 echo WARNING: PostgreSQL must already be running and reachable via DB_URL.
