@@ -17,9 +17,6 @@ CREATE INDEX idx_task_dependencies_user_id ON task_dependencies (user_id);
 ALTER TABLE task_schedules ADD COLUMN user_id BIGINT REFERENCES users(id);
 CREATE INDEX idx_task_schedules_user_id ON task_schedules (user_id);
 
-ALTER TABLE task_check_ins ADD COLUMN user_id BIGINT REFERENCES users(id);
-CREATE INDEX idx_task_check_ins_user_id ON task_check_ins (user_id);
-
 ALTER TABLE habits ADD COLUMN user_id BIGINT REFERENCES users(id);
 CREATE INDEX idx_habits_user_id ON habits (user_id);
 

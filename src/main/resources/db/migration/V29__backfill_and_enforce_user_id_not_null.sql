@@ -12,7 +12,6 @@ BEGIN
     IF EXISTS (SELECT 1 FROM board_columns) THEN non_empty_tables := non_empty_tables || 'board_columns '; END IF;
     IF EXISTS (SELECT 1 FROM task_dependencies) THEN non_empty_tables := non_empty_tables || 'task_dependencies '; END IF;
     IF EXISTS (SELECT 1 FROM task_schedules) THEN non_empty_tables := non_empty_tables || 'task_schedules '; END IF;
-    IF EXISTS (SELECT 1 FROM task_check_ins) THEN non_empty_tables := non_empty_tables || 'task_check_ins '; END IF;
     IF EXISTS (SELECT 1 FROM habits) THEN non_empty_tables := non_empty_tables || 'habits '; END IF;
     IF EXISTS (SELECT 1 FROM habit_schedules) THEN non_empty_tables := non_empty_tables || 'habit_schedules '; END IF;
     IF EXISTS (SELECT 1 FROM habit_check_ins) THEN non_empty_tables := non_empty_tables || 'habit_check_ins '; END IF;
@@ -37,7 +36,6 @@ ALTER TABLE boards ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE board_columns ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE task_dependencies ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE task_schedules ALTER COLUMN user_id SET NOT NULL;
-ALTER TABLE task_check_ins ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE habits ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE habit_schedules ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE habit_check_ins ALTER COLUMN user_id SET NOT NULL;

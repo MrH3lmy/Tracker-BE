@@ -3,6 +3,7 @@ import { BoardPage } from '../pages/BoardPage';
 import { CalendarPage } from '../pages/CalendarPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
+import { HabitAnalysisPage } from '../pages/HabitAnalysisPage';
 import { HabitsPage } from '../pages/HabitsPage';
 import { ImportPage } from '../pages/ImportPage';
 import { MatrixPage } from '../pages/MatrixPage';
@@ -42,6 +43,7 @@ export const developerRoutes: AppRoute[] = [
 // Routes that render via the router but do not appear as sidebar tabs.
 export const detailRoutes: AppRoute[] = [
   { label: 'Task Detail', path: '/tasks/:id', element: <TaskDetailPage /> },
+  { label: 'Habit Analysis', path: '/habits/analysis', element: <HabitAnalysisPage /> },
 ];
 
 export const appRoutes = [...primaryRoutes, ...developerRoutes, ...detailRoutes];
