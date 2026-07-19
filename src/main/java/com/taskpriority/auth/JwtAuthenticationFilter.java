@@ -29,13 +29,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             String token = header.substring(BEARER_PREFIX.length());
-            Optional<AuthenticatedUser> authenticatedUser = jwtService.parseAccessToken(token);
-            if (authenticatedUser.isPresent() && SecurityContextHolder.getContext().getAuthentication() == null) {
-                AuthenticatedUser user = authenticatedUser.get();
-                List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.role().name()));
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(user, null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            // This filter runs on every request, including public endpoints like
+            // /api/v1/auth/login, so any exception here must never escape: it would bypass
+            // GlobalExceptionHandler and strip the CORS headers the CorsFilter already set,
+            // surfacing as a misleading browser CORS error instead of a clean auth failure.
+            try {
+                Optional<AuthenticatedUser> authenticatedUser = jwtService.parseAccessToken(token);
+                if (authenticatedUser.isPresent() && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    AuthenticatedUser user = authenticatedUser.get();
+                    List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.role().name()));
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(user, null, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            } catch (RuntimeException ex) {
+                // Leave the request unauthenticated; downstream authorization rules handle it.
             }
         }
         filterChain.doFilter(request, response);

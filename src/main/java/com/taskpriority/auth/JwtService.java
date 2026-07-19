@@ -3,7 +3,6 @@ package com.taskpriority.auth;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
@@ -67,7 +66,12 @@ public class JwtService {
             Tier tier = Tier.valueOf(claims.get(CLAIM_TIER, String.class));
             Role role = Role.valueOf(claims.get(CLAIM_ROLE, String.class));
             return Optional.of(new AuthenticatedUser(userId, email, tier, role));
-        } catch (JwtException | IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
+            // Any malformed token (missing/blank claims, bad subject format, etc.) should be
+            // treated as "not authenticated", never bubble up: this filter runs on every
+            // request - including public endpoints like /api/v1/auth/login - and an uncaught
+            // exception here escapes past the CorsFilter, stripping CORS headers from the
+            // response and surfacing as a misleading browser CORS error instead of a clean 401.
             return Optional.empty();
         }
     }
