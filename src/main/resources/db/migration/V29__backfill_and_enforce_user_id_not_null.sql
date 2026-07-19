@@ -3,13 +3,18 @@
 -- migration asserts every affected table is empty and fails loudly otherwise. If it fails
 -- in your environment, STOP and manually backfill user_id on the flagged table(s) to a
 -- deliberately chosen owner before re-running - do not weaken this check.
+--
+-- boards/board_columns are deliberately excluded from this assertion (and from the
+-- NOT NULL enforcement below): V2 unconditionally seeds a single global "Default Board"
+-- and its 7 status columns on every install, predating per-user accounts entirely, and
+-- the app has no per-user board-provisioning feature yet to give that row a real owner.
+-- Enforcing NOT NULL on user_id there today would make V29 fail on every fresh install
+-- and every upgrade from V27, with no legitimate owner to backfill it to.
 DO $$
 DECLARE
     non_empty_tables text := '';
 BEGIN
     IF EXISTS (SELECT 1 FROM tasks) THEN non_empty_tables := non_empty_tables || 'tasks '; END IF;
-    IF EXISTS (SELECT 1 FROM boards) THEN non_empty_tables := non_empty_tables || 'boards '; END IF;
-    IF EXISTS (SELECT 1 FROM board_columns) THEN non_empty_tables := non_empty_tables || 'board_columns '; END IF;
     IF EXISTS (SELECT 1 FROM task_dependencies) THEN non_empty_tables := non_empty_tables || 'task_dependencies '; END IF;
     IF EXISTS (SELECT 1 FROM task_schedules) THEN non_empty_tables := non_empty_tables || 'task_schedules '; END IF;
     IF EXISTS (SELECT 1 FROM habits) THEN non_empty_tables := non_empty_tables || 'habits '; END IF;
@@ -32,8 +37,6 @@ BEGIN
 END $$;
 
 ALTER TABLE tasks ALTER COLUMN user_id SET NOT NULL;
-ALTER TABLE boards ALTER COLUMN user_id SET NOT NULL;
-ALTER TABLE board_columns ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE task_dependencies ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE task_schedules ALTER COLUMN user_id SET NOT NULL;
 ALTER TABLE habits ALTER COLUMN user_id SET NOT NULL;
