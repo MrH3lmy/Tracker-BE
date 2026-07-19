@@ -65,7 +65,7 @@ public class HabitApiMapper {
                                     CreateHabitRequest.HabitRecurrenceRequest recurrence) {
         habit.setTitle(title);
         habit.setDescription(description);
-        if (area != null) habit.setArea(area);
+        habit.setArea(area != null ? area : Area.PERSONAL);
         habit.setImportant(important);
         habit.setEstimatedMinutes(estimatedMinutes);
         if (dailyTargetCount != null) habit.setDailyTargetCount(dailyTargetCount);

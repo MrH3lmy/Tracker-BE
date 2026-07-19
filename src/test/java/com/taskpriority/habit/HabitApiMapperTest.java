@@ -87,6 +87,20 @@ class HabitApiMapperTest {
     }
 
     @Test
+    void applyUpdateRequestResetsAreaToPersonalWhenRequestOmitsIt() {
+        Habit existing = new Habit("Habit with a category");
+        existing.setArea(Area.WORK);
+
+        UpdateHabitRequest request = new UpdateHabitRequest(
+                "Habit with a category", null, null, false, null, null,
+                false, null, weeklyRecurrence());
+
+        mapper.applyUpdateRequest(existing, request);
+
+        assertEquals(Area.PERSONAL, existing.getArea());
+    }
+
+    @Test
     void applyUpdateRequestCreatesRecurrenceRuleWhenHabitHasNone() {
         Habit existing = new Habit("Habit without recurrence");
 

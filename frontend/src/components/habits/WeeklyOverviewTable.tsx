@@ -1,6 +1,7 @@
+import { Link } from 'react-router-dom';
 import { getWeekDates, inferHabitIcon, isCountBasedHabit, toDateKey } from './habitPresentation';
 import type { HabitHistoryEntry, HabitRecord } from './habitTypes';
-import { Badge, Button, Card, CardHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../ui';
+import { Badge, Card, CardHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../ui';
 import { Check, Circle } from '../ui/icons';
 
 interface WeeklyOverviewTableProps {
@@ -89,7 +90,12 @@ export function WeeklyOverviewTable({ habits, historyEntries, isLoading }: Weekl
       </Table>
       <div className="mt-4 flex items-center justify-between gap-2">
         {isLoading && <Badge variant="outline">Loading history…</Badge>}
-        <Button className="ml-auto" disabled title="Full history view is coming soon">View full history</Button>
+        <Link
+          to="/habits/analysis"
+          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-card px-3.5 text-sm font-medium text-fg shadow-2xs hover:bg-inset"
+        >
+          View full history
+        </Link>
       </div>
     </Card>
   );
