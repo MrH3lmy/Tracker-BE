@@ -37,6 +37,23 @@ frontend_is_ready() {
   fi
 }
 
+# The frontend container just runs `npm run dev`, which is ready in a couple
+# of seconds. The app container has to run a full `mvn clean package` build
+# plus Flyway migrations before it binds port 8080, which routinely takes far
+# longer. Polling only the frontend meant this script opened the browser,
+# and users hit register/login, while the backend was still starting -
+# surfacing as ERR_CONNECTION_REFUSED. Poll the API docs endpoint (only
+# served once the Spring context is fully up) so we wait for both.
+backend_is_ready() {
+  if command -v curl >/dev/null 2>&1; then
+    curl --fail --silent --show-error --max-time 2 "$BACKEND_URL/v3/api-docs" >/dev/null 2>&1
+  elif command -v wget >/dev/null 2>&1; then
+    wget --quiet --spider --timeout=2 "$BACKEND_URL/v3/api-docs" >/dev/null 2>&1
+  else
+    return 2
+  fi
+}
+
 open_frontend() {
   case "$(uname -s)" in
     Darwin*)
@@ -63,19 +80,29 @@ echo
 
 docker compose up --build -d
 
-echo "Waiting for frontend to become available at $FRONTEND_URL ..."
+echo "Waiting for the backend and frontend to become available ..."
 if ! can_poll_frontend; then
-  echo "curl/wget is not available, so the frontend cannot be polled automatically."
-  echo "Waiting 10 seconds before opening the browser..."
-  sleep 10
+  echo "curl/wget is not available, so readiness cannot be polled automatically."
+  echo "Waiting 20 seconds before opening the browser..."
+  sleep 20
   open_frontend
   echo "Tracker is running. Use 'docker compose logs -f' to follow logs or 'docker compose down' to stop it."
   exit 0
 fi
 
-for attempt in {1..120}; do
-  if frontend_is_ready; then
-    echo "Frontend is ready. Opening $FRONTEND_URL ..."
+backend_ready=false
+frontend_ready=false
+for attempt in {1..150}; do
+  if [ "$backend_ready" = false ] && backend_is_ready; then
+    backend_ready=true
+    echo "Backend is ready at $BACKEND_URL."
+  fi
+  if [ "$frontend_ready" = false ] && frontend_is_ready; then
+    frontend_ready=true
+    echo "Frontend is ready at $FRONTEND_URL."
+  fi
+  if [ "$backend_ready" = true ] && [ "$frontend_ready" = true ]; then
+    echo "Opening $FRONTEND_URL ..."
     open_frontend
     echo "Tracker is running. Use 'docker compose logs -f' to follow logs or 'docker compose down' to stop it."
     exit 0
@@ -83,6 +110,11 @@ for attempt in {1..120}; do
   sleep 2
 done
 
-echo "ERROR: Timed out waiting for the frontend at $FRONTEND_URL."
-echo "Run 'docker compose logs frontend' to inspect frontend startup logs."
+echo "ERROR: Timed out waiting for the backend and/or frontend to become ready."
+if [ "$backend_ready" = false ]; then
+  echo "  - Backend never responded at $BACKEND_URL/v3/api-docs. Run 'docker compose logs app' to inspect backend startup logs."
+fi
+if [ "$frontend_ready" = false ]; then
+  echo "  - Frontend never responded at $FRONTEND_URL. Run 'docker compose logs frontend' to inspect frontend startup logs."
+fi
 exit 1
