@@ -101,7 +101,7 @@ Non-technical users can start the full Docker-based Tracker app by double-clicki
 - **Linux:** double-click `launch/Tracker.desktop`. Depending on your desktop environment, you may need to right-click the file, open **Properties**, allow it to run as a program, or choose **Allow Launching** first.
 - **Windows:** double-click `launch/Tracker.bat`.
 
-Each launcher calls the existing Docker startup script for that OS (`start-tracker-docker.sh` on macOS/Linux or `start-tracker-docker.bat` on Windows). The Docker startup script checks that Docker is installed and running, starts PostgreSQL, the backend, and the frontend with Docker Compose, waits for `http://localhost:5173`, and then opens the web app in your browser. If startup fails, the launcher keeps the terminal window open so you can read the Docker or startup error message.
+Each launcher calls the existing Docker startup script for that OS (`start-tracker-docker.sh` on macOS/Linux or `start-tracker-docker.bat` on Windows). The Docker startup script checks that Docker is installed and running, starts PostgreSQL, the backend, and the frontend with Docker Compose, waits for **both** `http://localhost:8080` (the backend finishing its Maven build and Flyway migrations, which is slower than the frontend) and `http://localhost:5173` to respond, and then opens the web app in your browser. Opening the browser before the backend is actually ready is what causes register/login to fail with a connection error immediately after startup. If startup fails, the launcher keeps the terminal window open so you can read the Docker or startup error message.
 
 ---
 
