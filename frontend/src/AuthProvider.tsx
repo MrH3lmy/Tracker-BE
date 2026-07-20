@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiJson, clearAuthTokens, getRefreshToken, onAuthFailure, setAuthTokens } from './apiClient';
+import { apiJson, clearAuthTokens, getRefreshToken, onAuthFailure, setAuthTokens, type ApiCallResult } from './apiClient';
 import { AuthContext, type AuthActionResult, type AuthContextValue, type AuthUser } from './authContext';
 
 interface AuthResponseBody {
   accessToken: string;
   refreshToken: string;
   user: AuthUser;
+}
+
+// A NETWORK_ERROR here means the fetch itself never got a response (e.g.
+// ERR_CONNECTION_REFUSED) rather than the API rejecting the request, which
+// almost always means the backend isn't reachable at all - a distinct,
+// actionable condition worth a specific message instead of the generic
+// "Network request failed."
+function describeAuthError(result: ApiCallResult<AuthResponseBody>, fallback: string): string {
+  if (result.error?.code === 'NETWORK_ERROR') {
+    return "Can't reach the server. Make sure the backend is running and reachable, then try again.";
+  }
+  return result.error?.message ?? fallback;
 }
 
 // Free-text hint the backend stores for the "active sessions" list; not
@@ -74,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(result.data.user);
       return { ok: true };
     }
-    return { ok: false, errorMessage: result.error?.message ?? 'Login failed.' };
+    return { ok: false, errorMessage: describeAuthError(result, 'Login failed.') };
   };
 
   const register = async (email: string, password: string, displayName?: string): Promise<AuthActionResult> => {
@@ -89,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(result.data.user);
       return { ok: true };
     }
-    return { ok: false, errorMessage: result.error?.message ?? 'Registration failed.' };
+    return { ok: false, errorMessage: describeAuthError(result, 'Registration failed.') };
   };
 
   const logout = async (): Promise<void> => {
