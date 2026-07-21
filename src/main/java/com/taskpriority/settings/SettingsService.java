@@ -10,9 +10,11 @@ import com.taskpriority.repository.AppSettingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,6 +22,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -31,9 +34,12 @@ public class SettingsService {
     public static final String WORKING_HOURS_KEY = "workingHours";
     public static final String SLEEP_HOURS_KEY = "sleepHours";
     public static final String HABIT_REMINDER_STYLE_KEY = "habitReminders.style";
+    public static final String TIMEZONE_KEY = "timezone";
+    public static final String QUIET_HOURS_KEY = "quietHours";
     public static final List<DayOfWeek> DEFAULT_EXCLUDED_WEEKDAYS = List.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
     public static final double DEFAULT_DAILY_CAPACITY_HOURS = 6.0;
     public static final String DEFAULT_HABIT_REMINDER_STYLE = "standard";
+    public static final String DEFAULT_TIMEZONE = "UTC";
     private static final Set<String> HABIT_REMINDER_STYLES = Set.of("silent", "gentle", "standard", "persistent");
     private static final List<DayOfWeek> DEFAULT_WORKING_DAYS = List.of(
             DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY);
@@ -45,7 +51,9 @@ public class SettingsService {
             AI_FEATURES_ENABLED_KEY,
             WORKING_HOURS_KEY,
             SLEEP_HOURS_KEY,
-            HABIT_REMINDER_STYLE_KEY
+            HABIT_REMINDER_STYLE_KEY,
+            TIMEZONE_KEY,
+            QUIET_HOURS_KEY
     );
 
     private final AppSettingRepository appSettingRepository;
@@ -60,7 +68,16 @@ public class SettingsService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getAll() {
-        Long userId = currentUserService.requireUserId();
+        return getAllForUser(currentUserService.requireUserId());
+    }
+
+    /**
+     * Same as {@link #getAll()} but for an explicit user rather than the request's authenticated
+     * user -- used by the reminder producer job, which iterates every user outside any request/
+     * security context.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getAllForUser(Long userId) {
         Map<String, Object> settings = defaultSettings();
         appSettingRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparing(AppSetting::getKey))
@@ -109,6 +126,26 @@ public class SettingsService {
         return parseTimeWindowMap(getAll().get(SLEEP_HOURS_KEY), SLEEP_HOURS_KEY);
     }
 
+    @Transactional(readOnly = true)
+    public ZoneId getTimezone() {
+        return parseTimezone(getAll().get(TIMEZONE_KEY));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<TimeWindow> getQuietHours() {
+        return Optional.ofNullable(parseQuietHours(getAll().get(QUIET_HOURS_KEY)));
+    }
+
+    @Transactional(readOnly = true)
+    public ZoneId getTimezoneForUser(Long userId) {
+        return parseTimezone(getAllForUser(userId).get(TIMEZONE_KEY));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<TimeWindow> getQuietHoursForUser(Long userId) {
+        return Optional.ofNullable(parseQuietHours(getAllForUser(userId).get(QUIET_HOURS_KEY)));
+    }
+
     private Map<String, Object> defaultSettings() {
         Map<String, Object> defaults = new LinkedHashMap<>();
         defaults.put(EXCLUDED_WEEKDAYS_KEY, DEFAULT_EXCLUDED_WEEKDAYS.stream().map(DayOfWeek::name).toList());
@@ -118,6 +155,8 @@ public class SettingsService {
         defaults.put(WORKING_HOURS_KEY, serializeTimeWindowMap(defaultWorkingHours()));
         defaults.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(defaultSleepHours()));
         defaults.put(HABIT_REMINDER_STYLE_KEY, DEFAULT_HABIT_REMINDER_STYLE);
+        defaults.put(TIMEZONE_KEY, DEFAULT_TIMEZONE);
+        defaults.put(QUIET_HOURS_KEY, null);
         return defaults;
     }
 
@@ -147,6 +186,34 @@ public class SettingsService {
         settings.put(WORKING_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(WORKING_HOURS_KEY), WORKING_HOURS_KEY)));
         settings.put(SLEEP_HOURS_KEY, serializeTimeWindowMap(parseTimeWindowMap(settings.get(SLEEP_HOURS_KEY), SLEEP_HOURS_KEY)));
         settings.put(HABIT_REMINDER_STYLE_KEY, parseHabitReminderStyle(settings.get(HABIT_REMINDER_STYLE_KEY), HABIT_REMINDER_STYLE_KEY));
+        settings.put(TIMEZONE_KEY, parseTimezone(settings.get(TIMEZONE_KEY)).getId());
+        TimeWindow quietHours = parseQuietHours(settings.get(QUIET_HOURS_KEY));
+        settings.put(QUIET_HOURS_KEY, quietHours == null ? null : Map.of("start", quietHours.start().toString(), "end", quietHours.end().toString()));
+    }
+
+    private ZoneId parseTimezone(Object value) {
+        if (value == null) return ZoneId.of(DEFAULT_TIMEZONE);
+        if (!(value instanceof String text) || text.isBlank()) {
+            throw new IllegalArgumentException(TIMEZONE_KEY + " must be a valid IANA timezone name.");
+        }
+        try {
+            return ZoneId.of(text.trim());
+        } catch (DateTimeException ex) {
+            throw new IllegalArgumentException(TIMEZONE_KEY + " must be a valid IANA timezone name.");
+        }
+    }
+
+    private TimeWindow parseQuietHours(Object value) {
+        if (value == null) return null;
+        if (!(value instanceof Map<?, ?> windowMap)) {
+            throw new IllegalArgumentException(QUIET_HOURS_KEY + " must be an object with start/end, or null to disable.");
+        }
+        Object startRaw = windowMap.get("start");
+        Object endRaw = windowMap.get("end");
+        if (!(startRaw instanceof String startText) || !(endRaw instanceof String endText)) {
+            throw new IllegalArgumentException(QUIET_HOURS_KEY + " must have start and end HH:mm strings.");
+        }
+        return new TimeWindow(parseTimeOfDay(startText, QUIET_HOURS_KEY, "start"), parseTimeOfDay(endText, QUIET_HOURS_KEY, "end"));
     }
 
     private Map<DayOfWeek, TimeWindow> parseTimeWindowMap(Object value, String key) {
@@ -218,6 +285,9 @@ public class SettingsService {
             if (WORKING_HOURS_KEY.equals(key) || SLEEP_HOURS_KEY.equals(key)) {
                 return objectMapper.readValue(value, new TypeReference<Map<String, Map<String, String>>>() {});
             }
+            if (QUIET_HOURS_KEY.equals(key)) {
+                return value == null || "null".equals(value) ? null : objectMapper.readValue(value, new TypeReference<Map<String, String>>() {});
+            }
         } catch (JsonProcessingException | IllegalArgumentException ignored) {
             return value;
         }
@@ -246,6 +316,8 @@ public class SettingsService {
             case AI_FEATURES_ENABLED_KEY -> parseBoolean(value, key);
             case WORKING_HOURS_KEY, SLEEP_HOURS_KEY -> parseTimeWindowMap(value, key);
             case HABIT_REMINDER_STYLE_KEY -> parseHabitReminderStyle(value, key);
+            case TIMEZONE_KEY -> parseTimezone(value);
+            case QUIET_HOURS_KEY -> parseQuietHours(value);
             default -> { }
         }
     }

@@ -8,6 +8,7 @@ import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, Schedu
 import type { CreateMilestonePayload, CreateProjectPayload, MilestoneRecord, ProjectOverviewRecord, ProjectRecord, UpdateMilestonePayload } from '../components/projects/projectTypes';
 import type { FocusAnalyticsRecord, FocusSessionRecord, StopFocusSessionPayload } from '../components/focus/focusTypes';
 import type { CompleteWeeklyReviewPayload, WeeklyReviewDraftRecord, WeeklyReviewRecord } from '../components/weeklyreview/weeklyReviewTypes';
+import type { NotificationRecord } from '../components/notifications/notificationTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -98,6 +99,8 @@ export const queryKeys = {
   focusAnalytics: (from: string, to: string) => ['focus-sessions', 'analytics', from, to] as const,
   weeklyReviews: (limit: number) => ['weekly-reviews', limit] as const,
   weeklyReviewDraft: ['weekly-reviews', 'current-draft'] as const,
+  notifications: (unreadOnly: boolean) => ['notifications', unreadOnly] as const,
+  notificationsUnreadCount: ['notifications', 'unread-count'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -188,6 +191,17 @@ export const useFocusSessionsQuery = (from: string, to: string, enabled = true) 
 export const useFocusAnalyticsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusAnalytics(from, to), queryFn: () => apiJson<FocusAnalyticsRecord>('GET', `/api/v1/focus-sessions/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
 export const useWeeklyReviewsQuery = (limit = 20, enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviews(limit), queryFn: () => apiJson<WeeklyReviewRecord[]>('GET', `/api/v1/weekly-reviews?limit=${encodeURIComponent(String(limit))}`), enabled });
 export const useWeeklyReviewDraftQuery = (enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviewDraft, queryFn: () => apiJson<WeeklyReviewDraftRecord>('GET', '/api/v1/weekly-reviews/current-draft'), enabled });
+export const useNotificationsQuery = (unreadOnly: boolean, enabled = true) => useQuery({
+  queryKey: queryKeys.notifications(unreadOnly),
+  queryFn: () => apiJson<NotificationRecord[]>('GET', `/api/v1/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+  enabled,
+});
+export const useNotificationsUnreadCountQuery = (enabled = true) => useQuery({
+  queryKey: queryKeys.notificationsUnreadCount,
+  queryFn: () => apiJson<{ count: number }>('GET', '/api/v1/notifications/unread-count'),
+  enabled,
+  refetchInterval: 60000,
+});
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -356,6 +370,15 @@ export function useWeeklyReviewMutations() {
         qc.invalidateQueries({ queryKey: ['tasks'] });
       },
     }),
+  };
+}
+
+export function useNotificationMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['notifications'] });
+  return {
+    markRead: useMutation({ mutationFn: (id: number) => apiJson<NotificationRecord>('PATCH', `/api/v1/notifications/${id}/read`), onSuccess }),
+    snooze: useMutation({ mutationFn: ({ id, scheduledFor }: { id: number; scheduledFor: string }) => apiJson<NotificationRecord>('PATCH', `/api/v1/notifications/${id}/snooze`, { scheduledFor }), onSuccess }),
   };
 }
 

@@ -10,8 +10,12 @@ import {
   EXCLUDED_WEEKDAYS_KEY,
   HABIT_REMINDER_STYLE_KEY,
   HOLIDAY_DATES_KEY,
+  QUIET_HOURS_KEY,
   readHabitReminderStyle,
+  readQuietHours,
+  readTimezone,
   SLEEP_HOURS_KEY,
+  TIMEZONE_KEY,
   WORKING_HOURS_KEY,
   validateSettingsPayload,
   type HabitReminderStyle,
@@ -41,6 +45,14 @@ const HABIT_REMINDER_STYLE_OPTIONS: { value: HabitReminderStyle; label: string; 
 const asStringArray = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 const asNumber = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 const asWeeklyHours = (value: unknown): WeeklyHours => value && typeof value === 'object' && !Array.isArray(value) ? (value as WeeklyHours) : {};
+
+const TIMEZONE_OPTIONS: string[] = (() => {
+  try {
+    return typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  } catch {
+    return [];
+  }
+})();
 
 function WeeklyHoursEditor({
   legend, hint, hours, disabled, onChangeDay,
@@ -120,6 +132,8 @@ export function SettingsPage() {
   const workingHours = asWeeklyHours(currentSettings[WORKING_HOURS_KEY]);
   const sleepHours = asWeeklyHours(currentSettings[SLEEP_HOURS_KEY]);
   const habitReminderStyle = readHabitReminderStyle(currentSettings);
+  const timezone = readTimezone(currentSettings);
+  const quietHours = readQuietHours(currentSettings);
 
   // Errors must stay visible even while the Advanced section is collapsed.
   const advancedOpen = advancedManuallyOpen || hasValidationErrors;
@@ -259,6 +273,56 @@ export function SettingsPage() {
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-line p-4" aria-label="Timezone and quiet hours">
+            <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Reminders</p>
+            <h4 className="mt-1 text-sm font-semibold text-fg">Timezone &amp; quiet hours</h4>
+            <p className="mt-0.5 text-sm text-fg-muted">
+              Task, follow-up, and habit reminders are scheduled in your local timezone and deferred until after quiet hours end.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Timezone" htmlFor="timezone">
+                <select
+                  id="timezone"
+                  value={timezone}
+                  onChange={(event) => updateSettingBody({ [TIMEZONE_KEY]: event.target.value })}
+                  className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm text-fg shadow-2xs focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
+                >
+                  {TIMEZONE_OPTIONS.length > 0 ? (
+                    TIMEZONE_OPTIONS.map((zone) => <option key={zone} value={zone}>{zone}</option>)
+                  ) : (
+                    <option value={timezone}>{timezone}</option>
+                  )}
+                </select>
+              </Field>
+              <div className="flex flex-col gap-1.5">
+                <Checkbox
+                  label="Quiet hours"
+                  checked={Boolean(quietHours)}
+                  onChange={(event) => updateSettingBody({ [QUIET_HOURS_KEY]: event.target.checked ? { start: '22:00', end: '07:00' } : null })}
+                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="time"
+                    aria-label="Quiet hours start"
+                    value={quietHours?.start ?? ''}
+                    disabled={!quietHours}
+                    onChange={(event) => updateSettingBody({ [QUIET_HOURS_KEY]: { start: event.target.value, end: quietHours?.end ?? '07:00' } })}
+                    className="w-32"
+                  />
+                  <span className="text-xs text-fg-subtle">to</span>
+                  <Input
+                    type="time"
+                    aria-label="Quiet hours end"
+                    value={quietHours?.end ?? ''}
+                    disabled={!quietHours}
+                    onChange={(event) => updateSettingBody({ [QUIET_HOURS_KEY]: { start: quietHours?.start ?? '22:00', end: event.target.value } })}
+                    className="w-32"
+                  />
+                </div>
+              </div>
             </div>
           </section>
 

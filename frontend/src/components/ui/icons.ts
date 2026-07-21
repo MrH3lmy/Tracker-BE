@@ -6,6 +6,7 @@ export {
   AlertTriangle,
   Archive,
   ArrowRight,
+  Bell,
   Calendar,
   CalendarDays,
   Camera,

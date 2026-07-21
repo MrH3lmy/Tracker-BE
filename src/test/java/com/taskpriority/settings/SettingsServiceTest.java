@@ -10,9 +10,12 @@ import com.taskpriority.repository.AppSettingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,5 +81,56 @@ class SettingsServiceTest {
 
         Map<String, Object> settings = settingsService.getAll();
         assertEquals("persistent", settings.get(SettingsService.HABIT_REMINDER_STYLE_KEY));
+    }
+
+    @Test
+    void getTimezoneDefaultsToUtc() {
+        assertEquals(ZoneId.of("UTC"), settingsService.getTimezone());
+    }
+
+    @Test
+    void updateAcceptsAValidIanaTimezone() {
+        Map<String, Object> updated = settingsService.update(Map.of(SettingsService.TIMEZONE_KEY, "America/New_York"));
+        assertEquals("America/New_York", updated.get(SettingsService.TIMEZONE_KEY));
+        assertEquals(ZoneId.of("America/New_York"), settingsService.getTimezone());
+    }
+
+    @Test
+    void updateRejectsAnInvalidTimezone() {
+        Map<String, Object> updates = Map.of(SettingsService.TIMEZONE_KEY, "Not/AZone");
+        assertThrows(IllegalArgumentException.class, () -> settingsService.update(updates));
+    }
+
+    @Test
+    void quietHoursDefaultToDisabled() {
+        assertEquals(Optional.empty(), settingsService.getQuietHours());
+    }
+
+    @Test
+    void updateAcceptsAQuietHoursWindow() {
+        settingsService.update(Map.of(SettingsService.QUIET_HOURS_KEY, Map.of("start", "22:00", "end", "07:00")));
+
+        Optional<TimeWindow> quietHours = settingsService.getQuietHours();
+        assertTrue(quietHours.isPresent());
+        assertEquals(LocalTime.of(22, 0), quietHours.get().start());
+        assertEquals(LocalTime.of(7, 0), quietHours.get().end());
+    }
+
+    @Test
+    void updateRejectsAQuietHoursWindowMissingEnd() {
+        Map<String, Object> updates = Map.of(SettingsService.QUIET_HOURS_KEY, Map.of("start", "22:00"));
+        assertThrows(IllegalArgumentException.class, () -> settingsService.update(updates));
+    }
+
+    @Test
+    void getTimezoneForUserReadsAnExplicitUsersSettingsNotTheCurrentUsers() {
+        AppSetting other = new AppSetting();
+        other.setUserId(2L);
+        other.setKey(SettingsService.TIMEZONE_KEY);
+        other.setValue("Asia/Tokyo");
+        when(appSettingRepository.findByUserId(2L)).thenReturn(List.of(other));
+
+        assertEquals(ZoneId.of("Asia/Tokyo"), settingsService.getTimezoneForUser(2L));
+        assertEquals(ZoneId.of("UTC"), settingsService.getTimezone());
     }
 }

@@ -12,6 +12,7 @@ import { UndoToastContext, type UndoToastContextValue } from './undoToastContext
 import { QuickCaptureContext, type QuickCaptureContextValue } from './quickCaptureContext';
 import { QuickCaptureModal } from './components/quickCapture/QuickCaptureModal';
 import { FocusTimerWidget } from './components/focus/FocusTimerWidget';
+import { NotificationInbox } from './components/notifications/NotificationInbox';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -398,6 +399,7 @@ function AuthenticatedApp() {
                     Quick add
                   </button>
                 )}
+                {user && <NotificationInbox />}
                 {user && (
                   <div className="flex items-center gap-2 border-l border-line pl-2">
                     <span className="hidden max-w-[10rem] truncate text-xs text-fg-muted sm:inline" title={user.email}>
