@@ -6,6 +6,7 @@ import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlann
 import { Badge, Button, Card, PageHeader, SegmentedControl, cn, type BadgeVariant } from '../components/ui';
 import { Calendar, CheckCircle2, ChevronRight, Eye, Flag, RefreshCw, Sparkles, TrendingUp } from '../components/ui/icons';
 import { formatEnumLabel } from '../lib/enumLabels';
+import { formatDateOnly, formatDateOnlyShort } from '../lib/dateOnly';
 import { SectionTabs } from '../components/SectionTabs';
 import { CALENDAR_VIEW_TABS } from '../router/routes';
 
@@ -94,57 +95,8 @@ interface DailyPlan {
   tasks?: unknown;
 }
 
-const plannerDateFormatter = new Intl.DateTimeFormat('en-US', {
-  weekday: 'long',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
-
-const parsePlannerDate = (value?: string | null): Date | null => {
-  if (!value) return null;
-
-  const trimmedValue = value.trim();
-  if (!trimmedValue) return null;
-
-  if (isoDateOnlyPattern.test(trimmedValue)) {
-    const [year, month, day] = trimmedValue.split('-').map(Number);
-    const date = new Date(Date.UTC(year, month - 1, day));
-
-    if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) {
-      return date;
-    }
-
-    return null;
-  }
-
-  const date = new Date(trimmedValue);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatPlannerDate = (value?: string | null, fallback = 'Date unavailable') => {
-  const date = parsePlannerDate(value);
-  return date ? plannerDateFormatter.format(date) : fallback;
-};
-
-const shortDateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-const utcDateKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-
-const formatPlannerShortDate = (value?: string | null, fallback = 'Date unavailable') => {
-  const date = parsePlannerDate(value);
-
-  if (!date) return fallback;
-
-  const shortDate = shortDateFormatter.format(date);
-  return utcDateKey(date) === utcDateKey(new Date()) ? `Today, ${shortDate}` : shortDate;
-};
+const formatPlannerDate = formatDateOnly;
+const formatPlannerShortDate = formatDateOnlyShort;
 
 const normalizeUiText = (value?: string | null, fallback = '') => (value ?? fallback).replaceAll('Mecahnism', 'Mechanism');
 

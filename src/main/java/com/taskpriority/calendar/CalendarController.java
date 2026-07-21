@@ -13,5 +13,6 @@ public class CalendarController {
     private final CalendarService calendarService;
     public CalendarController(CalendarService calendarService){this.calendarService=calendarService;}
     @GetMapping("/month") public Map<LocalDate, CalendarService.DaySummary> month(@RequestParam int year,@RequestParam int month){ return calendarService.getMonthSummary(year, month); }
+    @GetMapping("/month/tasks") public Map<LocalDate, java.util.List<com.taskpriority.task.api.TaskResponse>> monthTasks(@RequestParam int year,@RequestParam int month){ return calendarService.getMonthTasksByDay(year, month); }
     @GetMapping(value = "/export.ics", produces = "text/calendar") public ResponseEntity<String> ics(){return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tasks-calendar.ics").body(calendarService.exportCalendar());}
 }

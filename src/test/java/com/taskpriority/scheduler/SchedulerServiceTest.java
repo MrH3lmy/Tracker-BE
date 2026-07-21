@@ -128,4 +128,51 @@ class SchedulerServiceTest {
 
         verify(taskScheduleRepository).deleteByUserIdAndTaskId(USER_ID, 9L);
     }
+
+    @Test
+    void weekScheduleReturnsSevenDaysStartingFromTheGivenDate() {
+        LocalDate startDate = LocalDate.of(2026, 7, 20);
+        when(taskScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(habitScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        for (int offset = 0; offset < 7; offset++) {
+            when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, startDate.plusDays(offset))).thenReturn(List.of());
+            when(habitScheduleRepository.findByUserIdAndScheduledDate(USER_ID, startDate.plusDays(offset))).thenReturn(List.of());
+        }
+
+        WeekScheduleResponse response = schedulerService.getWeekSchedule(startDate);
+
+        assertEquals(startDate, response.startDate());
+        assertEquals(7, response.days().size());
+        assertEquals(startDate, response.days().get(0).date());
+        assertEquals(startDate.plusDays(6), response.days().get(6).date());
+        assertTrue(response.unscheduledTasks().isEmpty());
+        assertTrue(response.unscheduledHabits().isEmpty());
+    }
+
+    @Test
+    void weekSchedulePlacesEachDayScheduledEntryOnItsOwnDay() {
+        LocalDate startDate = LocalDate.of(2026, 7, 20);
+        LocalDate wednesday = startDate.plusDays(3);
+        Task task = task(5L, "Mid-week review");
+        TaskSchedule wednesdaySchedule = schedule(task, wednesday, LocalTime.of(10, 0), 30);
+
+        when(taskScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(habitScheduleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(taskRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(habitRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        for (int offset = 0; offset < 7; offset++) {
+            LocalDate date = startDate.plusDays(offset);
+            when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, date))
+                    .thenReturn(date.equals(wednesday) ? List.of(wednesdaySchedule) : List.of());
+            when(habitScheduleRepository.findByUserIdAndScheduledDate(USER_ID, date)).thenReturn(List.of());
+        }
+
+        WeekScheduleResponse response = schedulerService.getWeekSchedule(startDate);
+
+        assertTrue(response.days().get(0).scheduled().isEmpty());
+        assertEquals(1, response.days().get(3).scheduled().size());
+        assertEquals("Mid-week review", response.days().get(3).scheduled().get(0).task().title());
+    }
 }

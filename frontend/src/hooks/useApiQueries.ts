@@ -50,6 +50,8 @@ export const queryKeys = {
   dashboard: ['dashboard'] as const,
   homeToday: ['home', 'today'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
+  calendarMonthTasks: (year: string, month: string) => ['calendar', 'month', 'tasks', year, month] as const,
+  schedulerWeek: (startDate: string) => ['scheduler', 'week', startDate] as const,
   settings: ['settings'] as const,
   boardColumns: ['board-columns'] as const,
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
@@ -105,6 +107,8 @@ export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ 
 export const usePlanningProjectBoardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningProjectBoard, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/project-board'), enabled });
 export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.matrix, queryFn: () => apiJson<unknown>('GET', '/api/v1/matrix'), enabled });
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
+export const useCalendarMonthTasksQuery = (year: string, month: string, enabled = true) => useQuery({ queryKey: queryKeys.calendarMonthTasks(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month/tasks?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
+export const useSchedulerWeekQuery = (startDate: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerWeek(startDate), queryFn: () => apiJson<unknown>('GET', `/api/v1/scheduler/week?startDate=${encodeURIComponent(startDate)}`), enabled });
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
 export const useHabitsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits'), enabled });

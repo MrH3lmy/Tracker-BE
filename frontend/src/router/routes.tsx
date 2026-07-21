@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { SectionTabItem } from '../components/SectionTabs';
 import { BoardPage } from '../pages/BoardPage';
 import { CalendarPage } from '../pages/CalendarPage';
+import { CalendarWeekPage } from '../pages/CalendarWeekPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
 import { HabitAnalysisPage } from '../pages/HabitAnalysisPage';
 import { HabitsPage } from '../pages/HabitsPage';
@@ -30,9 +31,10 @@ export const TASK_VIEW_TABS: SectionTabItem[] = [
   { path: '/tasks/matrix', label: 'Matrix' },
 ];
 
-/** Calendar section: Month / Day / Auto-plan absorb the old standalone Calendar, Scheduler, and Planning pages. */
+/** Calendar section: Month / Week / Day / Auto-plan absorb the old standalone Calendar, Scheduler, and Planning pages. */
 export const CALENDAR_VIEW_TABS: SectionTabItem[] = [
   { path: '/calendar', label: 'Month', end: true },
+  { path: '/calendar/week', label: 'Week' },
   { path: '/calendar/day', label: 'Day' },
   { path: '/calendar/auto-plan', label: 'Auto-plan' },
 ];
@@ -54,6 +56,7 @@ export const primaryRoutes: AppRoute[] = [
 export const sectionRoutes: AppRoute[] = [
   { label: 'Tasks Board', path: '/tasks/board', element: <BoardPage /> },
   { label: 'Tasks Matrix', path: '/tasks/matrix', element: <MatrixPage /> },
+  { label: 'Calendar Week', path: '/calendar/week', element: <CalendarWeekPage /> },
   { label: 'Calendar Day', path: '/calendar/day', element: <SchedulerPage /> },
   { label: 'Calendar Auto-plan', path: '/calendar/auto-plan', element: <PlanningPage /> },
 ];

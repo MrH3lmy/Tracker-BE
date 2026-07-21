@@ -226,6 +226,7 @@ function AuthenticatedApp() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
+  const [quickCaptureInitialDate, setQuickCaptureInitialDate] = useState<string | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
@@ -293,7 +294,10 @@ function AuthenticatedApp() {
     dismissUndoToast();
   };
   const undoToastContextValue = useMemo<UndoToastContextValue>(() => ({ showUndo }), [showUndo]);
-  const openQuickCapture = useCallback(() => setIsQuickCaptureOpen(true), []);
+  const openQuickCapture = useCallback((initialDate?: string) => {
+    setQuickCaptureInitialDate(initialDate);
+    setIsQuickCaptureOpen(true);
+  }, []);
   const quickCaptureContextValue = useMemo<QuickCaptureContextValue>(() => ({ openQuickCapture }), [openQuickCapture]);
 
   useEffect(() => {
@@ -455,7 +459,11 @@ function AuthenticatedApp() {
             </div>
           </div>
         )}
-        <QuickCaptureModal open={isQuickCaptureOpen} onOpenChange={setIsQuickCaptureOpen} />
+        <QuickCaptureModal
+          open={isQuickCaptureOpen}
+          onOpenChange={(next) => { setIsQuickCaptureOpen(next); if (!next) setQuickCaptureInitialDate(undefined); }}
+          initialDate={quickCaptureInitialDate}
+        />
         </QuickCaptureContext.Provider>
         </UndoToastContext.Provider>
       </AnnouncementContext.Provider>

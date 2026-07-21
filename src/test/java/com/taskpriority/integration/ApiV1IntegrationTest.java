@@ -154,6 +154,12 @@ class ApiV1IntegrationTest {
         mockMvc.perform(get("/api/v1/matrix")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/dashboard")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/calendar/month").param("year","2026").param("month","5")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/calendar/month/tasks").param("year", "2026").param("month", "5")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/scheduler/week").param("startDate", "2026-05-01")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.startDate").value("2026-05-01"))
+                .andExpect(jsonPath("$.days.length()").value(7))
+                .andExpect(jsonPath("$.days[0].date").value("2026-05-01"))
+                .andExpect(jsonPath("$.days[6].date").value("2026-05-07"));
         mockMvc.perform(get("/api/v1/calendar/export.ics")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/settings")).andExpect(status().isOk());
         mockMvc.perform(put("/api/v1/settings").contentType(MediaType.APPLICATION_JSON).content("{\"theme\":\"dark\"}")).andExpect(status().isOk());

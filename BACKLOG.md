@@ -1,39 +1,10 @@
-# Backlog: Phases 5-10
+# Backlog: Phases 6-10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-4 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-5 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again.
 
----
-
-## Phase 5 — Real calendar experience
-
-**User story**: As a user, I want an actual calendar grid (month/week/day) where I can see, create, and reschedule tasks and habits by clicking or dragging, not just a text summary.
-
-**Scope**: Replace `CalendarPage`'s "month summary" card grid with a real month grid; add a week timeline view; deepen the existing Day view (`SchedulerPage`, already good) with drag-to-reschedule.
-
-**Backend tasks**:
-- `GET /api/v1/calendar/week?date=` — new endpoint returning 7 days of `{date, scheduledEntries, dueTasks}`, composing `SchedulerService.getDaySchedule()` per day (or a new batched `SchedulerService.getWeekSchedule(startDate)` to avoid 7 round trips — prefer the batched version).
-- No changes needed to Month (`/api/v1/calendar/month`) or Day (`/api/v1/scheduler/day`) — both already return what's needed.
-
-**Frontend tasks**:
-- `components/calendar/MonthGrid.tsx`: real 7-column grid, current month highlighted, overdue/important indicators per day (reusing the existing `hasOverdue`/`hasImportant`/`taskCount` fields from `/api/v1/calendar/month`), Previous/Next/Today controls, click-a-date to open quick capture pre-filled with that date.
-- `components/calendar/WeekTimeline.tsx`: 7-day time-grid view backed by the new week endpoint; drag a task between days calls `PUT /api/v1/scheduler/tasks/{id}` with the new date (reuse `useSchedulerMutations().scheduleTask`).
-- Extend `SchedulerTimeline` (already used in Day view) with drag-and-drop time-slot changes using the existing `@dnd-kit` dependency already in the project (see `BoardPage`'s usage for the pattern).
-- Existing ICS export button stays as-is.
-- Timezone/date handling: audit every date-only field (`dueDate`, `scheduledDate`) to confirm it's parsed as UTC-midnight the way `PlanningPage.parsePlannerDate` already does, not via a raw `new Date(string)` that shifts by local offset — reuse that exact parsing helper (extract it into a shared `lib/dateOnly.ts` first).
-
-**Migration requirements**: None.
-
-**Risks**: drag-and-drop across a full month grid has more edge cases (multi-day drag targets, keyboard equivalents for accessibility) than the existing single-day board drag — budget extra time for keyboard-operable alternatives (e.g., a "Move to..." menu item alongside drag).
-
-**Acceptance criteria**: Month loads current month automatically; Prev/Next/Today all work; a task due on a visible day renders on that day; dragging a task to a new day persists via the existing schedule endpoint and is reflected without a full page reload; ICS export still works; no date shifts by a day in any timezone (test explicitly at UTC-11 and UTC+13).
-
-**Test cases**: month grid rendering for months with 4/5/6 calendar rows; week endpoint aggregation; drag-and-drop persists correct date; date-only parsing at timezone extremes (backend `LocalDate` tests already exist as a pattern in `RecurrenceServiceTest` — mirror it).
-
-**Dependencies**: Extract `lib/dateOnly.ts` first (shared by this and any future date work).
-
-**Estimated complexity**: L.
+**Left for a later pass**: Month-grid drag-and-drop (Week view already has it; see Phase 5's "Scope decision" note in `PRODUCT_IMPROVEMENT_PLAN.md` for why Month was scoped to click-only).
 
 ---
 

@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 
 export interface QuickCaptureContextValue {
   /** Opens the global quick-capture modal (header button, Ctrl+K/Cmd+K, mobile Quick add). */
-  openQuickCapture: () => void;
+  openQuickCapture: (initialDate?: string) => void;
 }
 
 export const QuickCaptureContext = createContext<QuickCaptureContextValue | null>(null);

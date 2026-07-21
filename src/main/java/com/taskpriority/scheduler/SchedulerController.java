@@ -23,6 +23,11 @@ public class SchedulerController {
         return schedulerService.getDaySchedule(date);
     }
 
+    @GetMapping("/week")
+    public WeekScheduleResponse week(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate) {
+        return schedulerService.getWeekSchedule(startDate);
+    }
+
     @PutMapping("/tasks/{taskId}")
     public ScheduledTaskResponse scheduleTask(@PathVariable Long taskId, @Validated @RequestBody ScheduleTaskRequest request) {
         return schedulerService.scheduleTask(taskId, request);

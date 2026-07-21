@@ -61,7 +61,7 @@ const applyParseToFields = (fields: TaskFieldState, touched: Set<string>, parsed
   estimatedMinutes: touched.has('estimatedMinutes') ? fields.estimatedMinutes : (parsed.estimatedMinutes !== undefined ? String(parsed.estimatedMinutes) : ''),
 });
 
-export function QuickCaptureModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: boolean; onOpenChange: (open: boolean) => void; initialDate?: string }) {
   const navigate = useNavigate();
   const { announce } = useAnnouncement();
   const [type, setType] = useState<CaptureType>('task');
@@ -113,6 +113,11 @@ export function QuickCaptureModal({ open, onOpenChange }: { open: boolean; onOpe
   useEffect(() => {
     if (open) window.requestAnimationFrame(() => rawInputRef.current?.focus());
   }, [open]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time prefill reacting to the modal being opened from a specific calendar day, not state sync.
+    if (open && initialDate) setTaskFields((current) => ({ ...current, dueDate: initialDate }));
+  }, [open, initialDate]);
 
   const setTaskField = <K extends keyof TaskFieldState>(field: K, value: TaskFieldState[K]) => {
     touchedFieldsRef.current.add(field);

@@ -133,7 +133,14 @@ No breaking changes to any existing v1 contract in Phases 1–3.
   - [x] 7 component tests (`QuickCaptureModal.test.tsx`) + 15 parser tests
   - **Data-model note**: `Task.dueDate` is date-only (`LocalDate`) -- there is no due-*time* field on `Task`. When quick capture parses or is given a time-of-day, the task is still created with a date-only `dueDate`, and a follow-up `PUT /api/v1/scheduler/tasks/{id}` call places it at that time via the existing Scheduler/`TaskSchedule` mechanism, which is the app's actual time-of-day concept. This is the correct integration, not a workaround -- it mirrors how Day/Week scheduling already works everywhere else.
   - **Fixed alongside**: `npm run test` was discovered to be a real, pre-existing suite (see the "Fix pre-existing App.test.tsx failures" commit) -- it now runs as part of every phase's verification, and `QuickCaptureModal`/the parser both ship with real Vitest coverage rather than being reasoned about by hand.
-- [ ] Phase 5 — Real calendar experience (backlog)
+- [x] Phase 5 — Real calendar experience
+  - [x] Real Month grid (`MonthGrid`) replacing the old summary-card list: current month loads automatically, Prev/Next/Today navigation, real per-day task lists (new `GET /api/v1/calendar/month/tasks`), overdue/important indicators, click a day to quick-capture a task on that date, click a task to open it
+  - [x] Real Week view (`CalendarWeekPage` + `WeekTimeline`), backed by new `GET /api/v1/scheduler/week?startDate=`; drag a scheduled task/habit onto another day to reschedule it (with undo), Previous/Next/Today navigation
+  - [x] Extracted `lib/dateOnly.ts` (parse/format/add-days, all UTC-anchored) out of `PlanningPage`'s local duplicate, shared by Month/Week/Planning; 9 unit tests including month/year/leap-day boundaries
+  - [x] Existing ICS export preserved on the Month view; existing Day view (`SchedulerPage`) and Auto-plan (`PlanningPage`) untouched
+  - [x] `QuickCaptureContext.openQuickCapture` now accepts an optional date to prefill, used by Month's "click a day" affordance
+  - [x] Test coverage: `SchedulerServiceTest` (+2, week schedule composition), `ApiV1IntegrationTest` (2 new endpoint assertions), `MonthGrid.test.tsx` (5), `WeekTimeline.test.tsx` (4)
+  - **Scope decision**: drag-and-drop ships on the Week view (dragging a *scheduled* item onto another day is an unambiguous `TaskSchedule`/`HabitSchedule` date change) but not on the Month grid (dragging a task there would mean changing `Task.dueDate`, a different and riskier operation to get right for tasks that may also be scheduled -- "drag tasks between dates when supported safely" per the brief). Month supports click-to-view and click-a-day-to-capture instead. Month drag-and-drop is a reasonable follow-up, not done here.
 - [ ] Phase 6 — Global search (backlog)
 - [ ] Phase 7 — Projects and goals (backlog)
 - [ ] Phase 8 — Focus sessions (backlog)
