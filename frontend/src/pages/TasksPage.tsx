@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { isQueryError, type ApiCallResult } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
+import { useUndoToast } from '../undoToastContext';
+import { formatEnumLabel } from '../lib/enumLabels';
 import { QueryState } from '../components/QueryState';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { ManageDependenciesDrawer } from '../components/tasks/ManageDependenciesDrawer';
@@ -98,6 +100,7 @@ export function TasksPage() {
   const sort = sortValueFromParams(searchParams);
   const createFormRef = useRef<TaskCreateFormHandle>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
+  const { showUndo } = useUndoToast();
 
   const setFilterParam = (key: (typeof FILTER_PARAM_KEYS)[number], value: string | boolean, defaultValue: string | boolean) => {
     setSearchParams((previous) => {
@@ -184,6 +187,18 @@ export function TasksPage() {
     window.requestAnimationFrame(() => createFormRef.current?.focusTitle());
   };
 
+  useEffect(() => {
+    if (searchParams.get('quickAdd') !== '1') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opening the drawer here is a one-time reaction to an incoming ?quickAdd=1 link, not state sync.
+    showCreatePanel();
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('quickAdd');
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the quickAdd param is present, not on every filter change.
+  }, [searchParams]);
+
   const closeCreatePanel = () => {
     setCreateOpen(false);
     window.requestAnimationFrame(() => createButtonRef.current?.focus());
@@ -209,6 +224,28 @@ export function TasksPage() {
     const next = new Date();
     next.setDate(next.getDate() + 1);
     updateTaskFromCard(task, { followUpDate: next.toISOString().slice(0, 10) });
+  };
+
+  const handleComplete = (taskId: number) => {
+    const task = activeTasks.find((candidate) => candidate.id === taskId);
+    const previousStatus = task?.status;
+    completeTask.mutate(taskId, {
+      onSuccess: (result) => {
+        if (!result.ok || !previousStatus) return;
+        showUndo(`"${task?.title ?? 'Task'}" marked complete.`, () => changeStatus.mutate({ id: taskId, status: previousStatus }));
+      },
+    });
+  };
+
+  const handleChangeStatus = (taskId: number, status: string) => {
+    const task = activeTasks.find((candidate) => candidate.id === taskId);
+    const previousStatus = task?.status;
+    changeStatus.mutate({ id: taskId, status }, {
+      onSuccess: (result) => {
+        if (!result.ok || !previousStatus) return;
+        showUndo(`"${task?.title ?? 'Task'}" moved to ${formatEnumLabel(status)}.`, () => changeStatus.mutate({ id: taskId, status: previousStatus }));
+      },
+    });
   };
 
   const openDependencyManager = (task: TaskRecord) => {
@@ -314,9 +351,9 @@ export function TasksPage() {
           <TaskListView
             tasks={taskTree}
             busy={busy}
-            onComplete={(taskId) => completeTask.mutate(taskId)}
+            onComplete={handleComplete}
             onStartSubtask={(task) => startSubtask(task)}
-            onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
+            onChangeStatus={handleChangeStatus}
             onSnoozeFollowUp={snoozeFollowUp}
             onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
             onManageDependencies={openDependencyManager}

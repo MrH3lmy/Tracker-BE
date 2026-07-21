@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
 import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
 import { useHabitReminders } from './hooks/useHabitReminders';
@@ -8,6 +8,7 @@ import { AnnouncementContext } from './announcementContext';
 import { AuthProvider } from './AuthProvider';
 import { useAuth } from './authContext';
 import { ThemeContext } from './themeContext';
+import { UndoToastContext, type UndoToastContextValue } from './undoToastContext';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -27,12 +28,14 @@ import {
   Check,
   ChevronsLeft,
   Clock,
+  Columns3,
+  Flame,
   Grid2x2,
   Import,
   LayoutDashboard,
   ListTodo,
   Loader2,
-  MenuIcon,
+  MoreHorizontal,
   Plus,
   Settings,
   StickyNote,
@@ -62,8 +65,11 @@ type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean
 const navIcons: Record<string, IconComponent> = {
   Dashboard: LayoutDashboard,
   Tasks: ListTodo,
+  Habits: Flame,
+  Board: Columns3,
   Notes: StickyNote,
   Planning: CalendarDays,
+  Scheduler: Clock,
   Matrix: Grid2x2,
   Calendar: Calendar,
   Settings: Settings,
@@ -170,13 +176,65 @@ function AppRoot() {
   return <AuthenticatedApp />;
 }
 
+const MOBILE_TAB_ITEMS: { label: string; path: string; icon: IconComponent }[] = [
+  { label: 'Today', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Tasks', path: '/tasks', icon: ListTodo },
+  { label: 'Habits', path: '/habits', icon: Flame },
+];
+
+function MobileBottomNav({ onQuickAdd, onToggleMore, isMoreOpen }: { onQuickAdd: () => void; onToggleMore: () => void; isMoreOpen: boolean }) {
+  const [firstTab, secondTab, thirdTab] = MOBILE_TAB_ITEMS;
+  const tabClassName = ({ isActive }: { isActive: boolean }) =>
+    cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isActive ? 'text-brand' : 'text-fg-muted');
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-stretch justify-around border-t border-line bg-card px-1 py-1.5 lg:hidden"
+      aria-label="Mobile primary navigation"
+    >
+      <NavLink to={firstTab.path} className={tabClassName}>
+        <firstTab.icon className="h-5 w-5" aria-hidden />
+        {firstTab.label}
+      </NavLink>
+      <NavLink to={secondTab.path} className={tabClassName}>
+        <secondTab.icon className="h-5 w-5" aria-hidden />
+        {secondTab.label}
+      </NavLink>
+      <button type="button" onClick={onQuickAdd} className="flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium text-fg-muted">
+        <span className="-mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand text-brand-fg" aria-hidden>
+          <Plus className="h-4 w-4" />
+        </span>
+        Quick add
+      </button>
+      <NavLink to={thirdTab.path} className={tabClassName}>
+        <thirdTab.icon className="h-5 w-5" aria-hidden />
+        {thirdTab.label}
+      </NavLink>
+      <button
+        type="button"
+        onClick={onToggleMore}
+        aria-controls="mobile-navigation"
+        aria-expanded={isMoreOpen}
+        className={cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isMoreOpen ? 'text-brand' : 'text-fg-muted')}
+      >
+        <MoreHorizontal className="h-5 w-5" aria-hidden />
+        More
+      </button>
+    </nav>
+  );
+}
+
 function AuthenticatedApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
+  const [undoToast, setUndoToast] = useState<{ id: number; message: string; onUndo: () => void } | null>(null);
+  const undoToastTimeoutRef = useRef<number | undefined>(undefined);
+  const undoToastIdRef = useRef(0);
   const settingsQuery = useSettingsQuery(isAuthenticated);
   const hasSyncedSavedTheme = useRef(false);
   const habitsQuery = useHabitsQuery(isAuthenticated);
@@ -221,6 +279,23 @@ function AuthenticatedApp() {
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
   const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
+  const dismissUndoToast = useCallback(() => {
+    window.clearTimeout(undoToastTimeoutRef.current);
+    setUndoToast(null);
+  }, []);
+  const showUndo = useCallback((message: string, onUndo: () => void) => {
+    window.clearTimeout(undoToastTimeoutRef.current);
+    const id = ++undoToastIdRef.current;
+    setUndoToast({ id, message, onUndo });
+    undoToastTimeoutRef.current = window.setTimeout(() => {
+      setUndoToast((current) => (current?.id === id ? null : current));
+    }, 6000);
+  }, []);
+  const handleUndoClick = () => {
+    undoToast?.onUndo();
+    dismissUndoToast();
+  };
+  const undoToastContextValue = useMemo<UndoToastContextValue>(() => ({ showUndo }), [showUndo]);
   const visibleDeveloperTabs = isDevMode ? developerTabs : [];
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
@@ -244,13 +319,14 @@ function AuthenticatedApp() {
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
-        <a
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
-          href="#task-tracker-main"
-        >
-          Skip to content
-        </a>
-        <div className="flex min-h-screen bg-canvas text-fg">
+        <UndoToastContext.Provider value={undoToastContextValue}>
+          <a
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
+            href="#task-tracker-main"
+          >
+            Skip to content
+          </a>
+          <div className="flex min-h-screen bg-canvas text-fg">
           <aside
             className={cn(
               'sticky top-0 z-(--z-sticky) hidden h-screen shrink-0 flex-col border-r border-line bg-card px-3 py-4 lg:flex',
@@ -291,17 +367,6 @@ function AuthenticatedApp() {
 
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="sticky top-0 z-(--z-sticky) flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-4 sm:px-6">
-              <Button
-                variant="ghost"
-                iconOnly
-                className="lg:hidden"
-                aria-controls="mobile-navigation"
-                aria-expanded={isMobileMenuOpen}
-                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
-                onClick={() => setIsMobileMenuOpen((open) => !open)}
-              >
-                {isMobileMenuOpen ? <X className="h-5 w-5" aria-hidden /> : <MenuIcon className="h-5 w-5" aria-hidden />}
-              </Button>
               <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
               <div className="ml-auto flex items-center gap-2">
                 {!hideGlobalQuickAdd && (
@@ -342,7 +407,7 @@ function AuthenticatedApp() {
 
             <main
               id="task-tracker-main"
-              className={cn('min-w-0 flex-1 focus:outline-none', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
+              className={cn('min-w-0 flex-1 pb-20 focus:outline-none lg:pb-0', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
               tabIndex={-1}
             >
               <Routes>
@@ -361,6 +426,20 @@ function AuthenticatedApp() {
           onCheckIn={(id) => { checkInHabit.mutate(id); dismissReminder(id); }}
           onDismiss={dismissReminder}
         />
+        <MobileBottomNav
+          onQuickAdd={() => navigate('/tasks?quickAdd=1')}
+          onToggleMore={() => setIsMobileMenuOpen((open) => !open)}
+          isMoreOpen={isMobileMenuOpen}
+        />
+        {undoToast && (
+          <div className="fixed inset-x-0 bottom-20 z-(--z-toast) flex justify-center px-4 lg:bottom-6" role="status" aria-live="polite">
+            <div className="flex items-center gap-3 rounded-lg border border-line-strong bg-card px-4 py-3 shadow-lg">
+              <span className="text-sm text-fg">{undoToast.message}</span>
+              <Button size="sm" variant="ghost" onClick={handleUndoClick}>Undo</Button>
+            </div>
+          </div>
+        )}
+        </UndoToastContext.Provider>
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>
   );

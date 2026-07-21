@@ -1,9 +1,11 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, SegmentedControl, cn, type BadgeVariant } from '../components/ui';
 import { Calendar, CheckCircle2, ChevronRight, Eye, Flag, RefreshCw, Sparkles, TrendingUp } from '../components/ui/icons';
+import { formatEnumLabel } from '../lib/enumLabels';
 
 interface TaskPreview {
   id?: number | string;
@@ -177,14 +179,10 @@ function MetricItem({ icon: Icon, label, value, title }: { icon: IconComponent; 
 }
 
 const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
-const formatBadgeLabel = (value: string | number) => normalizeUiText(String(value).replaceAll('_', ' '));
-const chipLabelOverrides: Record<string, string> = {
-  ALREADY_IN_PROGRESS: 'IN_PROGRESS',
-};
+const formatBadgeLabel = (value: string | number) => normalizeUiText(formatEnumLabel(value));
 const formatReasonCode = (reason: string) => {
-  if (chipLabelOverrides[reason]) return chipLabelOverrides[reason];
-  if (reason.endsWith('_EFFORT')) return `EFFORT: ${reason.replace('_EFFORT', '')}`;
-  if (reason.startsWith('EFFORT_')) return reason.replace('EFFORT_', 'EFFORT: ');
+  if (reason.endsWith('_EFFORT')) return `Effort: ${formatEnumLabel(reason.replace('_EFFORT', ''))}`;
+  if (reason.startsWith('EFFORT_')) return `Effort: ${formatEnumLabel(reason.replace('EFFORT_', ''))}`;
   return formatBadgeLabel(reason);
 };
 
@@ -237,8 +235,8 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Top recommendation metadata">
         <MetricItem icon={Calendar} label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
-        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={task.status} />}
-        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={task.priorityCategory} />}
+        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={formatEnumLabel(task.status)} />}
+        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={formatEnumLabel(task.priorityCategory)} />}
         {typeof task?.priorityScore === 'number' && <MetricItem icon={TrendingUp} label="Score" value={task.priorityScore} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -264,6 +262,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
 }
 
 function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendation: RecommendationPreview; fallbackRank: number }) {
+  const navigate = useNavigate();
   const task = recommendation.task;
   const summary = 'Due today and ready for action.';
   const taskTitle = normalizeUiText(task?.title, 'Untitled task');
@@ -280,10 +279,16 @@ function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendat
       <p className="text-sm text-fg-muted">{summary}</p>
       <div className="flex flex-col gap-2" aria-label="Secondary recommendation metadata">
         <MetricItem icon={Calendar} label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
-        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={task.status} />}
-        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={task.priorityCategory} />}
+        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={formatEnumLabel(task.status)} />}
+        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={formatEnumLabel(task.priorityCategory)} />}
       </div>
-      <Button variant="ghost" size="sm" className="self-start">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        disabled={task?.id === undefined}
+        onClick={() => task?.id !== undefined && navigate(`/tasks/${task.id}`)}
+      >
         <Eye className="h-4 w-4" aria-hidden />
         View details
         <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -329,7 +334,7 @@ function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage:
           </div>
           <div className="flex flex-wrap gap-1.5">
             {task.dueDate && <Badge variant="outline">Due {formatPlannerDate(task.dueDate, 'Due date unavailable')}</Badge>}
-            {task.status && <Badge variant="outline">{task.status}</Badge>}
+            {task.status && <Badge variant="outline">{formatEnumLabel(task.status)}</Badge>}
             {typeof task.priorityScore === 'number' && <Badge variant="outline">Score {task.priorityScore}</Badge>}
             {task.important && <Badge variant="caution">Important</Badge>}
           </div>
@@ -475,7 +480,7 @@ function ProjectBoardView({ data }: { data: unknown }) {
                   <div className="min-w-0">
                     <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">{column.track ?? 'Unassigned track'}</p>
                     <h3 className="mt-0.5 text-sm font-semibold text-fg">{column.phase ?? 'Unassigned phase'}</h3>
-                    {column.status && <p className="mt-0.5 text-xs text-fg-muted">Status lane: {column.status}</p>}
+                    {column.status && <p className="mt-0.5 text-xs text-fg-muted">Status lane: {formatEnumLabel(column.status)}</p>}
                   </div>
                   <Badge variant={riskBadgeVariant(column.risk?.level)}>{column.risk?.level ?? 'LOW'}</Badge>
                 </div>
@@ -498,7 +503,7 @@ function ProjectBoardView({ data }: { data: unknown }) {
                           <Badge variant={riskBadgeVariant(task.risk?.level)}>{task.risk?.level ?? 'LOW'}</Badge>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {task.status && <Badge variant="outline">{task.status}</Badge>}
+                          {task.status && <Badge variant="outline">{formatEnumLabel(task.status)}</Badge>}
                           <Badge variant="outline">Due {formatPlannerDate(task.dueDate, 'No due date')}</Badge>
                           <Badge variant="outline">Estimate {formatHours(task.estimatedHours)}</Badge>
                           {typeof task.aggregateEstimatedHours === 'number' && task.aggregateEstimatedHours !== task.estimatedHours && <Badge variant="outline">With subtasks {formatHours(task.aggregateEstimatedHours)}</Badge>}

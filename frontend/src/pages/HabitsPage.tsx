@@ -44,6 +44,7 @@ export function HabitsPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
   const [sort, setSort] = useState<HabitSortValue>('reminderTime');
   const createFormRef = useRef<HabitCreateFormHandle>(null);
+  const templateSectionRef = useRef<HTMLDivElement>(null);
 
   const habitsQuery = useHabitsQuery();
   const { createHabit, updateHabit, deleteHabit, checkIn, undoCheckIn } = useHabitMutations();
@@ -75,12 +76,15 @@ export function HabitsPage() {
     return { total: habits.length, completedToday, currentStreak, bestStreak, percent };
   }, [habits]);
 
-  const showCreatePanel = () => {
+  const showCreatePanel = (initialFocus: 'title' | 'templates' = 'title') => {
     setEditingHabit(undefined);
     setSelectedPresetLabel(undefined);
     setFormValid(false);
     setCreateOpen(true);
-    window.requestAnimationFrame(() => createFormRef.current?.focusTitle());
+    window.requestAnimationFrame(() => {
+      if (initialFocus === 'templates') templateSectionRef.current?.focus();
+      else createFormRef.current?.focusTitle();
+    });
   };
 
   const showEditPanel = (habit: HabitRecord) => {
@@ -124,11 +128,11 @@ export function HabitsPage() {
         description={<span className="inline-flex items-center gap-1.5"><span aria-hidden>📅</span> {todayHeaderLabel()}</span>}
         actions={
           <>
-            <Button onClick={showCreatePanel} disabled={busy}>
+            <Button onClick={() => showCreatePanel('templates')} disabled={busy}>
               <Sparkles className="h-4 w-4" aria-hidden />
               Browse templates
             </Button>
-            <Button variant="primary" onClick={showCreatePanel} disabled={busy}>
+            <Button variant="primary" onClick={() => showCreatePanel('title')} disabled={busy}>
               <Plus className="h-4 w-4" aria-hidden />
               New habit
             </Button>
@@ -232,7 +236,9 @@ export function HabitsPage() {
         description="Set a routine you want to repeat."
         wide
         topSlot={!editingHabit ? (
-          <HabitTemplateSelector selectedLabel={selectedPresetLabel} onSelect={applyPreset} disabled={busy} />
+          <div ref={templateSectionRef} tabIndex={-1} className="outline-none">
+            <HabitTemplateSelector selectedLabel={selectedPresetLabel} onSelect={applyPreset} disabled={busy} />
+          </div>
         ) : undefined}
         footer={
           <>

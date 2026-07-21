@@ -35,10 +35,10 @@ export function ImportPage() {
     <div className="flex flex-col gap-5" aria-busy={busy}>
       <PageHeader
         title="Import"
-        description="Choose a CSV or JSON task import flow, review expected input, and post to the backend."
+        description="Bring existing tasks into Tracker from a CSV file or a JSON list."
         actions={
           <Button variant="primary" onClick={submitActiveMode} disabled={busy || (mode === 'json' && tasksValidation.errors.length > 0)}>
-            {activeMutation.isPending ? 'Posting...' : mode === 'csv' ? 'Import CSV' : 'Import tasks JSON'}
+            {activeMutation.isPending ? 'Importing...' : mode === 'csv' ? 'Import CSV' : 'Import tasks JSON'}
           </Button>
         }
         className="mb-0"
@@ -84,8 +84,8 @@ export function ImportPage() {
               <Textarea id="csvPayload" value={csvPayload} onChange={(event) => setCsvPayload(event.target.value)} rows={8} className="min-h-0 font-mono text-xs" />
             </Field>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-              <p className="text-sm text-fg-muted">POST plain text to <code>/api/v1/import/csv</code>.</p>
-              <Button variant="primary" onClick={() => importCsv.mutate(csvPayload)} disabled={busy}>{importCsv.isPending ? 'Posting...' : 'Post CSV'}</Button>
+              <p className="text-sm text-fg-muted">We'll create one task per row.</p>
+              <Button variant="primary" onClick={() => importCsv.mutate(csvPayload)} disabled={busy}>{importCsv.isPending ? 'Importing...' : 'Import CSV'}</Button>
             </div>
           </div>
         ) : (
@@ -101,8 +101,8 @@ export function ImportPage() {
             </Field>
             {tasksValidation.errors.map((error) => <p key={error} className="text-sm text-critical" role="status">{error}</p>)}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-              <p className="text-sm text-fg-muted">POST JSON to <code>/api/v1/import/tasks</code>.</p>
-              <Button variant="primary" onClick={submitTasks} disabled={tasksValidation.errors.length > 0 || busy}>{importTasks.isPending ? 'Posting...' : 'Post tasks JSON'}</Button>
+              <p className="text-sm text-fg-muted">We'll create one task per item in the list.</p>
+              <Button variant="primary" onClick={submitTasks} disabled={tasksValidation.errors.length > 0 || busy}>{importTasks.isPending ? 'Importing...' : 'Import tasks'}</Button>
             </div>
           </div>
         )}

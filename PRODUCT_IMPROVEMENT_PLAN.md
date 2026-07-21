@@ -1,0 +1,119 @@
+# Tracker Product Improvement Plan
+
+Status: living document. Updated at the end of each phase with what shipped and what moved to `BACKLOG.md`.
+
+## 1. Current UX problems (found in the actual code)
+
+Findings from a direct audit of `frontend/src` and `src/main/java/com/taskpriority` before any changes were made.
+
+1. **Sidebar icon fallback bug.** `App.tsx`'s `navIcons` map was missing entries for Habits, Board, and Scheduler, so all three silently rendered the Dashboard icon (`LayoutDashboard`) via the `navIcons[label] ?? LayoutDashboard` fallback.
+2. **A genuinely dead button.** `PlanningPage.tsx`'s `SecondarySuggestionCard` rendered a "View details" button with no `onClick` at all, even though `TaskDetailPage` / `/tasks/:id` already exists.
+3. **Redundant CTAs.** `HabitsPage.tsx`'s "Browse templates" and "New habit" buttons called the exact same handler (`showCreatePanel`), so they did the same thing despite implying different flows.
+4. **Developer/API language leaking into normal screens.** `DashboardPage.tsx` literally showed strings like "Summaries from /api/v1/dashboard", a raw JSON `<pre>` dump, and had a manual "Refresh"/"Check API" flow instead of loading on mount — it reads as an API-testing scaffold, not a finished dashboard. `SettingsPage.tsx` repeated "Saved as `<settingKey>`" captions showing raw backend keys. `ImportPage.tsx` told users to "POST plain text to `/api/v1/import/csv`".
+5. **Raw enum values rendered verbatim.** `PlanningPage.tsx` and `MatrixPage.tsx` printed `task.status` / `task.priorityCategory` straight from the API (`IN_PROGRESS`, `DO_NOW`, `DEEP_WORK`, `FOLLOW_UP_OVERDUE`, ...) with no humanization, unlike the one local `formatBadgeLabel` helper that was already applied inconsistently.
+6. **No undo for reversible actions.** Completing a task, changing its status (which is how "archiving" works — status flips to `DONE`/`CANCELLED`), moving a task on the board, and unscheduling a task/habit are all backed by fully reversible endpoints, but the UI gave no way to undo a misclick.
+7. **No mobile bottom navigation.** Mobile nav was a top hamburger opening a dropdown list — workable, but not the fast thumb-reachable navigation a "daily driver" app needs.
+8. **Fragmented information architecture.** Eleven top-level sidebar items (Dashboard, Tasks, Habits, Board, Notes, Planning, Scheduler, Matrix, Calendar, Settings, Import) for what are largely different *views* of the same two concepts (tasks, time). Board and Matrix are task views; Planning and Scheduler are both "what should I do and when" tools with overlapping data (`PlanningService` vs the `scheduler` package).
+9. **Dashboard isn't a command center.** It requires a manual click to load anything, shows generic workspace tiles instead of "what do I do right now," and has no habits, no timeline, no recommended-next-task surface even though `TaskRecommendationService` and `PlanningService.getTodayView()` already compute exactly that data.
+
+## 2. What already exists and should be reused, not rebuilt
+
+This matters because the original ask assumed some of this was missing — it is not:
+
+- **Auth & per-user isolation is mature.** JWT (`app/auth` package, `JwtAuthenticationFilter`, `CurrentUserService`), a real `User` entity, and `user_id` scoping on every domain table (migrations V26–V29). All new backend code follows the existing `currentUserService.requireUserId()` + `findByUserId(...)` pattern — no new auth work needed.
+- **Habits** is a fully shipped feature end-to-end (entity, service, controller, reminders, frontend pages/components, tests) — not greenfield.
+- **A recommendation engine already exists**: `TaskRecommendationService` (`/api/v1/planning/recommendations`) scores tasks and returns ranked actions with reason codes and confidence.
+- **Auto-scheduling already exists**: `ScheduleSuggestionService.autoSchedule` (`POST /api/v1/scheduler/auto-schedule`) bulk-assigns tasks/habits into open slots.
+- **Genuinely greenfield**: Projects/Goals (no entity — only `Task.track`/`Task.phase` string grouping), global search, focus sessions, weekly review, and reminder *delivery* (only `Habit.reminderEnabled`/`reminderTime` data fields exist; no `@Scheduled` job or notification system anywhere).
+
+## 3. Proposed information architecture
+
+Primary nav: **Today · Tasks · Habits · Notes · Calendar · Insights**
+Secondary: **Search · Settings · Import**
+
+| New location | Absorbs |
+|---|---|
+| Today (replaces Dashboard) | New `/api/v1/home/today` aggregation |
+| Tasks → List / Board / Matrix views | `TasksPage`, `BoardPage`, `MatrixPage` (existing pages, now view-switched under one route) |
+| Calendar → Day / Week / Month / Auto-plan | `CalendarPage`, `SchedulerPage`, `PlanningPage` weekly/board views |
+| Insights | New: task analytics, habit analytics, planning performance (Phase 4+ backlog) |
+
+Old routes (`/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler`) redirect to their new home so bookmarks/saved links keep working (`Navigate replace` routes, not deletions).
+
+## 4. Backend changes
+
+- Phase 3: `GET /api/v1/home/today` — new `home` package (`HomeController`, `HomeService`) composing existing services: `DashboardService` (counts), `PlanningService.getTodayView()` (overdue/due-today/top-priority tasks), `TaskRecommendationService` (top 3 recommendations), `HabitService`/habit repositories (habits due today + check-in state), `TaskRepository` follow-up queries. No new tables — pure composition, read-only, scoped by `currentUserService.requireUserId()` like every other service.
+- Phase 7+ (backlog): `Project`/`Milestone` entities + Flyway migrations, `ProjectController`.
+- Phase 8+ (backlog): `FocusSession` entity + Flyway migration, session controller.
+- Phase 9+ (backlog): `WeeklyReview` entity + Flyway migration.
+- Phase 10+ (backlog): `Reminder`/`NotificationOutbox` entities, a `@Scheduled` delivery worker (first one anywhere in this codebase).
+
+## 5. Frontend changes
+
+- New shared primitives: `lib/enumLabels.ts` (SCREAMING_SNAKE_CASE → friendly label, with the exact overrides requested: `IN_PROGRESS` → "In progress", `DO_NOW` → "Do now", `DEEP_WORK` → "Deep work", `FOLLOW_UP_OVERDUE` → "Follow-up overdue"), `undoToastContext.tsx` (bottom undo toast, auto-dismiss, wired into `AuthenticatedApp` in `App.tsx` next to the existing `AnnouncementContext`).
+- Mobile bottom nav (`Today · Tasks · Quick add · Habits · More`), replacing the header hamburger (avoids two competing mobile nav triggers).
+- New `TodayPage` replacing `DashboardPage` as the `/dashboard`(→`/today`) route.
+- Route consolidation in `router/routes.tsx` + redirect routes for old paths.
+
+## 6. Database migrations
+
+Phase 1–3 ship **zero** new migrations (pure composition + frontend work). Future phases will need (see `BACKLOG.md` for exact DDL sketch):
+- `V33__create_projects.sql` (Projects/Goals/Milestones)
+- `V34__create_focus_sessions.sql`
+- `V35__create_weekly_reviews.sql`
+- `V36__create_reminders_and_outbox.sql`
+
+All forward-only, all with a `user_id` FK following the established pattern from V28/V29.
+
+## 7. API changes
+
+| Endpoint | Phase | Notes |
+|---|---|---|
+| `GET /api/v1/home/today` | 3 | New, additive. Existing `/api/v1/dashboard`, `/api/v1/planning/today` etc. remain unchanged — nothing is removed. |
+| `GET /api/v1/search` | 6 (backlog) | New |
+| `/api/v1/projects/**` | 7 (backlog) | New |
+| `/api/v1/focus-sessions/**` | 8 (backlog) | New |
+| `/api/v1/weekly-reviews/**` | 9 (backlog) | New |
+| `/api/v1/reminders/**`, `/api/v1/notifications/**` | 10 (backlog) | New |
+
+No breaking changes to any existing v1 contract in Phases 1–3.
+
+## 8. Risks
+
+- **Scope**: the full 10-phase brief (including a first delivery-guaranteed reminder system, projects/goals, focus sessions, and global search with new indexes) is multiple weeks of work with real data-model decisions. Shipping it unreviewed in one pass risks exactly the kind of half-finished, untested code the brief explicitly forbids.
+- **Nav consolidation risk**: moving Board/Matrix under Tasks and Planning/Scheduler under Calendar touches routing, the sidebar, and every internal link; redirects mitigate bookmark breakage but need testing against every old path.
+- **Today endpoint risk**: composing four existing services into one response is straightforward, but must stay read-only and avoid N+1 (reuse existing repository methods, no per-task extra queries).
+- **Mitigation for both**: ship Phases 1–3 fully tested now; everything else specified as implementation-ready backlog items rather than rushed code.
+
+## 9. Test strategy
+
+- Backend: `mvn test` (JUnit 5 + Mockito + MockMvc slice tests for the new `HomeController`; reuse of already-tested services means no new service-level logic to re-test).
+- Frontend: `npm run lint`, `npm run build` (`tsc -b && vite build`) — no frontend test runner is configured in this repo (per `CLAUDE.md`), so correctness is verified via type-checking, linting, and manual dev-server smoke checks.
+- Both suites run after every phase; regressions are fixed before moving on.
+
+## 10. Ordered implementation phases
+
+1. **UI polish and correctness** — icons, dead buttons, redundant CTAs, dev-string cleanup, enum labels, undo, mobile bottom nav.
+2. **Consolidate navigation IA** — Today/Tasks/Habits/Notes/Calendar/Insights, view-switching, redirects.
+3. **Real Today page** — `/api/v1/home/today` + command-center UI.
+4–10. **Backlog** (see `BACKLOG.md`): global quick capture, real calendar experience, global search, projects/goals, focus sessions, weekly review, reminder foundation.
+
+## 11. Checklist
+
+- [x] Phase 1 — UI polish and correctness
+  - [x] Fix sidebar icons (Habits, Board, Scheduler)
+  - [x] Fix dead "View details" button
+  - [x] Differentiate "Browse templates" / "New habit"
+  - [x] Remove developer language from Settings/Import; consolidate raw JSON under Settings → Advanced → Developer configuration
+  - [x] Humanize enum labels in Planning/Matrix
+  - [x] Undo support for complete / status change / board move / unschedule
+  - [x] Mobile bottom navigation
+- [ ] Phase 2 — Consolidate navigation IA
+- [ ] Phase 3 — Real Today page (`/api/v1/home/today`)
+- [ ] Phase 4 — Global quick capture (backlog)
+- [ ] Phase 5 — Real calendar experience (backlog)
+- [ ] Phase 6 — Global search (backlog)
+- [ ] Phase 7 — Projects and goals (backlog)
+- [ ] Phase 8 — Focus sessions (backlog)
+- [ ] Phase 9 — Weekly review (backlog)
+- [ ] Phase 10 — Reminder foundation (backlog)

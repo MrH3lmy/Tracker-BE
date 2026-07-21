@@ -43,11 +43,10 @@ const asNumber = (value: unknown, fallback: number) => typeof value === 'number'
 const asWeeklyHours = (value: unknown): WeeklyHours => value && typeof value === 'object' && !Array.isArray(value) ? (value as WeeklyHours) : {};
 
 function WeeklyHoursEditor({
-  legend, hint, settingKey, hours, disabled, onChangeDay,
+  legend, hint, hours, disabled, onChangeDay,
 }: {
   legend: string;
   hint: string;
-  settingKey: string;
   hours: WeeklyHours;
   disabled: boolean;
   onChangeDay: (day: string, window: TimeWindow | undefined) => void;
@@ -90,7 +89,6 @@ function WeeklyHoursEditor({
           );
         })}
       </div>
-      <p className="mt-2 text-xs text-fg-subtle">Saved as <code>{settingKey}</code>.</p>
     </fieldset>
   );
 }
@@ -141,7 +139,7 @@ export function SettingsPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Settings"
-        description="Adjust workspace defaults; the same values are stored as JSON under the hood."
+        description="Adjust your workspace defaults, scheduling preferences, and appearance."
         actions={
           <Button variant="primary" onClick={() => bodyValidation.parsed && saveMutation.mutate(bodyValidation.parsed)} disabled={!canSubmit}>
             {saveMutation.isPending ? 'Saving...' : 'Save settings'}
@@ -209,9 +207,6 @@ export function SettingsPage() {
                 />
               </Field>
             </div>
-            <p className="mt-3 text-xs text-fg-subtle">
-              Saved as <code>{EXCLUDED_WEEKDAYS_KEY}</code>, <code>{HOLIDAY_DATES_KEY}</code>, and <code>{DEFAULT_DAILY_CAPACITY_HOURS_KEY}</code>.
-            </p>
           </section>
 
           <section className="rounded-lg border border-line p-4" aria-label="Working and sleep hours">
@@ -224,7 +219,6 @@ export function SettingsPage() {
               <WeeklyHoursEditor
                 legend="Working hours"
                 hint="Days with no working hours are treated as non-working for suggestions."
-                settingKey={WORKING_HOURS_KEY}
                 hours={workingHours}
                 disabled={saveMutation.isPending}
                 onChangeDay={(day, window) => updateSettingBody({ [WORKING_HOURS_KEY]: { ...workingHours, [day]: window } })}
@@ -232,7 +226,6 @@ export function SettingsPage() {
               <WeeklyHoursEditor
                 legend="Sleep hours"
                 hint="Can cross midnight (e.g. 23:00 to 07:00)."
-                settingKey={SLEEP_HOURS_KEY}
                 hours={sleepHours}
                 disabled={saveMutation.isPending}
                 onChangeDay={(day, window) => updateSettingBody({ [SLEEP_HOURS_KEY]: { ...sleepHours, [day]: window } })}
@@ -267,9 +260,6 @@ export function SettingsPage() {
                 );
               })}
             </div>
-            <p className="mt-3 text-xs text-fg-subtle">
-              Saved as <code>{HABIT_REMINDER_STYLE_KEY}</code>.
-            </p>
           </section>
 
           <section className="rounded-lg border border-line p-4">
@@ -280,7 +270,7 @@ export function SettingsPage() {
               onChange={(event) => updateSettingBody({ [AI_FEATURES_ENABLED_KEY]: event.target.checked })}
             />
             <p className="mt-2 text-xs text-fg-subtle">
-              Saved as <code>{AI_FEATURES_ENABLED_KEY}</code>. Leave disabled for offline or privacy-sensitive environments; note AI suggestions require user review and never auto-create tasks.
+              Leave disabled for offline or privacy-sensitive environments. AI suggestions always require your review and never auto-create tasks.
             </p>
           </section>
 
@@ -312,9 +302,6 @@ export function SettingsPage() {
                 );
               })}
             </div>
-            <p className="mt-3 text-xs text-fg-subtle">
-              Saved as <code>{THEME_SETTING_KEY}</code>.
-            </p>
           </section>
 
           <section className="rounded-lg border border-line p-4" aria-label="Premium features">
@@ -331,13 +318,13 @@ export function SettingsPage() {
           </section>
 
           <Collapsible
-            title="Advanced: raw settings JSON"
+            title="Advanced → Developer configuration"
             open={advancedOpen}
             onOpenChange={setAdvancedManuallyOpen}
             badge={hasValidationErrors ? <Badge variant="critical">{bodyValidation.errors.length} issue{bodyValidation.errors.length === 1 ? '' : 's'}</Badge> : undefined}
           >
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-fg-muted">Edit application settings as JSON directly. Structured controls above write into this payload.</p>
+              <p className="text-sm text-fg-muted">Edit the underlying settings payload directly as JSON. Structured controls above write into this same payload; most people never need to open this section.</p>
               <Field label="Settings JSON" htmlFor="settingsPayload">
                 <Textarea
                   id="settingsPayload"
