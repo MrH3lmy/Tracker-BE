@@ -4,6 +4,9 @@ import { QueryState } from '../components/QueryState';
 import { useMatrixQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, cn, type BadgeVariant } from '../components/ui';
 import { ArrowRight, Calendar, Check, Clock, X } from '../components/ui/icons';
+import { formatEnumLabel } from '../lib/enumLabels';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 interface MatrixTask {
   id?: number | string;
@@ -93,7 +96,7 @@ function MatrixTaskCard({ task }: { task: MatrixTask }) {
             Due {task.dueDate}
           </Badge>
         )}
-        {task.status && <Badge variant="outline">{task.status}</Badge>}
+        {task.status && <Badge variant="outline">{formatEnumLabel(task.status)}</Badge>}
         {typeof task.priorityScore === 'number' && <Badge variant="brand">Score {task.priorityScore}</Badge>}
       </div>
       {task.priorityReason && (
@@ -138,8 +141,7 @@ function MatrixQuadrants({ data }: { data: unknown }) {
             <section key={quadrant.key} className={cn('flex flex-col gap-3 rounded-xl border border-line border-t-2 bg-card p-4 shadow-2xs', quadrant.accent)}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">{quadrant.key.replace('_', ' ')}</p>
-                  <h3 className="mt-0.5 text-sm font-semibold text-fg">{quadrant.title}</h3>
+                  <h3 className="text-sm font-semibold text-fg">{quadrant.title}</h3>
                   <p className="mt-0.5 text-sm text-fg-muted">{quadrant.subtitle}</p>
                 </div>
                 <Badge variant={quadrant.badgeVariant}>{quadrant.tasks.length}</Badge>
@@ -171,7 +173,10 @@ export function MatrixPage() {
   const canRenderQuadrants = supportsQuadrants(query.data?.data);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+      </div>
       <PageHeader
         title="Matrix"
         description="See tasks organized by Eisenhower-style priority categories."

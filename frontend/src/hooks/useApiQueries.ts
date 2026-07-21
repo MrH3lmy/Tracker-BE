@@ -5,6 +5,10 @@ import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes
 import type { BoardColumnRecord } from '../components/board/boardTypes';
 import type { CreateHabitPayload, HabitHistoryEntry, HabitRecord } from '../components/habits/habitTypes';
 import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
+import type { CreateMilestonePayload, CreateProjectPayload, MilestoneRecord, ProjectOverviewRecord, ProjectRecord, UpdateMilestonePayload } from '../components/projects/projectTypes';
+import type { FocusAnalyticsRecord, FocusSessionRecord, StopFocusSessionPayload } from '../components/focus/focusTypes';
+import type { CompleteWeeklyReviewPayload, WeeklyReviewDraftRecord, WeeklyReviewRecord } from '../components/weeklyreview/weeklyReviewTypes';
+import type { NotificationRecord } from '../components/notifications/notificationTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -29,6 +33,32 @@ export interface NotesQueryFilters {
   size?: number;
 }
 
+export interface SearchFilters {
+  q?: string;
+  type?: 'task' | 'note' | 'habit' | 'tag' | '';
+  status?: string;
+  due?: string;
+  area?: string;
+  tag?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface SearchResultRecord {
+  type: 'TASK' | 'NOTE' | 'HABIT' | 'TAG';
+  id: number;
+  title: string;
+  snippet?: string | null;
+  url: string;
+}
+
+export interface SearchResponseRecord {
+  items: SearchResultRecord[];
+  page: number;
+  size: number;
+  totalElements: number;
+}
+
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
 export type UploadScreenshotVariables = { noteId: number; file: File | Blob; caption?: string; source?: string; width?: number; height?: number };
 type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
@@ -47,13 +77,30 @@ export const queryKeys = {
   planningRecommendations: ['planning', 'recommendations'] as const,
   planningProjectBoard: ['planning', 'project-board'] as const,
   matrix: ['matrix'] as const,
+  dashboard: ['dashboard'] as const,
+  homeToday: ['home', 'today'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
+  calendarMonthTasks: (year: string, month: string) => ['calendar', 'month', 'tasks', year, month] as const,
+  schedulerWeek: (startDate: string) => ['scheduler', 'week', startDate] as const,
+  search: (filters: SearchFilters) => ['search', filters.q ?? '', filters.type ?? '', filters.status ?? '', filters.due ?? '', filters.area ?? '', filters.tag ?? '', filters.page ?? 0, filters.size ?? 20] as const,
   settings: ['settings'] as const,
   boardColumns: ['board-columns'] as const,
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
   schedulerDay: (date: string) => ['scheduler', 'day', date] as const,
   habits: ['habits'] as const,
   habitHistory: (from: string, to: string) => ['habits', 'history', from, to] as const,
+  projects: ['projects'] as const,
+  project: (id: number) => ['projects', id] as const,
+  projectOverview: (id: number) => ['projects', id, 'overview'] as const,
+  projectMilestones: (id: number) => ['projects', id, 'milestones'] as const,
+  projectTasks: (id: number) => ['projects', id, 'tasks'] as const,
+  focusActive: ['focus-sessions', 'active'] as const,
+  focusSessions: (from: string, to: string) => ['focus-sessions', from, to] as const,
+  focusAnalytics: (from: string, to: string) => ['focus-sessions', 'analytics', from, to] as const,
+  weeklyReviews: (limit: number) => ['weekly-reviews', limit] as const,
+  weeklyReviewDraft: ['weekly-reviews', 'current-draft'] as const,
+  notifications: (unreadOnly: boolean) => ['notifications', unreadOnly] as const,
+  notificationsUnreadCount: ['notifications', 'unread-count'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -95,12 +142,32 @@ export interface NoteSavedViewRecord { id: number; name: string; filters: Record
 export const useNoteSavedViewsQuery = () => useQuery({ queryKey: queryKeys.noteSavedViews, queryFn: () => apiJson<NoteSavedViewRecord[]>('GET', '/api/v1/note-saved-views') });
 export const useNoteVersionsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteVersions(noteId), queryFn: () => apiJson<NoteVersionRecord[]>('GET', `/api/v1/notes/${noteId}/versions`), enabled });
 export const useNoteAiGenerationsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteAiGenerations(noteId), queryFn: () => apiJson<NoteAiGenerationRecord[]>('GET', `/api/v1/notes/${noteId}/ai-generations`), enabled });
+export const useDashboardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.dashboard, queryFn: () => apiJson<unknown>('GET', '/api/v1/dashboard'), enabled });
+export const useHomeTodayQuery = (enabled = true) => useQuery({ queryKey: queryKeys.homeToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/home/today'), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
 export const usePlanningProjectBoardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningProjectBoard, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/project-board'), enabled });
 export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.matrix, queryFn: () => apiJson<unknown>('GET', '/api/v1/matrix'), enabled });
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
+export const useCalendarMonthTasksQuery = (year: string, month: string, enabled = true) => useQuery({ queryKey: queryKeys.calendarMonthTasks(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month/tasks?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
+export const useSchedulerWeekQuery = (startDate: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerWeek(startDate), queryFn: () => apiJson<unknown>('GET', `/api/v1/scheduler/week?startDate=${encodeURIComponent(startDate)}`), enabled });
+export const useSearchQuery = (filters: SearchFilters, enabled: boolean) => useQuery({
+  queryKey: queryKeys.search(filters),
+  queryFn: () => {
+    const params = new URLSearchParams();
+    if (filters.q?.trim()) params.set('q', filters.q.trim());
+    if (filters.type) params.set('type', filters.type);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.due) params.set('due', filters.due);
+    if (filters.area) params.set('area', filters.area);
+    if (filters.tag) params.set('tag', filters.tag);
+    if (filters.page !== undefined) params.set('page', String(filters.page));
+    if (filters.size !== undefined) params.set('size', String(filters.size));
+    return apiJson<SearchResponseRecord>('GET', `/api/v1/search?${params.toString()}`);
+  },
+  enabled,
+});
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
 export const useHabitsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits'), enabled });
@@ -109,12 +176,39 @@ export const useHabitHistoryQuery = (from: string, to: string, enabled = true) =
   queryFn: () => apiJson<HabitHistoryEntry[]>('GET', `/api/v1/habits/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   enabled,
 });
+export const useProjectsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.projects, queryFn: () => apiJson<ProjectRecord[]>('GET', '/api/v1/projects'), enabled });
+export const useProjectQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.project(id), queryFn: () => apiJson<ProjectRecord>('GET', `/api/v1/projects/${id}`), enabled: enabled && Number.isFinite(id) });
+export const useProjectOverviewQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectOverview(id), queryFn: () => apiJson<ProjectOverviewRecord>('GET', `/api/v1/projects/${id}/overview`), enabled: enabled && Number.isFinite(id) });
+export const useProjectMilestonesQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectMilestones(id), queryFn: () => apiJson<MilestoneRecord[]>('GET', `/api/v1/projects/${id}/milestones`), enabled: enabled && Number.isFinite(id) });
+export const useProjectTasksQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectTasks(id), queryFn: () => apiJson<TaskRecord[]>('GET', `/api/v1/projects/${id}/tasks`), enabled: enabled && Number.isFinite(id) });
+export const useFocusActiveQuery = (enabled = true) => useQuery({
+  queryKey: queryKeys.focusActive,
+  queryFn: () => apiJson<FocusSessionRecord>('GET', '/api/v1/focus-sessions/active'),
+  enabled,
+  refetchInterval: (query) => (query.state.data?.data ? 30000 : false),
+});
+export const useFocusSessionsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusSessions(from, to), queryFn: () => apiJson<FocusSessionRecord[]>('GET', `/api/v1/focus-sessions?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
+export const useFocusAnalyticsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusAnalytics(from, to), queryFn: () => apiJson<FocusAnalyticsRecord>('GET', `/api/v1/focus-sessions/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
+export const useWeeklyReviewsQuery = (limit = 20, enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviews(limit), queryFn: () => apiJson<WeeklyReviewRecord[]>('GET', `/api/v1/weekly-reviews?limit=${encodeURIComponent(String(limit))}`), enabled });
+export const useWeeklyReviewDraftQuery = (enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviewDraft, queryFn: () => apiJson<WeeklyReviewDraftRecord>('GET', '/api/v1/weekly-reviews/current-draft'), enabled });
+export const useNotificationsQuery = (unreadOnly: boolean, enabled = true) => useQuery({
+  queryKey: queryKeys.notifications(unreadOnly),
+  queryFn: () => apiJson<NotificationRecord[]>('GET', `/api/v1/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+  enabled,
+});
+export const useNotificationsUnreadCountQuery = (enabled = true) => useQuery({
+  queryKey: queryKeys.notificationsUnreadCount,
+  queryFn: () => apiJson<{ count: number }>('GET', '/api/v1/notifications/unread-count'),
+  enabled,
+  refetchInterval: 60000,
+});
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
   qc.invalidateQueries({ queryKey: ['planning'] });
   qc.invalidateQueries({ queryKey: ['matrix'] });
   qc.invalidateQueries({ queryKey: ['scheduler'] });
+  qc.invalidateQueries({ queryKey: ['calendar'] });
 };
 
 const sortTasksForPositioning = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
@@ -179,6 +273,14 @@ export function useTaskMutations() {
     }),
     addDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('POST', `/api/v1/tasks/${id}/dependencies`, { blocksTaskId }), onSuccess }),
     removeDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('DELETE', `/api/v1/tasks/${id}/dependencies/${blocksTaskId}`), onSuccess }),
+    updateTaskProject: useMutation({
+      mutationFn: ({ id, projectId }: { id: number; projectId: number | null }) => apiJson('PATCH', `/api/v1/tasks/${id}/project`, { projectId }),
+      onSuccess: () => { invalidateTaskFamily(qc); qc.invalidateQueries({ queryKey: queryKeys.projects }); },
+    }),
+    updateTaskDueDate: useMutation({
+      mutationFn: ({ id, dueDate }: { id: number; dueDate: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/due-date`, { dueDate }),
+      onSuccess,
+    }),
   };
 }
 export function useSchedulerMutations() {
@@ -211,6 +313,77 @@ export function useHabitMutations() {
     deleteHabit: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/habits/${id}`), onSuccess }),
     checkIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('PATCH', `/api/v1/habits/${id}/check-in`), onSuccess }),
     undoCheckIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('DELETE', `/api/v1/habits/${id}/check-in`), onSuccess }),
+  };
+}
+
+export function useProjectMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: queryKeys.projects });
+  return {
+    createProject: useMutation({ mutationFn: (body: CreateProjectPayload) => apiJson<ProjectRecord>('POST', '/api/v1/projects', body), onSuccess }),
+    updateProject: useMutation({
+      mutationFn: ({ id, body }: { id: number; body: CreateProjectPayload }) => apiJson<ProjectRecord>('PUT', `/api/v1/projects/${id}`, body),
+      onSuccess: (_data, variables) => { onSuccess(); qc.invalidateQueries({ queryKey: queryKeys.project(variables.id) }); qc.invalidateQueries({ queryKey: queryKeys.projectOverview(variables.id) }); },
+    }),
+    deleteProject: useMutation({
+      mutationFn: (id: number) => apiJson('DELETE', `/api/v1/projects/${id}`),
+      onSuccess: () => { onSuccess(); qc.invalidateQueries({ queryKey: ['tasks'] }); },
+    }),
+  };
+}
+
+export function useMilestoneMutations() {
+  const qc = useQueryClient();
+  const invalidate = (projectId: number) => { qc.invalidateQueries({ queryKey: queryKeys.projectMilestones(projectId) }); qc.invalidateQueries({ queryKey: queryKeys.projectOverview(projectId) }); };
+  return {
+    createMilestone: useMutation({
+      mutationFn: ({ projectId, body }: { projectId: number; body: CreateMilestonePayload }) => apiJson<MilestoneRecord>('POST', `/api/v1/projects/${projectId}/milestones`, body),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+    updateMilestone: useMutation({
+      mutationFn: ({ projectId, milestoneId, body }: { projectId: number; milestoneId: number; body: UpdateMilestonePayload }) => apiJson<MilestoneRecord>('PUT', `/api/v1/projects/${projectId}/milestones/${milestoneId}`, body),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+    deleteMilestone: useMutation({
+      mutationFn: ({ projectId, milestoneId }: { projectId: number; milestoneId: number }) => apiJson('DELETE', `/api/v1/projects/${projectId}/milestones/${milestoneId}`),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+  };
+}
+
+export function useFocusSessionMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['focus-sessions'] });
+  return {
+    startSession: useMutation({ mutationFn: (taskId: number | null) => apiJson<FocusSessionRecord>('POST', '/api/v1/focus-sessions', { taskId }), onSuccess }),
+    pauseSession: useMutation({ mutationFn: (id: number) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/pause`), onSuccess }),
+    resumeSession: useMutation({ mutationFn: (id: number) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/resume`), onSuccess }),
+    stopSession: useMutation({
+      mutationFn: ({ id, body }: { id: number; body?: StopFocusSessionPayload }) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/stop`, body),
+      onSuccess: () => { onSuccess(); qc.invalidateQueries({ queryKey: ['tasks'] }); },
+    }),
+  };
+}
+
+export function useWeeklyReviewMutations() {
+  const qc = useQueryClient();
+  return {
+    completeReview: useMutation({
+      mutationFn: (body: CompleteWeeklyReviewPayload) => apiJson<WeeklyReviewRecord>('POST', '/api/v1/weekly-reviews', body),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ['weekly-reviews'] });
+        qc.invalidateQueries({ queryKey: ['tasks'] });
+      },
+    }),
+  };
+}
+
+export function useNotificationMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['notifications'] });
+  return {
+    markRead: useMutation({ mutationFn: (id: number) => apiJson<NotificationRecord>('PATCH', `/api/v1/notifications/${id}/read`), onSuccess }),
+    snooze: useMutation({ mutationFn: ({ id, scheduledFor }: { id: number; scheduledFor: string }) => apiJson<NotificationRecord>('PATCH', `/api/v1/notifications/${id}/snooze`, { scheduledFor }), onSuccess }),
   };
 }
 

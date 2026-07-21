@@ -120,6 +120,22 @@ public class TaskService {
     }
 
     @Transactional
+    public Task updateProject(Long id, Long projectId) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        task.setProjectId(projectId);
+        return save(task);
+    }
+
+    @Transactional
+    public Task updateDueDate(Long id, LocalDate dueDate) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        task.setDueDate(dueDate);
+        return save(task);
+    }
+
+    @Transactional
     public void delete(Long id) { taskRepository.deleteById(id); }
 
     @Transactional

@@ -7,6 +7,9 @@ import type { Focus } from '../components/scheduler/schedulerStyleUtils';
 import type { AutoScheduleResultRecord, DayScheduleRecord } from '../components/scheduler/schedulerTypes';
 import { useHabitMutations, useSchedulerDayQuery, useSchedulerMutations, useTaskMutations } from '../hooks/useApiQueries';
 import { Button, Card, PageHeader, SegmentedControl } from '../components/ui';
+import { useUndoToast } from '../undoToastContext';
+import { SectionTabs } from '../components/SectionTabs';
+import { CALENDAR_VIEW_TABS } from '../router/routes';
 
 const toIsoDate = (date: Date) => {
   const year = date.getFullYear();
@@ -50,6 +53,7 @@ export function SchedulerPage() {
   const { scheduleTask, unscheduleTask, scheduleHabit, unscheduleHabit, suggestForTask, suggestForHabit, autoSchedule } = useSchedulerMutations();
   const { completeTask } = useTaskMutations();
   const { checkIn } = useHabitMutations();
+  const { showUndo } = useUndoToast();
 
   const day = useMemo<DayScheduleRecord | undefined>(() => {
     const data = dayQuery.data?.data;
@@ -60,6 +64,32 @@ export function SchedulerPage() {
   const hasError = isQueryError(dayQuery.data);
   const busy = scheduleTask.isPending || unscheduleTask.isPending || scheduleHabit.isPending || unscheduleHabit.isPending
     || completeTask.isPending || checkIn.isPending || autoSchedule.isPending;
+
+  const handleUnscheduleTask = (taskId: number) => {
+    const entry = day?.scheduled.find((candidate) => candidate.kind === 'TASK' && candidate.id === taskId);
+    unscheduleTask.mutate(taskId, {
+      onSuccess: (result) => {
+        if (!result.ok || !entry) return;
+        showUndo(`"${entry.task?.title ?? 'Task'}" removed from schedule.`, () => scheduleTask.mutate({
+          taskId,
+          body: { scheduledDate: entry.scheduledDate, startTime: entry.startTime, durationMinutes: entry.durationMinutes, priorityLevel: entry.priorityLevel },
+        }));
+      },
+    });
+  };
+
+  const handleUnscheduleHabit = (habitId: number) => {
+    const entry = day?.scheduled.find((candidate) => candidate.kind === 'HABIT' && candidate.id === habitId);
+    unscheduleHabit.mutate(habitId, {
+      onSuccess: (result) => {
+        if (!result.ok || !entry) return;
+        showUndo(`"${entry.habit?.title ?? 'Habit'}" removed from schedule.`, () => scheduleHabit.mutate({
+          habitId,
+          body: { scheduledDate: entry.scheduledDate, startTime: entry.startTime, durationMinutes: entry.durationMinutes, priorityLevel: entry.priorityLevel },
+        }));
+      },
+    });
+  };
 
   const runAutoSchedule = () => {
     setAutoScheduleMessage(null);
@@ -72,9 +102,12 @@ export function SchedulerPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={CALENDAR_VIEW_TABS} ariaLabel="Calendar view" />
+      </div>
       <PageHeader
-        title="Scheduler"
-        description="Give tasks and habits a specific time and priority today, separate from whole-day planning."
+        title="Day"
+        description="Give tasks and habits a specific time and priority today."
         className="mb-0"
         actions={
           <div className="flex items-center gap-2">
@@ -110,8 +143,8 @@ export function SchedulerPage() {
             busy={busy}
             onComplete={(taskId) => completeTask.mutate(taskId)}
             onCheckIn={(habitId) => checkIn.mutate(habitId)}
-            onUnscheduleTask={(taskId) => unscheduleTask.mutate(taskId)}
-            onUnscheduleHabit={(habitId) => unscheduleHabit.mutate(habitId)}
+            onUnscheduleTask={handleUnscheduleTask}
+            onUnscheduleHabit={handleUnscheduleHabit}
           />
           <Card className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold text-fg">Unscheduled</h3>

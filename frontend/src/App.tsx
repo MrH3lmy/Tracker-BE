@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
+import { appRoutes, appTabs, developerTabs, legacyRedirects, type AppRoute } from './router/routes';
 import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
 import { useHabitReminders } from './hooks/useHabitReminders';
 import type { HabitRecord } from './components/habits/habitTypes';
@@ -8,6 +8,11 @@ import { AnnouncementContext } from './announcementContext';
 import { AuthProvider } from './AuthProvider';
 import { useAuth } from './authContext';
 import { ThemeContext } from './themeContext';
+import { UndoToastContext, type UndoToastContextValue } from './undoToastContext';
+import { QuickCaptureContext, type QuickCaptureContextValue } from './quickCaptureContext';
+import { QuickCaptureModal } from './components/quickCapture/QuickCaptureModal';
+import { FocusTimerWidget } from './components/focus/FocusTimerWidget';
+import { NotificationInbox } from './components/notifications/NotificationInbox';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -23,19 +28,20 @@ import { Badge, Button, cn } from './components/ui';
 import {
   AlertTriangle,
   Calendar,
-  CalendarDays,
   Check,
   ChevronsLeft,
   Clock,
-  Grid2x2,
+  Flame,
   Import,
   LayoutDashboard,
   ListTodo,
   Loader2,
-  MenuIcon,
+  MoreHorizontal,
   Plus,
+  Search,
   Settings,
   StickyNote,
+  TrendingUp,
   Wrench,
   X,
 } from './components/ui/icons';
@@ -60,12 +66,13 @@ const routeIsDeveloperRoute = ({ path }: AppRoute) => developerTabs.some((tab) =
 type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 const navIcons: Record<string, IconComponent> = {
-  Dashboard: LayoutDashboard,
+  Today: LayoutDashboard,
   Tasks: ListTodo,
+  Habits: Flame,
   Notes: StickyNote,
-  Planning: CalendarDays,
-  Matrix: Grid2x2,
   Calendar: Calendar,
+  Insights: TrendingUp,
+  Search,
   Settings: Settings,
   Import: Import,
   'Error Playground': AlertTriangle,
@@ -170,13 +177,66 @@ function AppRoot() {
   return <AuthenticatedApp />;
 }
 
+const MOBILE_TAB_ITEMS: { label: string; path: string; icon: IconComponent }[] = [
+  { label: 'Today', path: '/today', icon: LayoutDashboard },
+  { label: 'Tasks', path: '/tasks', icon: ListTodo },
+  { label: 'Habits', path: '/habits', icon: Flame },
+];
+
+function MobileBottomNav({ onQuickAdd, onToggleMore, isMoreOpen }: { onQuickAdd: () => void; onToggleMore: () => void; isMoreOpen: boolean }) {
+  const [firstTab, secondTab, thirdTab] = MOBILE_TAB_ITEMS;
+  const tabClassName = ({ isActive }: { isActive: boolean }) =>
+    cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isActive ? 'text-brand' : 'text-fg-muted');
+
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-stretch justify-around border-t border-line bg-card px-1 py-1.5 lg:hidden"
+      aria-label="Mobile primary navigation"
+    >
+      <NavLink to={firstTab.path} className={tabClassName}>
+        <firstTab.icon className="h-5 w-5" aria-hidden />
+        {firstTab.label}
+      </NavLink>
+      <NavLink to={secondTab.path} className={tabClassName}>
+        <secondTab.icon className="h-5 w-5" aria-hidden />
+        {secondTab.label}
+      </NavLink>
+      <button type="button" onClick={onQuickAdd} className="flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium text-fg-muted">
+        <span className="-mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand text-brand-fg" aria-hidden>
+          <Plus className="h-4 w-4" />
+        </span>
+        Quick add
+      </button>
+      <NavLink to={thirdTab.path} className={tabClassName}>
+        <thirdTab.icon className="h-5 w-5" aria-hidden />
+        {thirdTab.label}
+      </NavLink>
+      <button
+        type="button"
+        onClick={onToggleMore}
+        aria-controls="mobile-navigation"
+        aria-expanded={isMoreOpen}
+        className={cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isMoreOpen ? 'text-brand' : 'text-fg-muted')}
+      >
+        <MoreHorizontal className="h-5 w-5" aria-hidden />
+        More
+      </button>
+    </nav>
+  );
+}
+
 function AuthenticatedApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
+  const [quickCaptureInitialDate, setQuickCaptureInitialDate] = useState<string | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
+  const [undoToast, setUndoToast] = useState<{ id: number; message: string; onUndo: () => void } | null>(null);
+  const undoToastTimeoutRef = useRef<number | undefined>(undefined);
+  const undoToastIdRef = useRef(0);
   const settingsQuery = useSettingsQuery(isAuthenticated);
   const hasSyncedSavedTheme = useRef(false);
   const habitsQuery = useHabitsQuery(isAuthenticated);
@@ -221,12 +281,45 @@ function AuthenticatedApp() {
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
   const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
+  const dismissUndoToast = useCallback(() => {
+    window.clearTimeout(undoToastTimeoutRef.current);
+    setUndoToast(null);
+  }, []);
+  const showUndo = useCallback((message: string, onUndo: () => void) => {
+    window.clearTimeout(undoToastTimeoutRef.current);
+    const id = ++undoToastIdRef.current;
+    setUndoToast({ id, message, onUndo });
+    undoToastTimeoutRef.current = window.setTimeout(() => {
+      setUndoToast((current) => (current?.id === id ? null : current));
+    }, 6000);
+  }, []);
+  const handleUndoClick = () => {
+    undoToast?.onUndo();
+    dismissUndoToast();
+  };
+  const undoToastContextValue = useMemo<UndoToastContextValue>(() => ({ showUndo }), [showUndo]);
+  const openQuickCapture = useCallback((initialDate?: string) => {
+    setQuickCaptureInitialDate(initialDate);
+    setIsQuickCaptureOpen(true);
+  }, []);
+  const quickCaptureContextValue = useMemo<QuickCaptureContextValue>(() => ({ openQuickCapture }), [openQuickCapture]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isCaptureShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (!isCaptureShortcut) return;
+      event.preventDefault();
+      setIsQuickCaptureOpen(true);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const visibleDeveloperTabs = isDevMode ? developerTabs : [];
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
   const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
-  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
+  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Today';
 
   if (isAuthLoading) {
     return (
@@ -244,13 +337,15 @@ function AuthenticatedApp() {
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
-        <a
-          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
-          href="#task-tracker-main"
-        >
-          Skip to content
-        </a>
-        <div className="flex min-h-screen bg-canvas text-fg">
+        <UndoToastContext.Provider value={undoToastContextValue}>
+        <QuickCaptureContext.Provider value={quickCaptureContextValue}>
+          <a
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
+            href="#task-tracker-main"
+          >
+            Skip to content
+          </a>
+          <div className="flex min-h-screen bg-canvas text-fg">
           <aside
             className={cn(
               'sticky top-0 z-(--z-sticky) hidden h-screen shrink-0 flex-col border-r border-line bg-card px-3 py-4 lg:flex',
@@ -291,28 +386,20 @@ function AuthenticatedApp() {
 
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="sticky top-0 z-(--z-sticky) flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-4 sm:px-6">
-              <Button
-                variant="ghost"
-                iconOnly
-                className="lg:hidden"
-                aria-controls="mobile-navigation"
-                aria-expanded={isMobileMenuOpen}
-                aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
-                onClick={() => setIsMobileMenuOpen((open) => !open)}
-              >
-                {isMobileMenuOpen ? <X className="h-5 w-5" aria-hidden /> : <MenuIcon className="h-5 w-5" aria-hidden />}
-              </Button>
               <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
               <div className="ml-auto flex items-center gap-2">
                 {!hideGlobalQuickAdd && (
-                  <NavLink
-                    to="/tasks"
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickCaptureOpen(true)}
                     className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"
+                    title="Quick add (Ctrl+K)"
                   >
                     <Plus className="h-4 w-4" aria-hidden />
                     Quick add
-                  </NavLink>
+                  </button>
                 )}
+                {user && <NotificationInbox />}
                 {user && (
                   <div className="flex items-center gap-2 border-l border-line pl-2">
                     <span className="hidden max-w-[10rem] truncate text-xs text-fg-muted sm:inline" title={user.email}>
@@ -342,14 +429,17 @@ function AuthenticatedApp() {
 
             <main
               id="task-tracker-main"
-              className={cn('min-w-0 flex-1 focus:outline-none', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
+              className={cn('min-w-0 flex-1 pb-20 focus:outline-none lg:pb-0', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
               tabIndex={-1}
             >
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/today" replace />} />
                 {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {legacyRedirects.map(({ from, to }) => (
+                  <Route key={`legacy-${from}`} path={from} element={<Navigate to={to} replace />} />
+                ))}
                 {!isDevMode && developerTabs.map(({ path }) => (
-                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
+                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/today" replace />} />
                 ))}
               </Routes>
             </main>
@@ -361,6 +451,27 @@ function AuthenticatedApp() {
           onCheckIn={(id) => { checkInHabit.mutate(id); dismissReminder(id); }}
           onDismiss={dismissReminder}
         />
+        <MobileBottomNav
+          onQuickAdd={openQuickCapture}
+          onToggleMore={() => setIsMobileMenuOpen((open) => !open)}
+          isMoreOpen={isMobileMenuOpen}
+        />
+        <FocusTimerWidget />
+        {undoToast && (
+          <div className="fixed inset-x-0 bottom-20 z-(--z-toast) flex justify-center px-4 lg:bottom-6" role="status" aria-live="polite">
+            <div className="flex items-center gap-3 rounded-lg border border-line-strong bg-card px-4 py-3 shadow-lg">
+              <span className="text-sm text-fg">{undoToast.message}</span>
+              <Button size="sm" variant="ghost" onClick={handleUndoClick}>Undo</Button>
+            </div>
+          </div>
+        )}
+        <QuickCaptureModal
+          open={isQuickCaptureOpen}
+          onOpenChange={(next) => { setIsQuickCaptureOpen(next); if (!next) setQuickCaptureInitialDate(undefined); }}
+          initialDate={quickCaptureInitialDate}
+        />
+        </QuickCaptureContext.Provider>
+        </UndoToastContext.Provider>
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>
   );

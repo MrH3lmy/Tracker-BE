@@ -3,6 +3,7 @@ package com.taskpriority.scheduler;
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.habit.HabitApiMapper;
+import com.taskpriority.habit.HabitResponse;
 import com.taskpriority.habit.HabitService;
 import com.taskpriority.model.Habit;
 import com.taskpriority.model.HabitSchedule;
@@ -16,6 +17,7 @@ import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskScheduleRepository;
 import com.taskpriority.service.TaskService;
 import com.taskpriority.task.api.TaskApiMapper;
+import com.taskpriority.task.api.TaskResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,13 +61,38 @@ public class SchedulerService {
 
     @Transactional(readOnly = true)
     public DayScheduleResponse getDaySchedule(LocalDate date) {
-        Long userId = currentUserService.requireUserId();
         List<Booking> bookings = bookingsForDate(date);
         List<ScheduledEntryResponse> scheduled = bookings.stream()
                 .sorted(Comparator.comparing(Booking::startTime))
                 .map(booking -> toEntryResponse(booking, bookings))
                 .toList();
 
+        return new DayScheduleResponse(date, scheduled, unscheduledTaskResponses(), unscheduledHabitResponses());
+    }
+
+    /**
+     * Same shape as {@link #getDaySchedule}, one day per entry in the range starting at
+     * {@code startDate}. The unscheduled-tasks/-habits lists aren't date-scoped (a task is
+     * either scheduled somewhere or it isn't), so they're computed once and shared across
+     * the week rather than recomputed per day.
+     */
+    @Transactional(readOnly = true)
+    public WeekScheduleResponse getWeekSchedule(LocalDate startDate) {
+        List<WeekScheduleResponse.DayEntries> days = new ArrayList<>();
+        for (int offset = 0; offset < 7; offset++) {
+            LocalDate date = startDate.plusDays(offset);
+            List<Booking> bookings = bookingsForDate(date);
+            List<ScheduledEntryResponse> scheduled = bookings.stream()
+                    .sorted(Comparator.comparing(Booking::startTime))
+                    .map(booking -> toEntryResponse(booking, bookings))
+                    .toList();
+            days.add(new WeekScheduleResponse.DayEntries(date, scheduled));
+        }
+        return new WeekScheduleResponse(startDate, days, unscheduledTaskResponses(), unscheduledHabitResponses());
+    }
+
+    private List<TaskResponse> unscheduledTaskResponses() {
+        Long userId = currentUserService.requireUserId();
         Set<Long> scheduledTaskIds = taskScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getTask().getId())
                 .collect(Collectors.toSet());
@@ -75,7 +102,11 @@ public class SchedulerService {
                 .filter(task -> !scheduledTaskIds.contains(task.getId()))
                 .toList();
         taskService.computeDerivedFieldsBatch(unscheduledTasks);
+        return unscheduledTasks.stream().map(taskMapper::toResponse).toList();
+    }
 
+    private List<HabitResponse> unscheduledHabitResponses() {
+        Long userId = currentUserService.requireUserId();
         Set<Long> scheduledHabitIds = habitScheduleRepository.findByUserId(userId).stream()
                 .map(schedule -> schedule.getHabit().getId())
                 .collect(Collectors.toSet());
@@ -84,10 +115,7 @@ public class SchedulerService {
                 .filter(habit -> !scheduledHabitIds.contains(habit.getId()))
                 .toList();
         habitService.applyTodayProgressBatch(unscheduledHabits);
-
-        return new DayScheduleResponse(date, scheduled,
-                unscheduledTasks.stream().map(taskMapper::toResponse).toList(),
-                unscheduledHabits.stream().map(habitMapper::toResponse).toList());
+        return unscheduledHabits.stream().map(habitMapper::toResponse).toList();
     }
 
     @Transactional

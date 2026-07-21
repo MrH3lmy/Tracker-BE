@@ -10,6 +10,9 @@ import { sortTasksForBoard } from '../components/tasks/taskUtils';
 import { matchesFocus, type Focus } from '../components/scheduler/schedulerStyleUtils';
 import { useBoardColumnsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { PageHeader, SegmentedControl } from '../components/ui';
+import { useUndoToast } from '../undoToastContext';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 const focusOptions = [
   { value: 'all' as Focus, label: 'All' },
@@ -21,6 +24,7 @@ export function BoardPage() {
   const columnsQuery = useBoardColumnsQuery();
   const tasksQuery = useTasksQuery('active');
   const { moveTask } = useTaskMutations();
+  const { showUndo } = useUndoToast();
   const [focus, setFocus] = useState<Focus>('all');
 
   const columns = useMemo<BoardColumnRecord[]>(() => {
@@ -75,11 +79,21 @@ export function BoardPage() {
 
     if (draggedTask.boardColumnId === targetColumnId && draggedTask.position === targetIndex) return;
 
-    moveTask.mutate({ id: draggedTaskId, body: { boardColumnId: targetColumnId, position: targetIndex } });
+    const previousColumnId = draggedTask.boardColumnId;
+    const previousPosition = draggedTask.position;
+    moveTask.mutate({ id: draggedTaskId, body: { boardColumnId: targetColumnId, position: targetIndex } }, {
+      onSuccess: (result) => {
+        if (!result.ok) return;
+        showUndo(`"${draggedTask.title}" moved.`, () => moveTask.mutate({ id: draggedTaskId, body: { boardColumnId: previousColumnId, position: previousPosition } }));
+      },
+    });
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+      </div>
       <PageHeader
         title="Board"
         description="Drag tasks across columns to work on several at once."

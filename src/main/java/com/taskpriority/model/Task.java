@@ -14,6 +14,7 @@ import java.util.List;
         @Index(name = "idx_tasks_due_date", columnList = "due_date"),
         @Index(name = "idx_tasks_follow_up_date", columnList = "follow_up_date"),
         @Index(name = "idx_tasks_created_at", columnList = "created_at"),
+        @Index(name = "idx_tasks_updated_at", columnList = "updated_at"),
         @Index(name = "idx_tasks_area", columnList = "area"),
         @Index(name = "idx_tasks_effort", columnList = "effort"),
         @Index(name = "idx_tasks_important", columnList = "important"),
@@ -25,7 +26,8 @@ import java.util.List;
         @Index(name = "idx_tasks_risk_level", columnList = "risk_level"),
         @Index(name = "idx_tasks_track", columnList = "track"),
         @Index(name = "idx_tasks_phase", columnList = "phase"),
-        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id")
+        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id"),
+        @Index(name = "idx_tasks_project_id", columnList = "project_id")
 })
 public class Task {
 
@@ -71,8 +73,14 @@ public class Task {
     @Column(name = "parent_task_id")
     private Long parentTaskId;
 
+    @Column(name = "project_id")
+    private Long projectId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedDate = LocalDateTime.now();
 
     @Column(name = "completed_date")
     private LocalDateTime completedDate;
@@ -179,8 +187,12 @@ public class Task {
     public void setPhase(String phase) { this.phase = phase; }
     public Long getParentTaskId() { return parentTaskId; }
     public void setParentTaskId(Long parentTaskId) { this.parentTaskId = parentTaskId; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
+    public LocalDateTime getUpdatedDate() { return updatedDate; }
+    public void setUpdatedDate(LocalDateTime updatedDate) { this.updatedDate = updatedDate; }
     public LocalDateTime getCompletedDate() { return completedDate; }
     public void setCompletedDate(LocalDateTime completedDate) { this.completedDate = completedDate; }
     public boolean isImportant() { return important; }
@@ -230,4 +242,9 @@ public class Task {
     public int getCompletedSubtaskCount() { return completedSubtaskCount; }
     public void setCompletedSubtaskCount(int completedSubtaskCount) { this.completedSubtaskCount = completedSubtaskCount; }
     public int getSubtaskProgressPercent() { return subtaskCount == 0 ? 0 : (int) Math.round((completedSubtaskCount * 100.0) / subtaskCount); }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedDate = LocalDateTime.now();
+    }
 }

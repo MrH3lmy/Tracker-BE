@@ -15,9 +15,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,5 +77,22 @@ class TaskControllerV1UpdateRegressionTest {
         assertThat(updated.getCreatedDate()).isEqualTo(createdDate);
         assertThat(updated.getCompletedDate()).isEqualTo(completedDate);
         assertThat(updated.isDeleted()).isTrue();
+    }
+
+    @Test
+    void updateDueDateChangesOnlyTheDueDate() throws Exception {
+        Task existing = new Task("Drag me on the month grid");
+        existing.setUserId(testUser.getId());
+        existing.setDueDate(LocalDate.of(2026, 7, 10));
+        Task saved = taskRepository.saveAndFlush(existing);
+
+        mockMvc.perform(patch("/api/v1/tasks/{id}/due-date", saved.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dueDate\":\"2026-07-22\"}"))
+                .andExpect(status().isOk());
+
+        Task updated = taskRepository.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getDueDate()).isEqualTo(LocalDate.of(2026, 7, 22));
+        assertThat(updated.getTitle()).isEqualTo("Drag me on the month grid");
     }
 }

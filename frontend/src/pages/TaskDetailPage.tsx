@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
@@ -7,9 +7,10 @@ import { ManageDependenciesDrawer } from '../components/tasks/ManageDependencies
 import { TaskCreateForm } from '../components/tasks/TaskCreateForm';
 import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, TaskRecord } from '../components/tasks/taskTypes';
-import { useTaskDetailQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import type { ProjectRecord } from '../components/projects/projectTypes';
+import { useFocusSessionMutations, useProjectsQuery, useTaskDetailQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Button, Card, CardHeader, PageHeader } from '../components/ui';
-import { ChevronLeft } from '../components/ui/icons';
+import { ChevronLeft, Timer } from '../components/ui/icons';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,26 +20,40 @@ export function TaskDetailPage() {
   const [dependenciesOpen, setDependenciesOpen] = useState(false);
   const [dependencyTaskId, setDependencyTaskId] = useState('');
   const [dependencyBlocksTaskId, setDependencyBlocksTaskId] = useState('');
+  const [editProjectId, setEditProjectId] = useState('');
 
   const detailQuery = useTaskDetailQuery(taskId, Number.isFinite(taskId));
   const activeQuery = useTasksQuery('active');
-  const { updateTask, addDependency, removeDependency } = useTaskMutations();
+  const projectsQuery = useProjectsQuery();
+  const { updateTask, addDependency, removeDependency, updateTaskProject } = useTaskMutations();
+  const { startSession } = useFocusSessionMutations();
 
   const detail = detailQuery.data?.data;
   const task = detail?.task;
   const activeData = activeQuery.data?.data;
   const activeTasks = Array.isArray(activeData) ? (activeData as TaskRecord[]) : [];
+  const projects = useMemo<ProjectRecord[]>(() => (Array.isArray(projectsQuery.data?.data) ? (projectsQuery.data.data as ProjectRecord[]) : []), [projectsQuery.data]);
+
+  useEffect(() => {
+    if (!task) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing the project picker to a newly-loaded task, not deriving render state.
+    setEditProjectId(task.projectId != null ? String(task.projectId) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync only when a different task loads, not on every task field change.
+  }, [task?.id]);
 
   const isLoading = detailQuery.isLoading || detailQuery.isFetching;
   const hasError = isQueryError(detailQuery.data);
-  const busy = updateTask.isPending || addDependency.isPending || removeDependency.isPending;
+  const busy = updateTask.isPending || addDependency.isPending || removeDependency.isPending || updateTaskProject.isPending;
 
   const handleSubmit = (payload: CreateTaskPayload, onSuccess: () => void) => {
     if (!task) return;
     updateTask.mutate({ id: task.id, body: buildTaskUpdateBody(task, payload) }, {
       onSuccess: (result) => {
         announce(result.ok ? 'Task updated successfully.' : (result.error?.message ?? 'Task update failed.'));
-        if (result.ok) onSuccess();
+        if (!result.ok) return;
+        const nextProjectId = editProjectId ? Number(editProjectId) : null;
+        if (nextProjectId !== (task.projectId ?? null)) updateTaskProject.mutate({ id: task.id, projectId: nextProjectId });
+        onSuccess();
       },
     });
   };
@@ -63,10 +78,24 @@ export function TaskDetailPage() {
         title={task ? `#${task.id} ${task.title}` : 'Task detail'}
         description="Edit task details, manage dependencies, and review linked notes."
         actions={
-          <Button onClick={() => navigate('/tasks')}>
-            <ChevronLeft className="h-4 w-4" aria-hidden />
-            Back to tasks
-          </Button>
+          <>
+            <Button onClick={() => navigate('/tasks')}>
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              Back to tasks
+            </Button>
+            {task && task.status !== 'DONE' && (
+              <Button
+                variant="primary"
+                onClick={() => startSession.mutate(task.id, {
+                  onSuccess: (result) => announce(result.ok ? `Focus session started for "${task.title}".` : (result.error?.message ?? 'Could not start focus session.')),
+                })}
+                disabled={startSession.isPending}
+              >
+                <Timer className="h-4 w-4" aria-hidden />
+                Start focus session
+              </Button>
+            )}
+          </>
         }
         className="mb-0"
       />
@@ -86,6 +115,9 @@ export function TaskDetailPage() {
               mode="edit"
               initialValue={task}
               activeTasks={activeTasks}
+              projects={projects}
+              projectId={editProjectId}
+              onProjectIdChange={setEditProjectId}
               busy={busy}
               isSubmitting={updateTask.isPending}
               onCancel={() => navigate('/tasks')}

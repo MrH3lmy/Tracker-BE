@@ -19,7 +19,7 @@ export function LoginPage() {
     setIsSubmitting(false);
 
     if (result.ok) {
-      navigate('/dashboard', { replace: true });
+      navigate('/today', { replace: true });
     } else {
       setError(result.errorMessage ?? 'Login failed.');
     }

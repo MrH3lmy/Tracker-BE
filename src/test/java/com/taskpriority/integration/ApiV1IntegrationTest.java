@@ -154,6 +154,12 @@ class ApiV1IntegrationTest {
         mockMvc.perform(get("/api/v1/matrix")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/dashboard")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/calendar/month").param("year","2026").param("month","5")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/calendar/month/tasks").param("year", "2026").param("month", "5")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/scheduler/week").param("startDate", "2026-05-01")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.startDate").value("2026-05-01"))
+                .andExpect(jsonPath("$.days.length()").value(7))
+                .andExpect(jsonPath("$.days[0].date").value("2026-05-01"))
+                .andExpect(jsonPath("$.days[6].date").value("2026-05-07"));
         mockMvc.perform(get("/api/v1/calendar/export.ics")).andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/settings")).andExpect(status().isOk());
         mockMvc.perform(put("/api/v1/settings").contentType(MediaType.APPLICATION_JSON).content("{\"theme\":\"dark\"}")).andExpect(status().isOk());
@@ -169,5 +175,31 @@ class ApiV1IntegrationTest {
                 .andExpect(jsonPath("$.completionRate").exists())
                 .andExpect(jsonPath("$.byStatus").exists())
                 .andExpect(jsonPath("$.byPriorityCategory").exists());
+
+        mockMvc.perform(get("/api/v1/search").param("q", "Test Task"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].title", hasItem("Test Task")))
+                .andExpect(jsonPath("$.items[0].type").exists())
+                .andExpect(jsonPath("$.items[0].url").exists())
+                .andExpect(jsonPath("$.totalElements").exists());
+        mockMvc.perform(get("/api/v1/search").param("q", "Test Task").param("type", "note"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.items[*].title", org.hamcrest.Matchers.not(hasItem("Test Task"))));
+
+        mockMvc.perform(get("/api/v1/home/today"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.date").exists())
+                .andExpect(jsonPath("$.summary.totalTasks").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.dueToday").isArray())
+                .andExpect(jsonPath("$.overdue").isArray())
+                .andExpect(jsonPath("$.topRecommendations").isArray())
+                .andExpect(jsonPath("$.topRecommendations[*].task.title", hasItem("Test Task")))
+                .andExpect(jsonPath("$.todayTimeline").isArray())
+                .andExpect(jsonPath("$.scheduledFocusMinutes").value(0))
+                .andExpect(jsonPath("$.habitsToday").isArray())
+                .andExpect(jsonPath("$.upcomingTasks").isArray())
+                .andExpect(jsonPath("$.waitingOrBlocked").isArray())
+                .andExpect(jsonPath("$.followUpsDue").isArray());
     }
 }

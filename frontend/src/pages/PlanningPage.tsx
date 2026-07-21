@@ -1,9 +1,14 @@
 import { useState, type ComponentType, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlanningTodayQuery, usePlanningWeeklyQuery, useSettingsQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, SegmentedControl, cn, type BadgeVariant } from '../components/ui';
 import { Calendar, CheckCircle2, ChevronRight, Eye, Flag, RefreshCw, Sparkles, TrendingUp } from '../components/ui/icons';
+import { formatEnumLabel } from '../lib/enumLabels';
+import { formatDateOnly, formatDateOnlyShort } from '../lib/dateOnly';
+import { SectionTabs } from '../components/SectionTabs';
+import { CALENDAR_VIEW_TABS } from '../router/routes';
 
 interface TaskPreview {
   id?: number | string;
@@ -90,57 +95,8 @@ interface DailyPlan {
   tasks?: unknown;
 }
 
-const plannerDateFormatter = new Intl.DateTimeFormat('en-US', {
-  weekday: 'long',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
-
-const parsePlannerDate = (value?: string | null): Date | null => {
-  if (!value) return null;
-
-  const trimmedValue = value.trim();
-  if (!trimmedValue) return null;
-
-  if (isoDateOnlyPattern.test(trimmedValue)) {
-    const [year, month, day] = trimmedValue.split('-').map(Number);
-    const date = new Date(Date.UTC(year, month - 1, day));
-
-    if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) {
-      return date;
-    }
-
-    return null;
-  }
-
-  const date = new Date(trimmedValue);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatPlannerDate = (value?: string | null, fallback = 'Date unavailable') => {
-  const date = parsePlannerDate(value);
-  return date ? plannerDateFormatter.format(date) : fallback;
-};
-
-const shortDateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-const utcDateKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-
-const formatPlannerShortDate = (value?: string | null, fallback = 'Date unavailable') => {
-  const date = parsePlannerDate(value);
-
-  if (!date) return fallback;
-
-  const shortDate = shortDateFormatter.format(date);
-  return utcDateKey(date) === utcDateKey(new Date()) ? `Today, ${shortDate}` : shortDate;
-};
+const formatPlannerDate = formatDateOnly;
+const formatPlannerShortDate = formatDateOnlyShort;
 
 const normalizeUiText = (value?: string | null, fallback = '') => (value ?? fallback).replaceAll('Mecahnism', 'Mechanism');
 
@@ -177,14 +133,10 @@ function MetricItem({ icon: Icon, label, value, title }: { icon: IconComponent; 
 }
 
 const recommendationTags = (recommendation: RecommendationPreview) => asStrings(recommendation.reasonCodes);
-const formatBadgeLabel = (value: string | number) => normalizeUiText(String(value).replaceAll('_', ' '));
-const chipLabelOverrides: Record<string, string> = {
-  ALREADY_IN_PROGRESS: 'IN_PROGRESS',
-};
+const formatBadgeLabel = (value: string | number) => normalizeUiText(formatEnumLabel(value));
 const formatReasonCode = (reason: string) => {
-  if (chipLabelOverrides[reason]) return chipLabelOverrides[reason];
-  if (reason.endsWith('_EFFORT')) return `EFFORT: ${reason.replace('_EFFORT', '')}`;
-  if (reason.startsWith('EFFORT_')) return reason.replace('EFFORT_', 'EFFORT: ');
+  if (reason.endsWith('_EFFORT')) return `Effort: ${formatEnumLabel(reason.replace('_EFFORT', ''))}`;
+  if (reason.startsWith('EFFORT_')) return `Effort: ${formatEnumLabel(reason.replace('EFFORT_', ''))}`;
   return formatBadgeLabel(reason);
 };
 
@@ -237,8 +189,8 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Top recommendation metadata">
         <MetricItem icon={Calendar} label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
-        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={task.status} />}
-        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={task.priorityCategory} />}
+        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={formatEnumLabel(task.status)} />}
+        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={formatEnumLabel(task.priorityCategory)} />}
         {typeof task?.priorityScore === 'number' && <MetricItem icon={TrendingUp} label="Score" value={task.priorityScore} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -264,6 +216,7 @@ function TaskSuggestionCard({ recommendation }: { recommendation: Recommendation
 }
 
 function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendation: RecommendationPreview; fallbackRank: number }) {
+  const navigate = useNavigate();
   const task = recommendation.task;
   const summary = 'Due today and ready for action.';
   const taskTitle = normalizeUiText(task?.title, 'Untitled task');
@@ -280,10 +233,16 @@ function SecondarySuggestionCard({ recommendation, fallbackRank }: { recommendat
       <p className="text-sm text-fg-muted">{summary}</p>
       <div className="flex flex-col gap-2" aria-label="Secondary recommendation metadata">
         <MetricItem icon={Calendar} label="Due date" value={formatPlannerShortDate(task?.dueDate, 'Due date unavailable')} title={formatPlannerDate(task?.dueDate, 'Due date unavailable')} />
-        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={task.status} />}
-        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={task.priorityCategory} />}
+        {task?.status && <MetricItem icon={CheckCircle2} label="Status" value={formatEnumLabel(task.status)} />}
+        {task?.priorityCategory && <MetricItem icon={Flag} label="Priority" value={formatEnumLabel(task.priorityCategory)} />}
       </div>
-      <Button variant="ghost" size="sm" className="self-start">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        disabled={task?.id === undefined}
+        onClick={() => task?.id !== undefined && navigate(`/tasks/${task.id}`)}
+      >
         <Eye className="h-4 w-4" aria-hidden />
         View details
         <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -329,7 +288,7 @@ function TaskList({ tasks, emptyMessage }: { tasks: TaskPreview[]; emptyMessage:
           </div>
           <div className="flex flex-wrap gap-1.5">
             {task.dueDate && <Badge variant="outline">Due {formatPlannerDate(task.dueDate, 'Due date unavailable')}</Badge>}
-            {task.status && <Badge variant="outline">{task.status}</Badge>}
+            {task.status && <Badge variant="outline">{formatEnumLabel(task.status)}</Badge>}
             {typeof task.priorityScore === 'number' && <Badge variant="outline">Score {task.priorityScore}</Badge>}
             {task.important && <Badge variant="caution">Important</Badge>}
           </div>
@@ -475,7 +434,7 @@ function ProjectBoardView({ data }: { data: unknown }) {
                   <div className="min-w-0">
                     <p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">{column.track ?? 'Unassigned track'}</p>
                     <h3 className="mt-0.5 text-sm font-semibold text-fg">{column.phase ?? 'Unassigned phase'}</h3>
-                    {column.status && <p className="mt-0.5 text-xs text-fg-muted">Status lane: {column.status}</p>}
+                    {column.status && <p className="mt-0.5 text-xs text-fg-muted">Status lane: {formatEnumLabel(column.status)}</p>}
                   </div>
                   <Badge variant={riskBadgeVariant(column.risk?.level)}>{column.risk?.level ?? 'LOW'}</Badge>
                 </div>
@@ -498,7 +457,7 @@ function ProjectBoardView({ data }: { data: unknown }) {
                           <Badge variant={riskBadgeVariant(task.risk?.level)}>{task.risk?.level ?? 'LOW'}</Badge>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {task.status && <Badge variant="outline">{task.status}</Badge>}
+                          {task.status && <Badge variant="outline">{formatEnumLabel(task.status)}</Badge>}
                           <Badge variant="outline">Due {formatPlannerDate(task.dueDate, 'No due date')}</Badge>
                           <Badge variant="outline">Estimate {formatHours(task.estimatedHours)}</Badge>
                           {typeof task.aggregateEstimatedHours === 'number' && task.aggregateEstimatedHours !== task.estimatedHours && <Badge variant="outline">With subtasks {formatHours(task.aggregateEstimatedHours)}</Badge>}
@@ -536,8 +495,11 @@ export function PlanningPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={CALENDAR_VIEW_TABS} ariaLabel="Calendar view" />
+      </div>
       <PageHeader
-        title="Planning"
+        title="Auto-plan"
         description="Review today’s focus or generate a seven-day plan."
         actions={
           <Button variant="primary" onClick={() => active.refetch()} disabled={active.isFetching}>

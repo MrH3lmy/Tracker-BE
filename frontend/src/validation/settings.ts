@@ -7,6 +7,9 @@ export const AI_FEATURES_ENABLED_KEY = 'aiFeaturesEnabled';
 export const WORKING_HOURS_KEY = 'workingHours';
 export const SLEEP_HOURS_KEY = 'sleepHours';
 export const HABIT_REMINDER_STYLE_KEY = 'habitReminders.style';
+export const TIMEZONE_KEY = 'timezone';
+export const QUIET_HOURS_KEY = 'quietHours';
+export const DEFAULT_TIMEZONE = 'UTC';
 
 export const HABIT_REMINDER_STYLES = ['silent', 'gentle', 'standard', 'persistent'] as const;
 export type HabitReminderStyle = (typeof HABIT_REMINDER_STYLES)[number];
@@ -24,6 +27,30 @@ export function readHabitReminderStyle(settings: unknown): HabitReminderStyle {
 const weekdays = new Set(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']);
 const isoDateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 const timeOfDayPattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export const isValidTimezone = (value: string): boolean => {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export function readTimezone(settings: unknown): string {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return DEFAULT_TIMEZONE;
+  const value = (settings as Record<string, unknown>)[TIMEZONE_KEY];
+  return typeof value === 'string' && isValidTimezone(value) ? value : DEFAULT_TIMEZONE;
+}
+
+export function readQuietHours(settings: unknown): TimeWindow | undefined {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return undefined;
+  const value = (settings as Record<string, unknown>)[QUIET_HOURS_KEY];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { start, end } = value as Record<string, unknown>;
+  if (typeof start !== 'string' || typeof end !== 'string' || !timeOfDayPattern.test(start) || !timeOfDayPattern.test(end)) return undefined;
+  return { start, end };
+}
 
 export type TimeWindow = { start: string; end: string };
 export type WeeklyHours = Record<string, TimeWindow | undefined>;
@@ -110,6 +137,22 @@ export function validateSettingsPayload(text: string): ValidationResult<Record<s
   const habitReminderStyle = result.parsed[HABIT_REMINDER_STYLE_KEY];
   if (habitReminderStyle !== undefined && !isHabitReminderStyle(habitReminderStyle)) {
     errors.push(`${HABIT_REMINDER_STYLE_KEY} must be one of ${HABIT_REMINDER_STYLES.join(', ')}.`);
+  }
+
+  const timezone = result.parsed[TIMEZONE_KEY];
+  if (timezone !== undefined && (typeof timezone !== 'string' || !isValidTimezone(timezone))) {
+    errors.push(`${TIMEZONE_KEY} must be a valid IANA timezone name.`);
+  }
+
+  const quietHours = result.parsed[QUIET_HOURS_KEY];
+  if (quietHours !== undefined && quietHours !== null) {
+    if (typeof quietHours !== 'object' || Array.isArray(quietHours)) {
+      errors.push(`${QUIET_HOURS_KEY} must be an object with start/end, or null to disable.`);
+    } else {
+      const { start, end } = quietHours as Record<string, unknown>;
+      if (typeof start !== 'string' || !timeOfDayPattern.test(start)) errors.push(`${QUIET_HOURS_KEY}.start must be a valid HH:mm time.`);
+      if (typeof end !== 'string' || !timeOfDayPattern.test(end)) errors.push(`${QUIET_HOURS_KEY}.end must be a valid HH:mm time.`);
+    }
   }
 
   return { parsed: result.parsed, errors };

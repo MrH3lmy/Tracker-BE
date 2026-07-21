@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { isQueryError, type ApiCallResult } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
+import { useUndoToast } from '../undoToastContext';
+import { formatEnumLabel } from '../lib/enumLabels';
 import { QueryState } from '../components/QueryState';
 import { TaskCreateForm, type TaskCreateFormHandle } from '../components/tasks/TaskCreateForm';
 import { ManageDependenciesDrawer } from '../components/tasks/ManageDependenciesDrawer';
@@ -11,9 +13,12 @@ import { TaskListView } from '../components/tasks/TaskListView';
 import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
-import { latestResult, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import type { ProjectRecord } from '../components/projects/projectTypes';
+import { latestResult, useFocusSessionMutations, useProjectsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Drawer, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '../components/ui';
 import { Filter, Plus, Search } from '../components/ui/icons';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
@@ -83,6 +88,7 @@ export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'active' | 'done' | 'archive'>('active');
   const [createOpen, setCreateOpen] = useState(false);
+  const [createProjectId, setCreateProjectId] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dependenciesOpen, setDependenciesOpen] = useState(false);
   const [dependencyTaskId, setDependencyTaskId] = useState('');
@@ -98,6 +104,7 @@ export function TasksPage() {
   const sort = sortValueFromParams(searchParams);
   const createFormRef = useRef<TaskCreateFormHandle>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
+  const { showUndo } = useUndoToast();
 
   const setFilterParam = (key: (typeof FILTER_PARAM_KEYS)[number], value: string | boolean, defaultValue: string | boolean) => {
     setSearchParams((previous) => {
@@ -131,8 +138,11 @@ export function TasksPage() {
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
   const query = tab === 'archive' ? archiveQuery : activeQuery;
-  const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency } = useTaskMutations();
-  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending;
+  const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency, updateTaskProject } = useTaskMutations();
+  const { startSession } = useFocusSessionMutations();
+  const projectsQuery = useProjectsQuery();
+  const projects = useMemo<ProjectRecord[]>(() => (Array.isArray(projectsQuery.data?.data) ? (projectsQuery.data.data as ProjectRecord[]) : []), [projectsQuery.data]);
+  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending || updateTaskProject.isPending;
 
   const activeData = activeQuery.data?.data;
   const archiveData = archiveQuery.data?.data;
@@ -184,8 +194,21 @@ export function TasksPage() {
     window.requestAnimationFrame(() => createFormRef.current?.focusTitle());
   };
 
+  useEffect(() => {
+    if (searchParams.get('quickAdd') !== '1') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- opening the drawer here is a one-time reaction to an incoming ?quickAdd=1 link, not state sync.
+    showCreatePanel();
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('quickAdd');
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the quickAdd param is present, not on every filter change.
+  }, [searchParams]);
+
   const closeCreatePanel = () => {
     setCreateOpen(false);
+    setCreateProjectId('');
     window.requestAnimationFrame(() => createButtonRef.current?.focus());
   };
 
@@ -198,7 +221,15 @@ export function TasksPage() {
   };
 
   const submitCreate = (payload: CreateTaskPayload, onSuccess: () => void) => {
-    createTask.mutate(payload, { onSuccess: (result) => { if (result.ok) onSuccess(); } });
+    createTask.mutate(payload, {
+      onSuccess: (result) => {
+        if (!result.ok) return;
+        const createdId = (result.data as TaskRecord | null)?.id;
+        if (createdId && createProjectId) updateTaskProject.mutate({ id: createdId, projectId: Number(createProjectId) });
+        setCreateProjectId('');
+        onSuccess();
+      },
+    });
   };
 
   const updateTaskFromCard = (task: TaskRecord, updates: Partial<TaskRecord>) => {
@@ -209,6 +240,28 @@ export function TasksPage() {
     const next = new Date();
     next.setDate(next.getDate() + 1);
     updateTaskFromCard(task, { followUpDate: next.toISOString().slice(0, 10) });
+  };
+
+  const handleComplete = (taskId: number) => {
+    const task = activeTasks.find((candidate) => candidate.id === taskId);
+    const previousStatus = task?.status;
+    completeTask.mutate(taskId, {
+      onSuccess: (result) => {
+        if (!result.ok || !previousStatus) return;
+        showUndo(`"${task?.title ?? 'Task'}" marked complete.`, () => changeStatus.mutate({ id: taskId, status: previousStatus }));
+      },
+    });
+  };
+
+  const handleChangeStatus = (taskId: number, status: string) => {
+    const task = activeTasks.find((candidate) => candidate.id === taskId);
+    const previousStatus = task?.status;
+    changeStatus.mutate({ id: taskId, status }, {
+      onSuccess: (result) => {
+        if (!result.ok || !previousStatus) return;
+        showUndo(`"${task?.title ?? 'Task'}" moved to ${formatEnumLabel(status)}.`, () => changeStatus.mutate({ id: taskId, status: previousStatus }));
+      },
+    });
   };
 
   const openDependencyManager = (task: TaskRecord) => {
@@ -231,10 +284,13 @@ export function TasksPage() {
           <h2 className="text-xl font-semibold tracking-tight text-fg">Tasks</h2>
           <p className="mt-1 text-sm text-fg-muted">Manage, prioritize, and complete your work.</p>
         </div>
-        <Button ref={createButtonRef} variant="primary" onClick={showCreatePanel} disabled={busy}>
-          <Plus className="h-4 w-4" aria-hidden />
-          Add task
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+          <Button ref={createButtonRef} variant="primary" onClick={showCreatePanel} disabled={busy}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Add task
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2" aria-label="Task search and filters">
@@ -314,13 +370,16 @@ export function TasksPage() {
           <TaskListView
             tasks={taskTree}
             busy={busy}
-            onComplete={(taskId) => completeTask.mutate(taskId)}
+            onComplete={handleComplete}
             onStartSubtask={(task) => startSubtask(task)}
-            onChangeStatus={(id, status) => changeStatus.mutate({ id, status })}
+            onChangeStatus={handleChangeStatus}
             onSnoozeFollowUp={snoozeFollowUp}
             onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
             onManageDependencies={openDependencyManager}
             onDelete={(taskId) => deleteTask.mutate(taskId)}
+            onStartFocusSession={(task) => startSession.mutate(task.id, {
+              onSuccess: (result) => announce(result.ok ? `Focus session started for "${task.title}".` : (result.error?.message ?? 'Could not start focus session.')),
+            })}
           />
         )}
       </section>
@@ -350,6 +409,9 @@ export function TasksPage() {
         <TaskCreateForm
           ref={createFormRef}
           activeTasks={activeTasks}
+          projects={projects}
+          projectId={createProjectId}
+          onProjectIdChange={setCreateProjectId}
           busy={busy}
           isSubmitting={createTask.isPending}
           onCancel={closeCreatePanel}

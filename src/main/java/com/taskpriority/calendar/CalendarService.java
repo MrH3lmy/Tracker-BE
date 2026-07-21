@@ -6,6 +6,9 @@ import com.taskpriority.model.Task;
 import com.taskpriority.model.Tier;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.service.PriorityEngine;
+import com.taskpriority.service.TaskService;
+import com.taskpriority.task.api.TaskApiMapper;
+import com.taskpriority.task.api.TaskResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +22,15 @@ import java.util.Map;
 public class CalendarService {
     private final TaskRepository taskRepository;
     private final PriorityEngine priorityEngine;
+    private final TaskService taskService;
+    private final TaskApiMapper taskApiMapper;
     private final CurrentUserService currentUserService;
-    public CalendarService(TaskRepository taskRepository, PriorityEngine priorityEngine, CurrentUserService currentUserService) {
+    public CalendarService(TaskRepository taskRepository, PriorityEngine priorityEngine, TaskService taskService,
+                            TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.priorityEngine = priorityEngine;
+        this.taskService = taskService;
+        this.taskApiMapper = taskApiMapper;
         this.currentUserService = currentUserService;
     }
 
@@ -31,6 +39,20 @@ public class CalendarService {
         Long userId = currentUserService.requireUserId();
         YearMonth ym = YearMonth.of(year, month);
         return taskRepository.findByUserIdAndDueDateBetween(userId, ym.atDay(1), ym.atEndOfMonth());
+    }
+
+    /** Real per-day task lists (with ids) backing the month grid, so a day can be dragged/edited, not just counted. */
+    @Transactional(readOnly = true)
+    public Map<LocalDate, List<TaskResponse>> getMonthTasksByDay(int year, int month) {
+        List<Task> tasks = getMonth(year, month).stream()
+                .filter(t -> t.getDueDate() != null && !t.isDeleted())
+                .toList();
+        taskService.computeDerivedFieldsBatch(tasks);
+        Map<LocalDate, List<Task>> grouped = tasks.stream()
+                .collect(java.util.stream.Collectors.groupingBy(Task::getDueDate, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+        Map<LocalDate, List<TaskResponse>> result = new LinkedHashMap<>();
+        grouped.forEach((date, dayTasks) -> result.put(date, dayTasks.stream().map(taskApiMapper::toResponse).toList()));
+        return result;
     }
 
     @Transactional(readOnly = true)

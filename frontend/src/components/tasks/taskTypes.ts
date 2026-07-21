@@ -31,6 +31,7 @@ export interface TaskRecord {
   track?: string;
   phase?: string;
   parentTaskId?: number;
+  projectId?: number;
   createdDate?: string;
   completedDate?: string;
   important?: boolean;
