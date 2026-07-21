@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -74,7 +75,7 @@ class WeeklyReviewControllerIntegrationTest {
 
         mockMvc.perform(get("/api/v1/weekly-reviews"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + id + ")]").exists());
+                .andExpect(jsonPath("$[*].id", hasItem((int) id)));
 
         mockMvc.perform(get("/api/v1/weekly-reviews").param("limit", "1"))
                 .andExpect(status().isOk())
@@ -95,7 +96,7 @@ class WeeklyReviewControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.weekStartDate").exists())
                 .andExpect(jsonPath("$.weekEndDate").exists())
-                .andExpect(jsonPath("$.overdueTasks[?(@.id == " + overdueTaskId + ")]").exists())
+                .andExpect(jsonPath("$.overdueTasks[*].id", hasItem((int) overdueTaskId)))
                 .andExpect(jsonPath("$.completedTasks").isArray())
                 .andExpect(jsonPath("$.habitPerformance").isArray())
                 .andExpect(jsonPath("$.projectsAtRisk").isArray())

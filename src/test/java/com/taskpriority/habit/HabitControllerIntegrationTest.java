@@ -16,6 +16,7 @@ import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -75,7 +76,7 @@ class HabitControllerIntegrationTest {
 
         mockMvc.perform(get("/api/v1/habits"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + id + ")]").exists());
+                .andExpect(jsonPath("$[*].id", hasItem((int) id)));
     }
 
     @Test
@@ -120,11 +121,20 @@ class HabitControllerIntegrationTest {
                 .andExpect(jsonPath("$.todayTargetMet").value(false));
 
         LocalDate today = LocalDate.now();
-        mockMvc.perform(get("/api/v1/habits/history")
+        String historyResponse = mockMvc.perform(get("/api/v1/habits/history")
                         .param("from", today.toString())
                         .param("to", today.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.habitId == " + id + ")].count").value(java.util.List.of(1)));
+                .andReturn().getResponse().getContentAsString();
+        com.fasterxml.jackson.databind.JsonNode history = jsonMapper.readTree(historyResponse);
+        boolean found = false;
+        for (com.fasterxml.jackson.databind.JsonNode entry : history) {
+            if (entry.get("habitId").asLong() == id) {
+                org.junit.jupiter.api.Assertions.assertEquals(1, entry.get("count").asInt());
+                found = true;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(found, "Expected a history entry for habit " + id + " in " + historyResponse);
     }
 
     @Test

@@ -62,7 +62,11 @@ class DashboardControllerIntegrationTest {
                 .andExpect(jsonPath("$.totalTasks").value(5))
                 .andExpect(jsonPath("$.completedTasks").value(1))
                 .andExpect(jsonPath("$.activeTasks").value(4))
-                .andExpect(jsonPath("$.overdueTasks").value(1))
+                // DashboardService's overdue query is "dueDate <= today and status != DONE" (see
+                // TaskRepository#findOverdueTasks), so it's inclusive of tasks due today, unlike
+                // PlanningService's stricter "before today" overdue definition - both the overdue
+                // task and the due-today task below satisfy dueDate <= today.
+                .andExpect(jsonPath("$.overdueTasks").value(2))
                 .andExpect(jsonPath("$.dueToday").value(1))
                 .andExpect(jsonPath("$.blockedTasks").value(1))
                 .andExpect(jsonPath("$.waitingTasks").value(1))
