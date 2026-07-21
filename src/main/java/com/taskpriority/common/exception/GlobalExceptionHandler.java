@@ -118,17 +118,31 @@ public class GlobalExceptionHandler {
     private void logException(HttpStatus status, HttpServletRequest request, Exception ex, boolean handled) {
         String queryString = request.getQueryString();
         String user = resolveAuthenticatedUser();
-        logger.error(
-                "Exception {} status={} method={} uri={} query={} requestId={} user={}",
-                handled ? "handled" : "unhandled",
-                status.value(),
-                request.getMethod(),
-                request.getRequestURI(),
-                queryString == null ? "" : queryString,
-                request.getHeader(REQUEST_ID_HEADER),
-                user,
-                ex
-        );
+        if (status.is5xxServerError()) {
+            logger.error(
+                    "Exception {} status={} method={} uri={} query={} requestId={} user={}",
+                    handled ? "handled" : "unhandled",
+                    status.value(),
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    queryString == null ? "" : queryString,
+                    request.getHeader(REQUEST_ID_HEADER),
+                    user,
+                    ex
+            );
+        } else {
+            logger.warn(
+                    "Exception {} status={} method={} uri={} query={} requestId={} user={} message={}",
+                    handled ? "handled" : "unhandled",
+                    status.value(),
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    queryString == null ? "" : queryString,
+                    request.getHeader(REQUEST_ID_HEADER),
+                    user,
+                    ex.getMessage()
+            );
+        }
     }
 
     private String resolveAuthenticatedUser() {
