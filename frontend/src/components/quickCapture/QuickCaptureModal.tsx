@@ -5,8 +5,10 @@ import { parseNaturalLanguageTask, type ParsedTask } from '../../lib/naturalLang
 import { AREA_VALUES, RISK_LEVEL_VALUES } from '../tasks/taskUtils';
 import { RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type RecurrenceFrequency } from '../../validation/recurrence';
 import { useHabitMutations, useNoteMutations, useSchedulerMutations, useSearchQuery, useTaskMutations, useTasksQuery, type SearchResultRecord } from '../../hooks/useApiQueries';
+import { useRovingSelection } from '../../hooks/useRovingSelection';
 import type { TaskRecord } from '../tasks/taskTypes';
 import { formatEnumLabel } from '../../lib/enumLabels';
+import { recordRecentItem } from '../../lib/recentItems';
 import { isQueryError } from '../../apiClient';
 import { Badge, Button, Checkbox, Collapsible, Dialog, Field, Input, Select, SegmentedControl, Textarea } from '../ui';
 import { AlertTriangle, Flame, ListTodo, Search, StickyNote, Tag as TagIcon } from '../ui/icons';
@@ -95,7 +97,7 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
   const showUncertainNotice = Boolean(parsed && !parsed.confident);
 
   const searchResultsQuery = useSearchQuery({ q: searchQuery, size: 8 }, type === 'search' && searchQuery.trim().length > 0);
-  const searchResults = searchResultsQuery.data?.data?.items ?? [];
+  const searchResults = useMemo(() => searchResultsQuery.data?.data?.items ?? [], [searchResultsQuery.data]);
 
   useEffect(() => {
     if (parsed) setTaskFields((current) => applyParseToFields(current, touchedFieldsRef.current, parsed));
@@ -216,9 +218,16 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
   };
 
   const goToResult = (result: SearchResultRecord) => {
+    recordRecentItem({ type: result.type, id: result.id, title: result.title, url: result.url });
     navigate(result.url);
     close();
   };
+
+  const { activeIndex: activeResultIndex, setActiveIndex: setActiveResultIndex, onKeyDown: onSearchKeyDown } = useRovingSelection(
+    searchResults,
+    (result) => `${result.type}-${result.id}`,
+    goToResult,
+  );
 
   const TypeIcon = TYPE_ICONS[type];
 
@@ -364,7 +373,11 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
                 ref={rawInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={onSearchKeyDown}
                 placeholder="Search tasks, notes, habits, and tags"
+                role="combobox"
+                aria-expanded={searchResults.length > 0}
+                aria-controls="quick-capture-search-results"
               />
             </Field>
             {searchQuery.trim() && (
@@ -374,15 +387,19 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
                 {!searchResultsQuery.isFetching && searchResults.length === 0 && !isQueryError(searchResultsQuery.data) && (
                   <p className="text-sm text-fg-muted">No results for "{searchQuery.trim()}".</p>
                 )}
-                <div className="flex flex-col gap-1.5">
-                  {searchResults.map((result) => {
+                <div id="quick-capture-search-results" role="listbox" aria-label="Search results" className="flex flex-col gap-1.5">
+                  {searchResults.map((result, index) => {
                     const ResultIcon = SEARCH_RESULT_ICONS[result.type];
+                    const active = index === activeResultIndex;
                     return (
                       <button
                         key={`${result.type}-${result.id}`}
                         type="button"
+                        role="option"
+                        aria-selected={active}
+                        onMouseEnter={() => setActiveResultIndex(index)}
                         onClick={() => goToResult(result)}
-                        className="flex items-center gap-2.5 rounded-lg border border-line bg-inset/30 px-3 py-2 text-left transition-colors duration-(--duration-fast) hover:bg-inset"
+                        className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors duration-(--duration-fast) hover:bg-inset ${active ? 'border-line-strong bg-inset' : 'border-line bg-inset/30'}`}
                       >
                         <ResultIcon className="h-4 w-4 shrink-0 text-brand" aria-hidden />
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{result.title}</span>

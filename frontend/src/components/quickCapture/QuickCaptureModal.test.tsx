@@ -1,19 +1,25 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnnouncementContext } from '../../announcementContext';
 import { QuickCaptureModal } from './QuickCaptureModal';
 
-function renderModal() {
+function renderModal(onOpenChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <AnnouncementContext.Provider value={{ message: '', announce: vi.fn() }}>
-          <QuickCaptureModal open onOpenChange={vi.fn()} />
-        </AnnouncementContext.Provider>
+      <MemoryRouter initialEntries={['/today']}>
+        <Routes>
+          <Route path="/today" element={(
+            <AnnouncementContext.Provider value={{ message: '', announce: vi.fn() }}>
+              <QuickCaptureModal open onOpenChange={onOpenChange} />
+            </AnnouncementContext.Provider>
+          )}
+          />
+          <Route path="/tasks/:id" element={<p>Task detail page</p>} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -25,6 +31,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
 });
 
 describe('QuickCaptureModal', () => {
@@ -122,5 +129,37 @@ describe('QuickCaptureModal', () => {
     await user.type(screen.getByLabelText('Search'), 'invoice');
 
     expect(await screen.findByText(/Search failed/)).toBeInTheDocument();
+  });
+
+  it('supports arrow-key roving through search results and Enter to open the selected one', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url.includes('/api/v1/search')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          items: [
+            { type: 'TASK', id: 1, title: 'Ship release', url: '/tasks/1' },
+            { type: 'NOTE', id: 2, title: 'Release notes', url: '/tasks/2' },
+          ],
+          page: 0,
+          size: 8,
+          totalElements: 2,
+        }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } }));
+    }));
+
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole('tab', { name: 'Search' }));
+    await user.type(screen.getByLabelText('Search'), 'release');
+
+    const firstOption = await screen.findByRole('option', { name: /Ship release/ });
+    expect(firstOption).toHaveAttribute('aria-selected', 'true');
+
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('option', { name: /Release notes/ })).toHaveAttribute('aria-selected', 'true');
+
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Task detail page')).toBeInTheDocument();
   });
 });
