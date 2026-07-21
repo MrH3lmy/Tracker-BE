@@ -7,6 +7,7 @@ import { useDashboardQuery } from '../hooks/useApiQueries';
 import { Card, CardHeader, PageHeader } from '../components/ui';
 import { formatEnumLabel } from '../lib/enumLabels';
 import { HabitAnalysisPage } from './HabitAnalysisPage';
+import { FocusAnalyticsPanel } from '../components/focus/FocusAnalyticsPanel';
 
 interface TaskAnalyticsSummary {
   completionRate?: number;
@@ -134,7 +135,7 @@ function TaskAnalyticsPanel() {
 }
 
 export function InsightsPage() {
-  const [tab, setTab] = useState<'tasks' | 'habits'>('tasks');
+  const [tab, setTab] = useState<'tasks' | 'habits' | 'focus'>('tasks');
 
   return (
     <div className="flex flex-col gap-5">
@@ -162,8 +163,19 @@ export function InsightsPage() {
         >
           Habit analytics
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'focus'}
+          onClick={() => setTab('focus')}
+          className={tab === 'focus' ? 'rounded-md bg-card px-3 py-1.5 text-sm font-medium text-fg shadow-2xs' : 'rounded-md px-3 py-1.5 text-sm font-medium text-fg-muted hover:text-fg'}
+        >
+          Focus analytics
+        </button>
       </div>
-      {tab === 'tasks' ? <TaskAnalyticsPanel /> : <HabitAnalysisPage embedded />}
+      {tab === 'tasks' && <TaskAnalyticsPanel />}
+      {tab === 'habits' && <HabitAnalysisPage embedded />}
+      {tab === 'focus' && <FocusAnalyticsPanel />}
     </div>
   );
 }

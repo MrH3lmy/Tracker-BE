@@ -5,7 +5,7 @@ import type { TaskTreeNode } from './taskTypes';
 import { riskVariantByLevel, taskStatusVariant } from './taskStyleUtils';
 import { formatDate, formatValue, isOverdue } from './taskUtils';
 import { Badge, Button, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, cn } from '../ui';
-import { Check, MoreHorizontal, StickyNote } from '../ui/icons';
+import { Check, MoreHorizontal, StickyNote, Timer } from '../ui/icons';
 
 interface TaskListViewProps {
   tasks: TaskTreeNode[];
@@ -17,6 +17,7 @@ interface TaskListViewProps {
   onRemoveDependency: (taskId: number, blocksTaskId: number) => void;
   onManageDependencies: (task: TaskTreeNode) => void;
   onDelete: (taskId: number) => void;
+  onStartFocusSession?: (task: TaskTreeNode) => void;
 }
 
 const gridColumns = 'grid grid-cols-[minmax(16rem,2.4fr)_minmax(7rem,1fr)_minmax(7.5rem,1fr)_minmax(5.5rem,0.8fr)_minmax(5.5rem,0.8fr)_minmax(7rem,1fr)_minmax(9rem,auto)] items-center gap-x-3';
@@ -89,7 +90,7 @@ function DetailSection({ id, title, action, children }: { id: string; title: str
   );
 }
 
-function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete, expanded, onToggleExpanded }: TaskListViewProps & { task: TaskTreeNode; expanded: boolean; onToggleExpanded: () => void }) {
+function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, onSnoozeFollowUp, onRemoveDependency, onManageDependencies, onDelete, onStartFocusSession, expanded, onToggleExpanded }: TaskListViewProps & { task: TaskTreeNode; expanded: boolean; onToggleExpanded: () => void }) {
   const overdue = isOverdue(task);
   const detailsId = `task-${task.id}-details`;
   const descriptionPreviewId = task.description ? `task-${task.id}-description-preview` : undefined;
@@ -203,6 +204,12 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
                 <Link to={`/tasks/${task.id}`}>Edit</Link>
               </MenuItem>
               <MenuItem onSelect={() => onStartSubtask(task)} disabled={busy}>Add subtask</MenuItem>
+              {onStartFocusSession && !isDone && (
+                <MenuItem onSelect={() => onStartFocusSession(task)} disabled={busy}>
+                  <Timer className="h-3.5 w-3.5" aria-hidden />
+                  Start focus session
+                </MenuItem>
+              )}
               <MenuItem asChild>
                 <a href={taskNotesHref(task.id)}>{notesLabel}</a>
               </MenuItem>

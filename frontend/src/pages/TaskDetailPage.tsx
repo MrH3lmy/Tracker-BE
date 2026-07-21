@@ -8,9 +8,9 @@ import { TaskCreateForm } from '../components/tasks/TaskCreateForm';
 import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, TaskRecord } from '../components/tasks/taskTypes';
 import type { ProjectRecord } from '../components/projects/projectTypes';
-import { useProjectsQuery, useTaskDetailQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import { useFocusSessionMutations, useProjectsQuery, useTaskDetailQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Button, Card, CardHeader, PageHeader } from '../components/ui';
-import { ChevronLeft } from '../components/ui/icons';
+import { ChevronLeft, Timer } from '../components/ui/icons';
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +26,7 @@ export function TaskDetailPage() {
   const activeQuery = useTasksQuery('active');
   const projectsQuery = useProjectsQuery();
   const { updateTask, addDependency, removeDependency, updateTaskProject } = useTaskMutations();
+  const { startSession } = useFocusSessionMutations();
 
   const detail = detailQuery.data?.data;
   const task = detail?.task;
@@ -77,10 +78,24 @@ export function TaskDetailPage() {
         title={task ? `#${task.id} ${task.title}` : 'Task detail'}
         description="Edit task details, manage dependencies, and review linked notes."
         actions={
-          <Button onClick={() => navigate('/tasks')}>
-            <ChevronLeft className="h-4 w-4" aria-hidden />
-            Back to tasks
-          </Button>
+          <>
+            <Button onClick={() => navigate('/tasks')}>
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              Back to tasks
+            </Button>
+            {task && task.status !== 'DONE' && (
+              <Button
+                variant="primary"
+                onClick={() => startSession.mutate(task.id, {
+                  onSuccess: (result) => announce(result.ok ? `Focus session started for "${task.title}".` : (result.error?.message ?? 'Could not start focus session.')),
+                })}
+                disabled={startSession.isPending}
+              >
+                <Timer className="h-4 w-4" aria-hidden />
+                Start focus session
+              </Button>
+            )}
+          </>
         }
         className="mb-0"
       />

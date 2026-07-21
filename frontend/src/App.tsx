@@ -11,6 +11,7 @@ import { ThemeContext } from './themeContext';
 import { UndoToastContext, type UndoToastContextValue } from './undoToastContext';
 import { QuickCaptureContext, type QuickCaptureContextValue } from './quickCaptureContext';
 import { QuickCaptureModal } from './components/quickCapture/QuickCaptureModal';
+import { FocusTimerWidget } from './components/focus/FocusTimerWidget';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -453,6 +454,7 @@ function AuthenticatedApp() {
           onToggleMore={() => setIsMobileMenuOpen((open) => !open)}
           isMoreOpen={isMobileMenuOpen}
         />
+        <FocusTimerWidget />
         {undoToast && (
           <div className="fixed inset-x-0 bottom-20 z-(--z-toast) flex justify-center px-4 lg:bottom-6" role="status" aria-live="polite">
             <div className="flex items-center gap-3 rounded-lg border border-line-strong bg-card px-4 py-3 shadow-lg">

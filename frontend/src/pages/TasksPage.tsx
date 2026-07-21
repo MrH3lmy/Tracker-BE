@@ -14,7 +14,7 @@ import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
 import type { ProjectRecord } from '../components/projects/projectTypes';
-import { latestResult, useProjectsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import { latestResult, useFocusSessionMutations, useProjectsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Drawer, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '../components/ui';
 import { Filter, Plus, Search } from '../components/ui/icons';
 import { SectionTabs } from '../components/SectionTabs';
@@ -139,6 +139,7 @@ export function TasksPage() {
   const archiveQuery = useTasksQuery('archive');
   const query = tab === 'archive' ? archiveQuery : activeQuery;
   const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency, updateTaskProject } = useTaskMutations();
+  const { startSession } = useFocusSessionMutations();
   const projectsQuery = useProjectsQuery();
   const projects = useMemo<ProjectRecord[]>(() => (Array.isArray(projectsQuery.data?.data) ? (projectsQuery.data.data as ProjectRecord[]) : []), [projectsQuery.data]);
   const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending || updateTaskProject.isPending;
@@ -376,6 +377,9 @@ export function TasksPage() {
             onRemoveDependency={(id, blocksTaskId) => removeDependency.mutate({ id, blocksTaskId })}
             onManageDependencies={openDependencyManager}
             onDelete={(taskId) => deleteTask.mutate(taskId)}
+            onStartFocusSession={(task) => startSession.mutate(task.id, {
+              onSuccess: (result) => announce(result.ok ? `Focus session started for "${task.title}".` : (result.error?.message ?? 'Could not start focus session.')),
+            })}
           />
         )}
       </section>

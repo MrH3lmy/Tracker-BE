@@ -44,6 +44,7 @@ export {
   Sparkles,
   Tag,
   Target,
+  Timer,
   TrendingUp,
   StickyNote,
   Trash2,

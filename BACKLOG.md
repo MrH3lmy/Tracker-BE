@@ -1,41 +1,12 @@
-# Backlog: Phases 8-10
+# Backlog: Phases 9-10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-7 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-8 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V36** (Phase 7 used V34/V35).
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V37** (Phase 8 used V36).
 
-**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6); a project-scoped Notes tab on `ProjectDetailPage` (Phase 7, union of notes linked to tasks in the project via the existing `NoteTaskLink` — the query is trivial, it's just not surfaced as a tab yet) -- see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
+**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6); a project-scoped Notes tab on `ProjectDetailPage` (Phase 7, union of notes linked to tasks in the project via the existing `NoteTaskLink` — the query is trivial, it's just not surfaced as a tab yet); Phase 8's focus-analytics area breakdown uses `Task.area` only, not `Task.projectId` (a project-level focus rollup is a reasonable follow-up now that Phase 7 exists) — see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
 
----
-
-## Phase 8 — Focus sessions
-
-**User story**: As a user, I want to start a focus timer against a task, pause/resume/stop it, and have the actual time automatically recorded, with analytics on where my time actually goes versus my estimates.
-
-**Scope**: Server-persisted focus sessions tied to `Task.estimatedMinutes`/`actualMinutes`; start/pause/resume/stop UI; analytics.
-
-**Backend tasks**:
-- New `model/FocusSession.java`: id, userId, taskId (nullable — allow a session with no task, e.g. general deep work), startedAt, pausedIntervals (store as a `List<Interval>` via a child table `focus_session_pauses(session_id, paused_at, resumed_at)` rather than a JSON blob, consistent with this codebase's preference for relational modeling over JSON columns — see how `TaskDependency`/`NoteBlock` are modeled), endedAt, status (`RUNNING/PAUSED/COMPLETED/ABANDONED`), note (nullable text), actualMinutes (computed on stop = elapsed minus paused time).
-- `focus` package: `FocusSessionController` (`POST /api/v1/focus-sessions` start, `PATCH /{id}/pause`, `PATCH /{id}/resume`, `PATCH /{id}/stop` body `{ note?, completeTask? }`, `GET /api/v1/focus-sessions?from=&to=`), `FocusSessionService`.
-- On stop with `completeTask: true` and a linked task: call the existing `TaskService.markComplete(taskId)` (reuse, don't duplicate completion logic) and add `actualMinutes` to `Task.actualMinutes` (sum, since a task can have multiple sessions).
-- **Abandoned/interrupted sessions**: a session left `RUNNING` for longer than a configurable threshold (e.g. 4 hours, `app.focus.session.max-hours` property) should be treated as abandoned when next queried — either a `@Scheduled` sweep (first scheduled job in the codebase — coordinate with Phase 10's reminder worker so there's only one scheduling mechanism, not two independently invented ones) or a lazy check-on-read that flips stale `RUNNING` sessions to `ABANDONED` with `actualMinutes` capped at the threshold. Prefer the lazy check for v1 — simpler, no new infra.
-- Analytics endpoint: `GET /api/v1/focus-sessions/analytics?from=&to=` returning: total focus minutes by day, by project/area (join through `Task.area`/`Task.projectId` once Phase 7 lands, else just `Task.area`), estimated-vs-actual per task (tasks where `actualMinutes` diverges from `estimatedMinutes` by more than e.g. 25%), and most productive hour-of-day (bucket session start times).
-
-**Frontend tasks**:
-- `components/focus/FocusTimerWidget.tsx`: persistent small widget (footer or header) showing running/paused state, elapsed time, pause/resume/stop controls — visible from any page once a session is active (state lives in a `focusSessionContext.tsx`, mirroring how `undoToastContext`/`announcementContext` are done).
-- Start a session from a task's detail page or list row ("Start focus session" action).
-- `pages/FocusAnalyticsPage.tsx` — likely a tab under Insights (`InsightsPage`, alongside Task/Habit analytics) rather than a new top-level nav item, per the same "don't over-fragment the sidebar" principle applied in Phase 2.
-- Persist "session in progress" across a page refresh: on load, `GET /api/v1/focus-sessions?status=RUNNING` (or a dedicated `/active` endpoint) so the timer widget can resume showing state — this is exactly why sessions are server-persisted, not `localStorage`-only.
-
-**Migration requirements**: `V36__create_focus_sessions.sql` (focus_sessions + focus_session_pauses tables, indexes on `user_id`, `task_id`, `started_at`).
-
-**Acceptance criteria**: start/pause/resume/stop all persist correctly across a page reload; stopping with "complete task" checked marks the task done and adds to its actual minutes; an abandoned session (browser closed mid-session) is handled without corrupting analytics (capped duration, marked ABANDONED, not silently counted as hours of focus); analytics numbers are computed from real session data, not estimates.
-
-**Test cases**: `FocusSessionServiceTest` (start/pause/resume/stop state machine, pause-time subtraction math, abandonment threshold), analytics aggregation tests (day/area/hour bucketing, estimate-divergence detection), controller slice tests for each transition including invalid ones (e.g. stopping an already-stopped session returns 409 or 400, not 500).
-
-**Dependencies**: None required; richer with Phase 7 (project-level focus analytics) but works standalone against `Task.area` in the meantime.
-
-**Estimated complexity**: L.
+**Known pre-existing issue (found during Phase 8, not fixed — out of scope)**: `AuthProvider`'s own session-restore call to `POST /api/v1/auth/refresh` and `apiClient.ts`'s 401-retry-triggered refresh are two independent code paths, each with its own in-flight-request dedup but not sharing one with the other. On a hard page reload where both fire near-simultaneously, the loser's refresh call gets a 400 (refresh tokens are single-use/rotating) and the user is bounced to `/login`. A real fix means unifying both call sites behind one shared refresh-dedup mechanism in `apiClient.ts`. Worth an auth-hardening pass independent of Phases 9-10.
 
 ---
 

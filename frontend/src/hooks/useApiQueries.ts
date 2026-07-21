@@ -6,6 +6,7 @@ import type { BoardColumnRecord } from '../components/board/boardTypes';
 import type { CreateHabitPayload, HabitHistoryEntry, HabitRecord } from '../components/habits/habitTypes';
 import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
 import type { CreateMilestonePayload, CreateProjectPayload, MilestoneRecord, ProjectOverviewRecord, ProjectRecord, UpdateMilestonePayload } from '../components/projects/projectTypes';
+import type { FocusAnalyticsRecord, FocusSessionRecord, StopFocusSessionPayload } from '../components/focus/focusTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -91,6 +92,9 @@ export const queryKeys = {
   projectOverview: (id: number) => ['projects', id, 'overview'] as const,
   projectMilestones: (id: number) => ['projects', id, 'milestones'] as const,
   projectTasks: (id: number) => ['projects', id, 'tasks'] as const,
+  focusActive: ['focus-sessions', 'active'] as const,
+  focusSessions: (from: string, to: string) => ['focus-sessions', from, to] as const,
+  focusAnalytics: (from: string, to: string) => ['focus-sessions', 'analytics', from, to] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -171,6 +175,14 @@ export const useProjectQuery = (id: number, enabled = true) => useQuery({ queryK
 export const useProjectOverviewQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectOverview(id), queryFn: () => apiJson<ProjectOverviewRecord>('GET', `/api/v1/projects/${id}/overview`), enabled: enabled && Number.isFinite(id) });
 export const useProjectMilestonesQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectMilestones(id), queryFn: () => apiJson<MilestoneRecord[]>('GET', `/api/v1/projects/${id}/milestones`), enabled: enabled && Number.isFinite(id) });
 export const useProjectTasksQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectTasks(id), queryFn: () => apiJson<TaskRecord[]>('GET', `/api/v1/projects/${id}/tasks`), enabled: enabled && Number.isFinite(id) });
+export const useFocusActiveQuery = (enabled = true) => useQuery({
+  queryKey: queryKeys.focusActive,
+  queryFn: () => apiJson<FocusSessionRecord>('GET', '/api/v1/focus-sessions/active'),
+  enabled,
+  refetchInterval: (query) => (query.state.data?.data ? 30000 : false),
+});
+export const useFocusSessionsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusSessions(from, to), queryFn: () => apiJson<FocusSessionRecord[]>('GET', `/api/v1/focus-sessions?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
+export const useFocusAnalyticsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusAnalytics(from, to), queryFn: () => apiJson<FocusAnalyticsRecord>('GET', `/api/v1/focus-sessions/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -311,6 +323,20 @@ export function useMilestoneMutations() {
     deleteMilestone: useMutation({
       mutationFn: ({ projectId, milestoneId }: { projectId: number; milestoneId: number }) => apiJson('DELETE', `/api/v1/projects/${projectId}/milestones/${milestoneId}`),
       onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+  };
+}
+
+export function useFocusSessionMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['focus-sessions'] });
+  return {
+    startSession: useMutation({ mutationFn: (taskId: number | null) => apiJson<FocusSessionRecord>('POST', '/api/v1/focus-sessions', { taskId }), onSuccess }),
+    pauseSession: useMutation({ mutationFn: (id: number) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/pause`), onSuccess }),
+    resumeSession: useMutation({ mutationFn: (id: number) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/resume`), onSuccess }),
+    stopSession: useMutation({
+      mutationFn: ({ id, body }: { id: number; body?: StopFocusSessionPayload }) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/stop`, body),
+      onSuccess: () => { onSuccess(); qc.invalidateQueries({ queryKey: ['tasks'] }); },
     }),
   };
 }
