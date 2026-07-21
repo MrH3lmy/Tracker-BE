@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { appRoutes, appTabs, developerTabs, type AppRoute } from './router/routes';
+import { appRoutes, appTabs, developerTabs, legacyRedirects, type AppRoute } from './router/routes';
 import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
 import { useHabitReminders } from './hooks/useHabitReminders';
 import type { HabitRecord } from './components/habits/habitTypes';
@@ -24,13 +24,10 @@ import { Badge, Button, cn } from './components/ui';
 import {
   AlertTriangle,
   Calendar,
-  CalendarDays,
   Check,
   ChevronsLeft,
   Clock,
-  Columns3,
   Flame,
-  Grid2x2,
   Import,
   LayoutDashboard,
   ListTodo,
@@ -39,6 +36,7 @@ import {
   Plus,
   Settings,
   StickyNote,
+  TrendingUp,
   Wrench,
   X,
 } from './components/ui/icons';
@@ -63,15 +61,12 @@ const routeIsDeveloperRoute = ({ path }: AppRoute) => developerTabs.some((tab) =
 type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
 const navIcons: Record<string, IconComponent> = {
-  Dashboard: LayoutDashboard,
+  Today: LayoutDashboard,
   Tasks: ListTodo,
   Habits: Flame,
-  Board: Columns3,
   Notes: StickyNote,
-  Planning: CalendarDays,
-  Scheduler: Clock,
-  Matrix: Grid2x2,
   Calendar: Calendar,
+  Insights: TrendingUp,
   Settings: Settings,
   Import: Import,
   'Error Playground': AlertTriangle,
@@ -177,7 +172,7 @@ function AppRoot() {
 }
 
 const MOBILE_TAB_ITEMS: { label: string; path: string; icon: IconComponent }[] = [
-  { label: 'Today', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Today', path: '/today', icon: LayoutDashboard },
   { label: 'Tasks', path: '/tasks', icon: ListTodo },
   { label: 'Habits', path: '/habits', icon: Flame },
 ];
@@ -301,7 +296,7 @@ function AuthenticatedApp() {
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
   const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
-  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Dashboard';
+  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Today';
 
   if (isAuthLoading) {
     return (
@@ -411,10 +406,13 @@ function AuthenticatedApp() {
               tabIndex={-1}
             >
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/today" replace />} />
                 {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {legacyRedirects.map(({ from, to }) => (
+                  <Route key={`legacy-${from}`} path={from} element={<Navigate to={to} replace />} />
+                ))}
                 {!isDevMode && developerTabs.map(({ path }) => (
-                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/dashboard" replace />} />
+                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/today" replace />} />
                 ))}
               </Routes>
             </main>

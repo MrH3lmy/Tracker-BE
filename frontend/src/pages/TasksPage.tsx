@@ -16,6 +16,8 @@ import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../c
 import { latestResult, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Drawer, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '../components/ui';
 import { Filter, Plus, Search } from '../components/ui/icons';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 const DEFAULT_SORT: TaskSortValue = 'position';
 const FILTER_PARAM_KEYS = ['q', 'status', 'area', 'effort', 'dueFrom', 'dueTo', 'overdue', 'sort'] as const;
@@ -268,10 +270,13 @@ export function TasksPage() {
           <h2 className="text-xl font-semibold tracking-tight text-fg">Tasks</h2>
           <p className="mt-1 text-sm text-fg-muted">Manage, prioritize, and complete your work.</p>
         </div>
-        <Button ref={createButtonRef} variant="primary" onClick={showCreatePanel} disabled={busy}>
-          <Plus className="h-4 w-4" aria-hidden />
-          Add task
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+          <Button ref={createButtonRef} variant="primary" onClick={showCreatePanel} disabled={busy}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Add task
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2" aria-label="Task search and filters">

@@ -26,7 +26,7 @@ export function RegisterPage() {
     setIsSubmitting(false);
 
     if (result.ok) {
-      navigate('/dashboard', { replace: true });
+      navigate('/today', { replace: true });
     } else {
       setError(result.errorMessage ?? 'Registration failed.');
     }

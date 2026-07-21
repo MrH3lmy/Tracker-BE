@@ -40,6 +40,8 @@ Secondary: **Search · Settings · Import**
 
 Old routes (`/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler`) redirect to their new home so bookmarks/saved links keep working (`Navigate replace` routes, not deletions).
 
+**Search is intentionally not added to the nav yet.** `GET /api/v1/search` doesn't exist until Phase 6; adding a "Search" sidebar entry now would be exactly the dead-link pattern this plan is trying to remove elsewhere. It ships as part of Phase 6 in `BACKLOG.md`.
+
 ## 4. Backend changes
 
 - Phase 3: `GET /api/v1/home/today` — new `home` package (`HomeController`, `HomeService`) composing existing services: `DashboardService` (counts), `PlanningService.getTodayView()` (overdue/due-today/top-priority tasks), `TaskRecommendationService` (top 3 recommendations), `HabitService`/habit repositories (habits due today + check-in state), `TaskRepository` follow-up queries. No new tables — pure composition, read-only, scoped by `currentUserService.requireUserId()` like every other service.
@@ -108,7 +110,12 @@ No breaking changes to any existing v1 contract in Phases 1–3.
   - [x] Humanize enum labels in Planning/Matrix
   - [x] Undo support for complete / status change / board move / unschedule
   - [x] Mobile bottom navigation
-- [ ] Phase 2 — Consolidate navigation IA
+- [x] Phase 2 — Consolidate navigation IA
+  - [x] Sidebar reduced to Today, Tasks, Habits, Notes, Calendar, Insights, Settings, Import
+  - [x] Tasks section: List / Board / Matrix as in-page views (`SectionTabs`) instead of separate top-level products
+  - [x] Calendar section: Month / Day / Auto-plan absorbing the old Calendar / Scheduler / Planning pages
+  - [x] Redirects from `/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler` to their new homes
+  - [x] New Insights page (Task analytics + Habit analytics, both backed by real existing data)
 - [ ] Phase 3 — Real Today page (`/api/v1/home/today`)
 - [ ] Phase 4 — Global quick capture (backlog)
 - [ ] Phase 5 — Real calendar experience (backlog)

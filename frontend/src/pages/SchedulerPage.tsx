@@ -8,6 +8,8 @@ import type { AutoScheduleResultRecord, DayScheduleRecord } from '../components/
 import { useHabitMutations, useSchedulerDayQuery, useSchedulerMutations, useTaskMutations } from '../hooks/useApiQueries';
 import { Button, Card, PageHeader, SegmentedControl } from '../components/ui';
 import { useUndoToast } from '../undoToastContext';
+import { SectionTabs } from '../components/SectionTabs';
+import { CALENDAR_VIEW_TABS } from '../router/routes';
 
 const toIsoDate = (date: Date) => {
   const year = date.getFullYear();
@@ -100,9 +102,12 @@ export function SchedulerPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={CALENDAR_VIEW_TABS} ariaLabel="Calendar view" />
+      </div>
       <PageHeader
-        title="Scheduler"
-        description="Give tasks and habits a specific time and priority today, separate from whole-day planning."
+        title="Day"
+        description="Give tasks and habits a specific time and priority today."
         className="mb-0"
         actions={
           <div className="flex items-center gap-2">

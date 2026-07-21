@@ -5,6 +5,8 @@ import { useMatrixQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Card, PageHeader, cn, type BadgeVariant } from '../components/ui';
 import { ArrowRight, Calendar, Check, Clock, X } from '../components/ui/icons';
 import { formatEnumLabel } from '../lib/enumLabels';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 interface MatrixTask {
   id?: number | string;
@@ -171,7 +173,10 @@ export function MatrixPage() {
   const canRenderQuadrants = supportsQuadrants(query.data?.data);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+      </div>
       <PageHeader
         title="Matrix"
         description="See tasks organized by Eisenhower-style priority categories."

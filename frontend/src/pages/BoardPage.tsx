@@ -11,6 +11,8 @@ import { matchesFocus, type Focus } from '../components/scheduler/schedulerStyle
 import { useBoardColumnsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { PageHeader, SegmentedControl } from '../components/ui';
 import { useUndoToast } from '../undoToastContext';
+import { SectionTabs } from '../components/SectionTabs';
+import { TASK_VIEW_TABS } from '../router/routes';
 
 const focusOptions = [
   { value: 'all' as Focus, label: 'All' },
@@ -88,7 +90,10 @@ export function BoardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
+      </div>
       <PageHeader
         title="Board"
         description="Drag tasks across columns to work on several at once."

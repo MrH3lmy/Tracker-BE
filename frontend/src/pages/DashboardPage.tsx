@@ -265,7 +265,7 @@ export function DashboardPage() {
         actions={
           <>
             <Link
-              to="/planning"
+              to="/calendar/auto-plan"
               className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-card px-3.5 text-sm font-medium text-fg shadow-2xs hover:bg-inset"
             >
               Start planning

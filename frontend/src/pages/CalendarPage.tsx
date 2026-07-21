@@ -5,6 +5,8 @@ import { useCalendarMonthQuery } from '../hooks/useApiQueries';
 import { validateCalendarInputs } from '../validation/calendar';
 import { Badge, Button, Card, Field, Input, PageHeader, Select } from '../components/ui';
 import { Download } from '../components/ui/icons';
+import { SectionTabs } from '../components/SectionTabs';
+import { CALENDAR_VIEW_TABS } from '../router/routes';
 
 interface DaySummary {
   taskCount?: number;
@@ -70,6 +72,9 @@ export function CalendarPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={CALENDAR_VIEW_TABS} ariaLabel="Calendar view" />
+      </div>
       <PageHeader
         title="Calendar"
         description="Load a month summary for due work, then export all dated tasks as an ICS calendar file."

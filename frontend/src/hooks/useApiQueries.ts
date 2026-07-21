@@ -47,6 +47,8 @@ export const queryKeys = {
   planningRecommendations: ['planning', 'recommendations'] as const,
   planningProjectBoard: ['planning', 'project-board'] as const,
   matrix: ['matrix'] as const,
+  dashboard: ['dashboard'] as const,
+  homeToday: ['home', 'today'] as const,
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
   settings: ['settings'] as const,
   boardColumns: ['board-columns'] as const,
@@ -95,6 +97,7 @@ export interface NoteSavedViewRecord { id: number; name: string; filters: Record
 export const useNoteSavedViewsQuery = () => useQuery({ queryKey: queryKeys.noteSavedViews, queryFn: () => apiJson<NoteSavedViewRecord[]>('GET', '/api/v1/note-saved-views') });
 export const useNoteVersionsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteVersions(noteId), queryFn: () => apiJson<NoteVersionRecord[]>('GET', `/api/v1/notes/${noteId}/versions`), enabled });
 export const useNoteAiGenerationsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteAiGenerations(noteId), queryFn: () => apiJson<NoteAiGenerationRecord[]>('GET', `/api/v1/notes/${noteId}/ai-generations`), enabled });
+export const useDashboardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.dashboard, queryFn: () => apiJson<unknown>('GET', '/api/v1/dashboard'), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });

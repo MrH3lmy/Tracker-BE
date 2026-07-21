@@ -60,7 +60,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-export function HabitAnalysisPage() {
+export function HabitAnalysisPage({ embedded = false }: { embedded?: boolean } = {}) {
   const habitsQuery = useHabitsQuery();
   const habits = useMemo<HabitRecord[]>(() => {
     const data = habitsQuery.data?.data;
@@ -116,20 +116,22 @@ export function HabitAnalysisPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Habit analysis"
-        description="Completion trends, streaks, and check-in history across your habits."
-        actions={
-          <Link
-            to="/habits"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-card px-3.5 text-sm font-medium text-fg shadow-2xs hover:bg-inset"
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden />
-            Back to habits
-          </Link>
-        }
-        className="mb-0"
-      />
+      {!embedded && (
+        <PageHeader
+          title="Habit analysis"
+          description="Completion trends, streaks, and check-in history across your habits."
+          actions={
+            <Link
+              to="/habits"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-card px-3.5 text-sm font-medium text-fg shadow-2xs hover:bg-inset"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+              Back to habits
+            </Link>
+          }
+          className="mb-0"
+        />
+      )}
 
       <QueryState
         isLoading={isLoading}

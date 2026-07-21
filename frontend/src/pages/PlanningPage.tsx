@@ -6,6 +6,8 @@ import { usePlanningProjectBoardQuery, usePlanningRecommendationsQuery, usePlann
 import { Badge, Button, Card, PageHeader, SegmentedControl, cn, type BadgeVariant } from '../components/ui';
 import { Calendar, CheckCircle2, ChevronRight, Eye, Flag, RefreshCw, Sparkles, TrendingUp } from '../components/ui/icons';
 import { formatEnumLabel } from '../lib/enumLabels';
+import { SectionTabs } from '../components/SectionTabs';
+import { CALENDAR_VIEW_TABS } from '../router/routes';
 
 interface TaskPreview {
   id?: number | string;
@@ -541,8 +543,11 @@ export function PlanningPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTabs items={CALENDAR_VIEW_TABS} ariaLabel="Calendar view" />
+      </div>
       <PageHeader
-        title="Planning"
+        title="Auto-plan"
         description="Review today’s focus or generate a seven-day plan."
         actions={
           <Button variant="primary" onClick={() => active.refetch()} disabled={active.isFetching}>
