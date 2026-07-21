@@ -22,11 +22,20 @@ public final class TestAuthSupport {
     private TestAuthSupport() {}
 
     public static User loginAsNewUser(UserRepository userRepository) {
+        return loginAsNewUser(userRepository, Role.USER);
+    }
+
+    /**
+     * Same as {@link #loginAsNewUser(UserRepository)} but lets the caller pick the persisted
+     * user's {@link Role} (e.g. {@code Role.ADMIN} for controllers gated with
+     * {@code @PreAuthorize("hasRole('ADMIN')")}, such as AdminUserController).
+     */
+    public static User loginAsNewUser(UserRepository userRepository, Role role) {
         User user = new User();
         user.setEmail("test-user-" + System.nanoTime() + "@example.com");
         user.setPasswordHash("irrelevant-for-these-tests");
         user.setTier(Tier.PREMIUM);
-        user.setRole(Role.USER);
+        user.setRole(role);
         user = userRepository.save(user);
 
         AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getEmail(), user.getTier(), user.getRole());

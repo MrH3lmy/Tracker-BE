@@ -1,10 +1,11 @@
-import { forwardRef, useImperativeHandle, useReducer, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useReducer, useState, useRef } from 'react';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import { DAY_OF_WEEK_VALUES, RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type DayOfWeekValue, type RecurrenceFrequency } from '../../validation/recurrence';
 import { AREA_VALUES, EFFORT_VALUES, RISK_LEVEL_VALUES } from './taskUtils';
 import type { CreateTaskPayload, RecurrenceRuleRecord, RiskLevel, TaskRecord } from './taskTypes';
 import type { ProjectRecord } from '../projects/projectTypes';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../ui';
+import { useAnnouncement } from '../../announcementContext';
 
 const formatAnnualDate = (month: string, day: string): string | undefined => {
   const m = Number(month);
@@ -142,6 +143,30 @@ const toOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
+interface TaskCreateFormFieldErrors {
+  blockedReason?: string;
+  waitingOn?: string;
+  followUpDate?: string;
+  riskReason?: string;
+}
+
+// Mirrors the backend's cross-field validation (CreateTaskRequest/UpdateTaskRequest @AssertTrue
+// rules) so the form catches these before submit instead of surfacing a confusing 400.
+const getFieldErrors = (state: TaskCreateFormState): TaskCreateFormFieldErrors => {
+  const errors: TaskCreateFormFieldErrors = {};
+  if (state.status === 'BLOCKED' && !state.blockedReason.trim()) {
+    errors.blockedReason = 'Required when status is Blocked.';
+  }
+  if (state.status === 'WAITING') {
+    if (!state.waitingOn.trim()) errors.waitingOn = 'Required when status is Waiting.';
+    if (!state.followUpDate) errors.followUpDate = 'Required when status is Waiting.';
+  }
+  if ((state.riskLevel === 'HIGH' || state.riskLevel === 'CRITICAL') && !state.riskReason.trim()) {
+    errors.riskReason = 'Required when risk level is High or Critical.';
+  }
+  return errors;
+};
+
 export interface TaskCreateFormHandle {
   focusTitle: () => void;
   setParentTaskId: (parentTaskId: string) => void;
@@ -164,7 +189,10 @@ interface TaskCreateFormProps {
 
 export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormProps>(function TaskCreateForm({ activeTasks, projects, projectId, onProjectIdChange, busy, isSubmitting, mode = 'create', initialValue, onCancel, onSubmit, onInvalidTitle }, ref) {
   const [form, dispatch] = useReducer(reducer, initialValue, mapRecordToFormState);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const { announce } = useAnnouncement();
+  const fieldErrors = getFieldErrors(form);
 
   useImperativeHandle(ref, () => ({
     focusTitle: () => titleRef.current?.focus(),
@@ -178,6 +206,11 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
     if (!form.title.trim()) {
       onInvalidTitle();
       titleRef.current?.focus();
+      return;
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      setSubmitAttempted(true);
+      announce(Object.values(fieldErrors).join(' '));
       return;
     }
     const recurrence: RecurrenceRuleRecord | undefined = form.recurrenceFrequency
@@ -272,12 +305,12 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
               {RISK_LEVEL_VALUES.map((level) => <option key={level} value={level}>{level}</option>)}
             </Select>
           </Field>
-          <Field label="Follow-up date" htmlFor="taskFollowUpDate">
-            <Input id="taskFollowUpDate" type="date" value={form.followUpDate} min={form.startDate || undefined} onChange={(e) => setField('followUpDate', e.target.value)} disabled={busy} />
+          <Field label="Follow-up date" htmlFor="taskFollowUpDate" error={submitAttempted ? fieldErrors.followUpDate : undefined}>
+            <Input id="taskFollowUpDate" type="date" value={form.followUpDate} min={form.startDate || undefined} onChange={(e) => setField('followUpDate', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.followUpDate)} />
           </Field>
         </div>
-        <Field label="Risk reason" htmlFor="taskRiskReason">
-          <Input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={form.riskReason} onChange={(e) => setField('riskReason', e.target.value)} disabled={busy} maxLength={500} />
+        <Field label="Risk reason" htmlFor="taskRiskReason" error={submitAttempted ? fieldErrors.riskReason : undefined}>
+          <Input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={form.riskReason} onChange={(e) => setField('riskReason', e.target.value)} disabled={busy} maxLength={500} aria-invalid={submitAttempted && Boolean(fieldErrors.riskReason)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Track" htmlFor="taskTrack">
@@ -286,11 +319,11 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
           <Field label="Phase" htmlFor="taskPhase">
             <Input id="taskPhase" placeholder="Discovery, build, launch" value={form.phase} onChange={(e) => setField('phase', e.target.value)} disabled={busy} maxLength={120} />
           </Field>
-          <Field label="Blocked reason" htmlFor="taskBlockedReason">
-            <Input id="taskBlockedReason" placeholder="Why this task is blocked" value={form.blockedReason} onChange={(e) => setField('blockedReason', e.target.value)} disabled={busy} />
+          <Field label="Blocked reason" htmlFor="taskBlockedReason" error={submitAttempted ? fieldErrors.blockedReason : undefined}>
+            <Input id="taskBlockedReason" placeholder="Why this task is blocked" value={form.blockedReason} onChange={(e) => setField('blockedReason', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.blockedReason)} />
           </Field>
-          <Field label="Waiting on" htmlFor="taskWaitingOn">
-            <Input id="taskWaitingOn" placeholder="Person, vendor, or event" value={form.waitingOn} onChange={(e) => setField('waitingOn', e.target.value)} disabled={busy} />
+          <Field label="Waiting on" htmlFor="taskWaitingOn" error={submitAttempted ? fieldErrors.waitingOn : undefined}>
+            <Input id="taskWaitingOn" placeholder="Person, vendor, or event" value={form.waitingOn} onChange={(e) => setField('waitingOn', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.waitingOn)} />
           </Field>
         </div>
         <Checkbox
