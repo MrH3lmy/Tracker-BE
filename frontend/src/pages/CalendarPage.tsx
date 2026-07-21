@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { apiDownload, isQueryError } from '../apiClient';
 import { QueryState } from '../components/QueryState';
 import { MonthGrid, type MonthGridTask } from '../components/calendar/MonthGrid';
-import { useCalendarMonthTasksQuery } from '../hooks/useApiQueries';
+import { useCalendarMonthTasksQuery, useTaskMutations } from '../hooks/useApiQueries';
 import { useQuickCapture } from '../quickCaptureContext';
+import { useUndoToast } from '../undoToastContext';
+import { formatDateOnly } from '../lib/dateOnly';
 import { Button, PageHeader } from '../components/ui';
 import { Download } from '../components/ui/icons';
 import { SectionTabs } from '../components/SectionTabs';
@@ -19,6 +21,8 @@ export function CalendarPage() {
   const [isExporting, setIsExporting] = useState(false);
   const navigate = useNavigate();
   const { openQuickCapture } = useQuickCapture();
+  const { showUndo } = useUndoToast();
+  const { updateTaskDueDate } = useTaskMutations();
 
   const query = useCalendarMonthTasksQuery(String(year), String(month), true);
   const tasksByDay = useMemo(() => {
@@ -27,6 +31,20 @@ export function CalendarPage() {
     return data as Record<string, MonthGridTask[]>;
   }, [query.data]);
   const hasData = Object.keys(tasksByDay).length > 0;
+
+  const handleTaskDrop = (taskId: number, newDateKey: string) => {
+    const previousEntry = Object.entries(tasksByDay).find(([, tasks]) => tasks.some((task) => task.id === taskId));
+    const previousDateKey = previousEntry?.[0];
+    const title = previousEntry?.[1].find((task) => task.id === taskId)?.title ?? 'Task';
+    if (previousDateKey === newDateKey) return;
+
+    updateTaskDueDate.mutate({ id: taskId, dueDate: newDateKey }, {
+      onSuccess: (result) => {
+        if (!result.ok || !previousDateKey) return;
+        showUndo(`"${title}" moved to ${formatDateOnly(newDateKey)}.`, () => updateTaskDueDate.mutate({ id: taskId, dueDate: previousDateKey }));
+      },
+    });
+  };
 
   const shiftMonth = (delta: number) => {
     const next = new Date(Date.UTC(year, month - 1 + delta, 1));
@@ -78,6 +96,8 @@ export function CalendarPage() {
         tasksByDay={hasData ? tasksByDay : {}}
         onDayClick={(dateKey) => openQuickCapture(dateKey)}
         onTaskClick={(taskId) => navigate(`/tasks/${taskId}`)}
+        onTaskDrop={handleTaskDrop}
+        dropDisabled={updateTaskDueDate.isPending}
       />
     </div>
   );

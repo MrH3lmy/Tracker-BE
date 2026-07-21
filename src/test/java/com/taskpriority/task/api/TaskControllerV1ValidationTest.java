@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,5 +80,16 @@ class TaskControllerV1ValidationTest {
                 .andExpect(jsonPath("$.error").value("Not Found"))
                 .andExpect(jsonPath("$.message").value("Task with id 999 not found"))
                 .andExpect(jsonPath("$.path").value("/api/v1/tasks/999"));
+    }
+
+    @Test
+    void updateDueDateReturnsBadRequestWithStandardizedErrorWhenDueDateMissing() throws Exception {
+        mockMvc.perform(patch("/api/v1/tasks/1/due-date")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("dueDate is required")))
+                .andExpect(jsonPath("$.path").value("/api/v1/tasks/1/due-date"));
     }
 }

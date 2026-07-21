@@ -41,6 +41,7 @@ public class TaskControllerV1 {
     @PostMapping("/{id}/subtasks") public ResponseEntity<TaskResponse> createSubtask(@PathVariable Long id,@Validated @RequestBody CreateTaskRequest r){ Task s=taskService.createSubtask(id, mapper.fromCreateRequest(r)); if (r.dependencyIds() != null) { s = taskService.replaceDependencies(s.getId(), r.dependencyIds()); } return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(s));}
     @PatchMapping("/{id}/parent") public TaskResponse updateParent(@PathVariable Long id,@Validated @RequestBody UpdateTaskParentRequest request){return mapper.toResponse(taskService.updateParent(id, request.parentTaskId()));}
     @PatchMapping("/{id}/project") public TaskResponse updateProject(@PathVariable Long id,@Validated @RequestBody UpdateTaskProjectRequest request){return mapper.toResponse(taskService.updateProject(id, request.projectId()));}
+    @PatchMapping("/{id}/due-date") public TaskResponse updateDueDate(@PathVariable Long id,@Validated @RequestBody UpdateTaskDueDateRequest request){return mapper.toResponse(taskService.updateDueDate(id, request.dueDate()));}
     @GetMapping("/archive") public List<TaskResponse> archive(){ return taskService.getArchive().stream().map(mapper::toResponse).toList(); }
     @GetMapping("/duplicates") public List<DuplicateDetectionService.DuplicateGroup> duplicates(){ return duplicateDetectionService.findPotentialDuplicates(); }
     @GetMapping("/blockers") public BlockerAnalysisService.BlockerAnalysis blockers(){ return blockerAnalysisService.analyze(); }

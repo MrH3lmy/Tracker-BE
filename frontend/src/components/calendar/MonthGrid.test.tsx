@@ -54,4 +54,35 @@ describe('MonthGrid', () => {
     );
     expect(screen.getByText('Overdue')).toBeInTheDocument();
   });
+
+  it('marks task chips as draggable and shows the drag hint when onTaskDrop is provided', () => {
+    render(
+      <MonthGrid
+        year={2026}
+        month={7}
+        tasksByDay={{ '2026-07-15': [{ id: 42, title: 'Ship release', status: 'NOT_STARTED' }] }}
+        onDayClick={vi.fn()}
+        onTaskClick={vi.fn()}
+        onTaskDrop={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Ship release' })).toHaveAttribute('aria-roledescription', 'draggable task');
+    expect(screen.getByText('Drag a task onto another day to change its due date.')).toBeInTheDocument();
+  });
+
+  it('does not mark task chips draggable or show the drag hint when onTaskDrop is omitted', () => {
+    render(
+      <MonthGrid
+        year={2026}
+        month={7}
+        tasksByDay={{ '2026-07-15': [{ id: 42, title: 'Ship release', status: 'NOT_STARTED' }] }}
+        onDayClick={vi.fn()}
+        onTaskClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Ship release' })).not.toHaveAttribute('aria-roledescription');
+    expect(screen.queryByText('Drag a task onto another day to change its due date.')).not.toBeInTheDocument();
+  });
 });

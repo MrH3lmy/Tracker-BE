@@ -208,6 +208,7 @@ const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['planning'] });
   qc.invalidateQueries({ queryKey: ['matrix'] });
   qc.invalidateQueries({ queryKey: ['scheduler'] });
+  qc.invalidateQueries({ queryKey: ['calendar'] });
 };
 
 const sortTasksForPositioning = (tasks: TaskRecord[]) => [...tasks].sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.id - b.id);
@@ -275,6 +276,10 @@ export function useTaskMutations() {
     updateTaskProject: useMutation({
       mutationFn: ({ id, projectId }: { id: number; projectId: number | null }) => apiJson('PATCH', `/api/v1/tasks/${id}/project`, { projectId }),
       onSuccess: () => { invalidateTaskFamily(qc); qc.invalidateQueries({ queryKey: queryKeys.projects }); },
+    }),
+    updateTaskDueDate: useMutation({
+      mutationFn: ({ id, dueDate }: { id: number; dueDate: string }) => apiJson('PATCH', `/api/v1/tasks/${id}/due-date`, { dueDate }),
+      onSuccess,
     }),
   };
 }
