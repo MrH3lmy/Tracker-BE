@@ -4,6 +4,7 @@
  */
 export {
   AlertTriangle,
+  Archive,
   ArrowRight,
   Calendar,
   CalendarDays,

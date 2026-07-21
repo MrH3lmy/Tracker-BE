@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { useAuth } from '../authContext';
-import { useHabitMutations, useHomeTodayQuery } from '../hooks/useApiQueries';
+import { useHabitMutations, useHomeTodayQuery, useWeeklyReviewsQuery } from '../hooks/useApiQueries';
 import { formatEnumLabel } from '../lib/enumLabels';
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader } from '../components/ui';
 import {
@@ -17,6 +17,37 @@ import {
   RefreshCw,
   Sparkles,
 } from '../components/ui/icons';
+
+const REVIEW_PROMPT_DAYS = 6;
+
+function WeeklyReviewPrompt() {
+  const reviewsQuery = useWeeklyReviewsQuery(1);
+  const now = useMemo(() => new Date().getTime(), []);
+  const latestReview = Array.isArray(reviewsQuery.data?.data) ? reviewsQuery.data.data[0] : undefined;
+  const daysSinceLastReview = latestReview?.completedAt ? Math.floor((now - new Date(latestReview.completedAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+  const shouldPrompt = !reviewsQuery.isLoading && (daysSinceLastReview === undefined || daysSinceLastReview >= REVIEW_PROMPT_DAYS);
+
+  if (!shouldPrompt) return null;
+
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+          <Sparkles className="h-4.5 w-4.5" aria-hidden />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-fg">Start this week's review</p>
+          <p className="text-xs text-fg-muted">
+            {latestReview ? `It's been ${daysSinceLastReview} days since your last review.` : 'See what finished, what’s stuck, and plan next week.'}
+          </p>
+        </div>
+      </div>
+      <Link to="/weekly-review" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-medium text-brand-fg hover:bg-brand-hover">
+        Start review
+      </Link>
+    </Card>
+  );
+}
 
 interface TaskPreview {
   id?: number;
@@ -306,6 +337,8 @@ export function TodayPage() {
 
       {!isLoading && !hasError && !isNewAccount && (
         <>
+          <WeeklyReviewPrompt />
+
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile icon={Calendar} label="Due today" value={String(today.summary?.dueToday ?? 0)} />
             <StatTile icon={AlertTriangle} label="Overdue" value={String(today.summary?.overdueTasks ?? 0)} tone={((today.summary?.overdueTasks ?? 0) > 0) ? 'critical' : 'default'} />

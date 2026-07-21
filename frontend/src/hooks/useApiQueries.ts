@@ -7,6 +7,7 @@ import type { CreateHabitPayload, HabitHistoryEntry, HabitRecord } from '../comp
 import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
 import type { CreateMilestonePayload, CreateProjectPayload, MilestoneRecord, ProjectOverviewRecord, ProjectRecord, UpdateMilestonePayload } from '../components/projects/projectTypes';
 import type { FocusAnalyticsRecord, FocusSessionRecord, StopFocusSessionPayload } from '../components/focus/focusTypes';
+import type { CompleteWeeklyReviewPayload, WeeklyReviewDraftRecord, WeeklyReviewRecord } from '../components/weeklyreview/weeklyReviewTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -95,6 +96,8 @@ export const queryKeys = {
   focusActive: ['focus-sessions', 'active'] as const,
   focusSessions: (from: string, to: string) => ['focus-sessions', from, to] as const,
   focusAnalytics: (from: string, to: string) => ['focus-sessions', 'analytics', from, to] as const,
+  weeklyReviews: (limit: number) => ['weekly-reviews', limit] as const,
+  weeklyReviewDraft: ['weekly-reviews', 'current-draft'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -183,6 +186,8 @@ export const useFocusActiveQuery = (enabled = true) => useQuery({
 });
 export const useFocusSessionsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusSessions(from, to), queryFn: () => apiJson<FocusSessionRecord[]>('GET', `/api/v1/focus-sessions?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
 export const useFocusAnalyticsQuery = (from: string, to: string, enabled = true) => useQuery({ queryKey: queryKeys.focusAnalytics(from, to), queryFn: () => apiJson<FocusAnalyticsRecord>('GET', `/api/v1/focus-sessions/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`), enabled });
+export const useWeeklyReviewsQuery = (limit = 20, enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviews(limit), queryFn: () => apiJson<WeeklyReviewRecord[]>('GET', `/api/v1/weekly-reviews?limit=${encodeURIComponent(String(limit))}`), enabled });
+export const useWeeklyReviewDraftQuery = (enabled = true) => useQuery({ queryKey: queryKeys.weeklyReviewDraft, queryFn: () => apiJson<WeeklyReviewDraftRecord>('GET', '/api/v1/weekly-reviews/current-draft'), enabled });
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -337,6 +342,19 @@ export function useFocusSessionMutations() {
     stopSession: useMutation({
       mutationFn: ({ id, body }: { id: number; body?: StopFocusSessionPayload }) => apiJson<FocusSessionRecord>('PATCH', `/api/v1/focus-sessions/${id}/stop`, body),
       onSuccess: () => { onSuccess(); qc.invalidateQueries({ queryKey: ['tasks'] }); },
+    }),
+  };
+}
+
+export function useWeeklyReviewMutations() {
+  const qc = useQueryClient();
+  return {
+    completeReview: useMutation({
+      mutationFn: (body: CompleteWeeklyReviewPayload) => apiJson<WeeklyReviewRecord>('POST', '/api/v1/weekly-reviews', body),
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ['weekly-reviews'] });
+        qc.invalidateQueries({ queryKey: ['tasks'] });
+      },
     }),
   };
 }

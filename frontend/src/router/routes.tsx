@@ -20,6 +20,7 @@ import { SettingsPage } from '../pages/SettingsPage';
 import { TaskDetailPage } from '../pages/TaskDetailPage';
 import { TasksPage } from '../pages/TasksPage';
 import { TodayPage } from '../pages/TodayPage';
+import { WeeklyReviewPage } from '../pages/WeeklyReviewPage';
 
 export interface AppRoute {
   label: string;
@@ -77,6 +78,7 @@ export const detailRoutes: AppRoute[] = [
   { label: 'Project Detail', path: '/tasks/projects/:id', element: <ProjectDetailPage /> },
   { label: 'Task Detail', path: '/tasks/:id', element: <TaskDetailPage /> },
   { label: 'Habit Analysis', path: '/habits/analysis', element: <HabitAnalysisPage /> },
+  { label: 'Weekly Review', path: '/weekly-review', element: <WeeklyReviewPage /> },
 ];
 
 // Old top-level routes that moved under a section. Kept working via redirect

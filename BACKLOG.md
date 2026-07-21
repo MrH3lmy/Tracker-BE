@@ -1,41 +1,12 @@
-# Backlog: Phases 9-10
+# Backlog: Phase 10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-8 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phase of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-9 are complete (see that document's checklist).
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V37** (Phase 8 used V36).
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V39** (Phase 9 used V37/V38).
 
-**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6); a project-scoped Notes tab on `ProjectDetailPage` (Phase 7, union of notes linked to tasks in the project via the existing `NoteTaskLink` — the query is trivial, it's just not surfaced as a tab yet); Phase 8's focus-analytics area breakdown uses `Task.area` only, not `Task.projectId` (a project-level focus rollup is a reasonable follow-up now that Phase 7 exists) — see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
+**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6); a project-scoped Notes tab on `ProjectDetailPage` (Phase 7); Phase 8's focus-analytics area breakdown uses `Task.area` only, not `Task.projectId`; Phase 9's Weekly Review "link to an existing note" was simplified to "save as a new note" only — a note-search-and-link picker is a reasonable follow-up — see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
 
-**Known pre-existing issue (found during Phase 8, not fixed — out of scope)**: `AuthProvider`'s own session-restore call to `POST /api/v1/auth/refresh` and `apiClient.ts`'s 401-retry-triggered refresh are two independent code paths, each with its own in-flight-request dedup but not sharing one with the other. On a hard page reload where both fire near-simultaneously, the loser's refresh call gets a 400 (refresh tokens are single-use/rotating) and the user is bounced to `/login`. A real fix means unifying both call sites behind one shared refresh-dedup mechanism in `apiClient.ts`. Worth an auth-hardening pass independent of Phases 9-10.
-
----
-
-## Phase 9 — Weekly review
-
-**User story**: As a user, I want a guided end-of-week flow that shows me what I finished, what's stuck, and helps me decide what to do about it, ending with a plan for next week.
-
-**Scope**: A multi-step guided review UI backed by a persisted review record; recommendations generated from existing services; optional note link.
-
-**Backend tasks**:
-- New `model/WeeklyReview.java`: id, userId, weekStartDate, completedAt, summary (text, user-editable free-form recap), linkedNoteId (nullable FK to `notes.id`), createdDate.
-- `weeklyreview` package: `WeeklyReviewController` (`GET /api/v1/weekly-reviews` list, `POST /api/v1/weekly-reviews` create/complete, `GET /api/v1/weekly-reviews/{id}`, `GET /api/v1/weekly-reviews/current-draft` — computes the review *content* live from existing services without persisting until the user finishes), `WeeklyReviewService`.
-- Review content is **not stored as a snapshot table** — it's computed on demand from existing data (completed tasks via `TaskRepository` + date range, overdue via `DashboardService`, blocked/waiting via the same query `HomeService` already added, habit performance via `HabitService`/`HabitCheckInRepository`, projects-at-risk via Phase 7's `ProjectService` once it exists, stale tasks = active tasks with no `completedDate`/status change in >14 days — needs a `Task.updatedDate` column if one doesn't exist yet; check `Task` entity first, add via migration if missing). Only the user's *decisions* (reschedule/archive/delete choices, the free-form summary, next-week plan) get persisted on the `WeeklyReview` record plus corresponding mutations against the underlying tasks (e.g. "archive this task" during review just calls the existing status-change endpoint).
-- `POST /api/v1/weekly-reviews` completion payload includes the decisions batch (task id -> action) and applies them transactionally via existing `TaskService` methods — no new task-mutation logic, just orchestration.
-
-**Frontend tasks**:
-- `pages/WeeklyReviewPage.tsx` (or a dedicated flow reachable from Insights/Today, not necessarily its own sidebar item): stepper UI — Completed / Overdue / Blocked & waiting / Habit performance / Projects at risk / Stale tasks / Decisions / Plan next week / Summary — each step a `Card` with real data and inline actions (reschedule = opens a date picker calling `updateTask`; archive/delete reuse existing task actions with the same undo-toast pattern from Phase 1).
-- Final step: free-form summary textarea, optional "link to a note" (creates or links an existing note via `useNoteMutations().createNote`/`createTaskLink` reused as-is), "Finish review" button that posts the whole batch.
-- Show a "Start this week's review" prompt on Today once 6+ days have passed since the last completed review (`GET /api/v1/weekly-reviews?limit=1` check) — not a hard gate, just a suggestion card, consistent with "no forced flows."
-
-**Migration requirements**: `V37__create_weekly_reviews.sql`; possibly `V38__add_task_updated_date.sql` if `Task` has no last-modified timestamp yet (check first — if `updatedDate` doesn't exist, "stale tasks" needs it, and it's broadly useful beyond this feature too).
-
-**Acceptance criteria**: every review step shows real, current data (no mocked/placeholder counts); decisions made during review actually apply to the underlying tasks; a completed review is retrievable later; skipping the review entirely has no negative effect (it's optional, not a blocking gate).
-
-**Test cases**: `WeeklyReviewServiceTest` (each content section's computation, using fixtures similar to `HomeServiceTest`'s pattern), decision-application integration test (batch of reschedule/archive/delete decisions all land correctly, transactionally — one failure shouldn't partially apply), controller tests.
-
-**Dependencies**: Reuses `HomeService`'s waiting/blocked/follow-up logic where it overlaps (extract shared filtering into a small helper if duplication starts to hurt) and Phase 7's `ProjectService` for the "projects at risk" section (degrade gracefully — omit that section — if Phase 7 hasn't shipped yet).
-
-**Estimated complexity**: M-L.
+**Known pre-existing issue (found during Phase 8, not fixed — out of scope)**: `AuthProvider`'s own session-restore call to `POST /api/v1/auth/refresh` and `apiClient.ts`'s 401-retry-triggered refresh are two independent code paths, each with its own in-flight-request dedup but not sharing one with the other. On a hard page reload where both fire near-simultaneously, the loser's refresh call gets a 400 (refresh tokens are single-use/rotating) and the user is bounced to `/login`. A real fix means unifying both call sites behind one shared refresh-dedup mechanism in `apiClient.ts`. Worth an auth-hardening pass independent of Phase 10.
 
 ---
 
