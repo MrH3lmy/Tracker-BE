@@ -101,4 +101,26 @@ describe('QuickCaptureModal', () => {
     expect(screen.getByRole('tab', { name: 'Habit', selected: true })).toBeInTheDocument();
     expect(screen.getByLabelText('Category')).toBeInTheDocument();
   });
+
+  it('switches to Search mode with a search field and no create action', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole('tab', { name: 'Search' }));
+
+    expect(screen.getByRole('tab', { name: 'Search', selected: true })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('surfaces a search error instead of crashing when the request fails', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole('tab', { name: 'Search' }));
+    await user.type(screen.getByLabelText('Search'), 'invoice');
+
+    expect(await screen.findByText(/Search failed/)).toBeInTheDocument();
+  });
 });

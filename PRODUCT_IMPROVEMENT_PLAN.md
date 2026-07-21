@@ -40,7 +40,7 @@ Secondary: **Search · Settings · Import**
 
 Old routes (`/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler`) redirect to their new home so bookmarks/saved links keep working (`Navigate replace` routes, not deletions).
 
-**Search is intentionally not added to the nav yet.** `GET /api/v1/search` doesn't exist until Phase 6; adding a "Search" sidebar entry now would be exactly the dead-link pattern this plan is trying to remove elsewhere. It ships as part of Phase 6 in `BACKLOG.md`.
+**Search was intentionally left out of the nav in Phase 2** (`GET /api/v1/search` didn't exist yet -- adding a "Search" sidebar entry would have been exactly the dead-link pattern this plan is trying to remove elsewhere) and added once it shipped for real in Phase 6.
 
 ## 4. Backend changes
 
@@ -141,7 +141,14 @@ No breaking changes to any existing v1 contract in Phases 1–3.
   - [x] `QuickCaptureContext.openQuickCapture` now accepts an optional date to prefill, used by Month's "click a day" affordance
   - [x] Test coverage: `SchedulerServiceTest` (+2, week schedule composition), `ApiV1IntegrationTest` (2 new endpoint assertions), `MonthGrid.test.tsx` (5), `WeekTimeline.test.tsx` (4)
   - **Scope decision**: drag-and-drop ships on the Week view (dragging a *scheduled* item onto another day is an unambiguous `TaskSchedule`/`HabitSchedule` date change) but not on the Month grid (dragging a task there would mean changing `Task.dueDate`, a different and riskier operation to get right for tasks that may also be scheduled -- "drag tasks between dates when supported safely" per the brief). Month supports click-to-view and click-a-day-to-capture instead. Month drag-and-drop is a reasonable follow-up, not done here.
-- [ ] Phase 6 — Global search (backlog)
+- [x] Phase 6 — Global search
+  - [x] `GET /api/v1/search?q=&type=&status=&due=&area=&tag=&page=&size=` -- searches tasks, notes (reusing the existing `NoteSpecifications` dynamic-filter pattern), habits, and tags; auth-scoped, paginated, sorted alphabetically across types
+  - [x] `V33__add_search_indexes.sql` -- `(user_id, lower(title))` indexes on tasks/notes/habits
+  - [x] New `/search` page with a filter-token DSL (`type:task`, `status:blocked`, `due:this-week`, `area:work`, `tag:decision`) parsed client-side (`lib/searchQueryParser.ts`, 8 unit tests) into explicit query params -- no ambiguous DSL parsing on the backend
+  - [x] Ctrl+K / Cmd+K palette gained a 4th "Search" mode (reuses the same modal shell) -- typing searches live, clicking a result navigates and closes the palette
+  - [x] `/notes` now accepts `?q=` and `?tag=` to deep-link into a pre-filtered note list, so search results that point at a note actually land somewhere useful
+  - [x] Test coverage: `SearchServiceTest` (9), `ApiV1IntegrationTest` (+2 assertions), `searchQueryParser.test.ts` (8), `SearchPage.test.tsx` (4), `QuickCaptureModal.test.tsx` (+2)
+  - **Known simplification**: an empty query shows a "start typing" prompt rather than recent items (no "recently viewed" concept exists yet to back that), and result navigation is click/Tab, not dedicated arrow-key roving. Both are reasonable follow-ups, not required for search to be genuinely useful today.
 - [ ] Phase 7 — Projects and goals (backlog)
 - [ ] Phase 8 — Focus sessions (backlog)
 - [ ] Phase 9 — Weekly review (backlog)

@@ -29,6 +29,32 @@ export interface NotesQueryFilters {
   size?: number;
 }
 
+export interface SearchFilters {
+  q?: string;
+  type?: 'task' | 'note' | 'habit' | 'tag' | '';
+  status?: string;
+  due?: string;
+  area?: string;
+  tag?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface SearchResultRecord {
+  type: 'TASK' | 'NOTE' | 'HABIT' | 'TAG';
+  id: number;
+  title: string;
+  snippet?: string | null;
+  url: string;
+}
+
+export interface SearchResponseRecord {
+  items: SearchResultRecord[];
+  page: number;
+  size: number;
+  totalElements: number;
+}
+
 type MoveTaskVariables = { id: number; body: { status?: string; boardColumnId?: number; position?: number } };
 export type UploadScreenshotVariables = { noteId: number; file: File | Blob; caption?: string; source?: string; width?: number; height?: number };
 type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
@@ -52,6 +78,7 @@ export const queryKeys = {
   calendarMonth: (year: string, month: string) => ['calendar', 'month', year, month] as const,
   calendarMonthTasks: (year: string, month: string) => ['calendar', 'month', 'tasks', year, month] as const,
   schedulerWeek: (startDate: string) => ['scheduler', 'week', startDate] as const,
+  search: (filters: SearchFilters) => ['search', filters.q ?? '', filters.type ?? '', filters.status ?? '', filters.due ?? '', filters.area ?? '', filters.tag ?? '', filters.page ?? 0, filters.size ?? 20] as const,
   settings: ['settings'] as const,
   boardColumns: ['board-columns'] as const,
   taskDetail: (id: number) => ['tasks', id, 'detail'] as const,
@@ -109,6 +136,22 @@ export const useMatrixQuery = (enabled: boolean) => useQuery({ queryKey: queryKe
 export const useCalendarMonthQuery = (year: string, month: string, enabled: boolean) => useQuery({ queryKey: queryKeys.calendarMonth(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useCalendarMonthTasksQuery = (year: string, month: string, enabled = true) => useQuery({ queryKey: queryKeys.calendarMonthTasks(year, month), queryFn: () => apiJson<unknown>('GET', `/api/v1/calendar/month/tasks?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`), enabled });
 export const useSchedulerWeekQuery = (startDate: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerWeek(startDate), queryFn: () => apiJson<unknown>('GET', `/api/v1/scheduler/week?startDate=${encodeURIComponent(startDate)}`), enabled });
+export const useSearchQuery = (filters: SearchFilters, enabled: boolean) => useQuery({
+  queryKey: queryKeys.search(filters),
+  queryFn: () => {
+    const params = new URLSearchParams();
+    if (filters.q?.trim()) params.set('q', filters.q.trim());
+    if (filters.type) params.set('type', filters.type);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.due) params.set('due', filters.due);
+    if (filters.area) params.set('area', filters.area);
+    if (filters.tag) params.set('tag', filters.tag);
+    if (filters.page !== undefined) params.set('page', String(filters.page));
+    if (filters.size !== undefined) params.set('size', String(filters.size));
+    return apiJson<SearchResponseRecord>('GET', `/api/v1/search?${params.toString()}`);
+  },
+  enabled,
+});
 export const useSettingsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.settings, queryFn: () => apiJson<unknown>('GET', '/api/v1/settings'), enabled });
 export const useSchedulerDayQuery = (date: string, enabled = true) => useQuery({ queryKey: queryKeys.schedulerDay(date), queryFn: () => apiJson<DayScheduleRecord>('GET', `/api/v1/scheduler/day?date=${encodeURIComponent(date)}`), enabled });
 export const useHabitsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.habits, queryFn: () => apiJson<HabitRecord[]>('GET', '/api/v1/habits'), enabled });

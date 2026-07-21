@@ -13,6 +13,7 @@ import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
 import { SchedulerPage } from '../pages/SchedulerPage';
+import { SearchPage } from '../pages/SearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TaskDetailPage } from '../pages/TaskDetailPage';
 import { TasksPage } from '../pages/TasksPage';
@@ -47,6 +48,7 @@ export const primaryRoutes: AppRoute[] = [
   { label: 'Notes', path: '/notes', element: <NotesPage /> },
   { label: 'Calendar', path: '/calendar', element: <CalendarPage /> },
   { label: 'Insights', path: '/insights', element: <InsightsPage /> },
+  { label: 'Search', path: '/search', element: <SearchPage /> },
   { label: 'Settings', path: '/settings', element: <SettingsPage /> },
   { label: 'Import', path: '/import', element: <ImportPage /> },
 ];

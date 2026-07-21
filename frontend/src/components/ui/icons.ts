@@ -41,6 +41,7 @@ export {
   Search,
   Settings,
   Sparkles,
+  Tag,
   TrendingUp,
   StickyNote,
   Trash2,

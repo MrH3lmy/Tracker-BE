@@ -1,40 +1,10 @@
-# Backlog: Phases 6-10
+# Backlog: Phases 7-10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-5 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-6 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again.
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V34** (Phase 6 used V33).
 
-**Left for a later pass**: Month-grid drag-and-drop (Week view already has it; see Phase 5's "Scope decision" note in `PRODUCT_IMPROVEMENT_PLAN.md` for why Month was scoped to click-only).
-
----
-
-## Phase 6 — Global search
-
-**User story**: As a user, I want to search across tasks, notes, habits, and tags from one place and jump straight to a result, including via the command palette.
-
-**Scope**: `GET /api/v1/search`, a `/search` page, and Ctrl+K integration (builds on Phase 4's palette).
-
-**Backend tasks**:
-- New `search` package: `SearchController`, `SearchService`.
-- `GET /api/v1/search?q=&type=&status=&due=&area=&tag=&page=&size=` — query params map to filters; `type` restricts to `task|note|habit|tag`; combine results into a paginated envelope `{ items: [{type, id, title, snippet, url}], page, size, totalElements }`.
-- Backing queries: extend `TaskRepository`/`NoteRepository`/`HabitRepository`/`TagRepository` with `ILIKE`-based search methods (Postgres) or reuse `NoteSpecifications`' existing dynamic-filter pattern for notes; for tasks/habits, simple `title ILIKE %q%` is enough for v1 (no need for full-text search infra yet).
-- **Indexes**: `V33__add_search_indexes.sql` — `CREATE INDEX idx_tasks_user_title ON tasks (user_id, lower(title))`, equivalent for `notes.title`, `habits.title`; consider a Postgres trigram index (`pg_trgm`) if substring search performance matters at scale — flag as a follow-up, don't block v1 on it.
-- Respect existing soft-delete/`deleted` flags; never return deleted tasks.
-
-**Frontend tasks**:
-- `hooks/useApiQueries.ts`: `useSearchQuery(filters)`.
-- `pages/SearchPage.tsx` at `/search` (added to the secondary nav slot, alongside Settings/Import): input + filter chips (`type:task`, `status:blocked`, `due:this-week`, `area:work`, `tag:decision` — parse these as a mini-DSL split on the first `:` in each space-separated token, similar spirit to the natural-language parser in Phase 4) + paginated result list, each result linking to its detail page (`/tasks/:id`, or the relevant note/habit view).
-- Ctrl+K palette (Phase 4) gets a "search mode": typing without a recognized quick-capture pattern falls through to live search-as-you-type via this endpoint, with results navigable by arrow keys + Enter.
-
-**Migration requirements**: `V33__add_search_indexes.sql` (see above; bump the number if Phase 5/7 land migrations first — always take the next free `V<n>`).
-
-**Acceptance criteria**: search returns matches across all four types; filter tokens narrow results correctly and combine (AND semantics); results paginate; keyboard-only users can search and navigate to a result entirely via the palette; empty query shows recent items or a clear empty state (never a blank screen).
-
-**Test cases**: backend — search each entity type independently and combined, filter-token parsing, pagination boundaries, soft-deleted exclusion, user isolation (user A never sees user B's results); frontend — DSL token parsing unit tests, palette search-mode keyboard nav.
-
-**Dependencies**: Phase 4's command palette shell (for the in-palette search mode) — the standalone `/search` page has no dependency and can ship first.
-
-**Estimated complexity**: M.
+**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6) -- see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
 
 ---
 
@@ -57,7 +27,7 @@ Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFER
 - `hooks/useApiQueries.ts`: `useProjectsQuery`, `useProjectQuery(id)`, `useProjectMutations()`, `useMilestoneMutations()`.
 - Task create/edit form: add an optional Project picker (under "More options", alongside track/phase/parentTaskId) that also lets someone set `track`/`phase` manually — don't force a migration of existing free-text grouping.
 
-**Migration requirements**: `V33__create_projects.sql` (projects, milestones tables + indexes), `V34__add_project_id_to_tasks.sql` (nullable FK + index). Forward-only; no backfill needed since the column is nullable and additive.
+**Migration requirements**: `V34__create_projects.sql` (projects, milestones tables + indexes), `V35__add_project_id_to_tasks.sql` (nullable FK + index). Forward-only; no backfill needed since the column is nullable and additive.
 
 **Acceptance criteria**: create/edit/archive a project; add milestones; assign tasks to a project via the task form; project overview shows real counts (not placeholders) computed from actual linked tasks; deleting a project does not delete its tasks (set `projectId` to null, confirmed via a dialog, not a cascade delete).
 
@@ -88,7 +58,7 @@ Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFER
 - `pages/FocusAnalyticsPage.tsx` — likely a tab under Insights (`InsightsPage`, alongside Task/Habit analytics) rather than a new top-level nav item, per the same "don't over-fragment the sidebar" principle applied in Phase 2.
 - Persist "session in progress" across a page refresh: on load, `GET /api/v1/focus-sessions?status=RUNNING` (or a dedicated `/active` endpoint) so the timer widget can resume showing state — this is exactly why sessions are server-persisted, not `localStorage`-only.
 
-**Migration requirements**: `V35__create_focus_sessions.sql` (focus_sessions + focus_session_pauses tables, indexes on `user_id`, `task_id`, `started_at`).
+**Migration requirements**: `V36__create_focus_sessions.sql` (focus_sessions + focus_session_pauses tables, indexes on `user_id`, `task_id`, `started_at`).
 
 **Acceptance criteria**: start/pause/resume/stop all persist correctly across a page reload; stopping with "complete task" checked marks the task done and adds to its actual minutes; an abandoned session (browser closed mid-session) is handled without corrupting analytics (capped duration, marked ABANDONED, not silently counted as hours of focus); analytics numbers are computed from real session data, not estimates.
 
@@ -117,7 +87,7 @@ Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFER
 - Final step: free-form summary textarea, optional "link to a note" (creates or links an existing note via `useNoteMutations().createNote`/`createTaskLink` reused as-is), "Finish review" button that posts the whole batch.
 - Show a "Start this week's review" prompt on Today once 6+ days have passed since the last completed review (`GET /api/v1/weekly-reviews?limit=1` check) — not a hard gate, just a suggestion card, consistent with "no forced flows."
 
-**Migration requirements**: `V36__create_weekly_reviews.sql`; possibly `V37__add_task_updated_date.sql` if `Task` has no last-modified timestamp yet (check first — if `updatedDate` doesn't exist, "stale tasks" needs it, and it's broadly useful beyond this feature too).
+**Migration requirements**: `V37__create_weekly_reviews.sql`; possibly `V38__add_task_updated_date.sql` if `Task` has no last-modified timestamp yet (check first — if `updatedDate` doesn't exist, "stale tasks" needs it, and it's broadly useful beyond this feature too).
 
 **Acceptance criteria**: every review step shows real, current data (no mocked/placeholder counts); decisions made during review actually apply to the underlying tasks; a completed review is retrievable later; skipping the review entirely has no negative effect (it's optional, not a blocking gate).
 
@@ -147,7 +117,7 @@ Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFER
 - `components/notifications/NotificationInbox.tsx`: bell icon in the header (next to Quick Add) with unread count badge, dropdown/panel listing notifications, mark-read, snooze action.
 - Migrate the existing `HabitReminderToasts` (currently a purely client-side, tab-must-be-open mechanism reading `habit.reminderEnabled`/`reminderTime` locally) to consume the new server-driven `HABIT` reminder kind instead, once delivery exists — don't run two parallel habit-reminder systems; this migration is part of Phase 10, not optional cleanup for later.
 
-**Migration requirements**: `V38__add_user_timezone_and_quiet_hours.sql`, `V39__create_reminders.sql`, `V40__create_notification_outbox.sql`. All forward-only, all `user_id`-scoped where applicable (`Reminder`/`NotificationOutboxEntry` both carry `user_id` directly for query simplicity even though it's derivable via the reminder, matching this codebase's existing preference for direct `user_id` columns over always joining).
+**Migration requirements**: `V39__add_user_timezone_and_quiet_hours.sql`, `V40__create_reminders.sql`, `V41__create_notification_outbox.sql`. All forward-only, all `user_id`-scoped where applicable (`Reminder`/`NotificationOutboxEntry` both carry `user_id` directly for query simplicity even though it's derivable via the reminder, matching this codebase's existing preference for direct `user_id` columns over always joining).
 
 **Risks**: this is the only phase introducing `@Scheduled` jobs into a codebase that has never had one — get the idempotency key and transactional boundaries right the first time (test concurrent producer runs don't double-enqueue); clock/timezone bugs here are user-visible and annoying (test explicitly with a user in `Pacific/Kiritimati` (UTC+14) and `Etc/GMT+12` (UTC-12) to catch date-boundary mistakes, mirroring the timezone-extreme testing called out in Phase 5).
 

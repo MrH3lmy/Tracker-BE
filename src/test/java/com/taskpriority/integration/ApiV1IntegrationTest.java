@@ -176,6 +176,17 @@ class ApiV1IntegrationTest {
                 .andExpect(jsonPath("$.byStatus").exists())
                 .andExpect(jsonPath("$.byPriorityCategory").exists());
 
+        mockMvc.perform(get("/api/v1/search").param("q", "Test Task"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].title", hasItem("Test Task")))
+                .andExpect(jsonPath("$.items[0].type").exists())
+                .andExpect(jsonPath("$.items[0].url").exists())
+                .andExpect(jsonPath("$.totalElements").exists());
+        mockMvc.perform(get("/api/v1/search").param("q", "Test Task").param("type", "note"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.items[*].title", org.hamcrest.Matchers.not(hasItem("Test Task"))));
+
         mockMvc.perform(get("/api/v1/home/today"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.date").exists())

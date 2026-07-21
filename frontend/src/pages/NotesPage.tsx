@@ -104,14 +104,14 @@ function parseTags(value: string): string[] {
 export function NotesPage() {
   const [searchParams] = useSearchParams();
   const linkedTaskId = searchParams.get("taskId")?.trim() ?? "";
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q")?.trim() ?? "");
   const [viewMode, setViewMode] = useState<NotesViewMode>("list");
   const [sortBy, setSortBy] = useState<NoteSortBy>("updatedAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [contentTypeFilter, setContentTypeFilter] = useState<
     NoteContentType | "all"
   >("all");
-  const [tagFilter, setTagFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState(() => searchParams.get("tag")?.trim() ?? "");
   const [collectionFilter, setCollectionFilter] = useState("");
   const [hasAttachmentsFilter, setHasAttachmentsFilter] = useState<"" | "true" | "false">("");
   const [linkedTaskFilter, setLinkedTaskFilter] = useState<"" | "true" | "false">("");

@@ -4,20 +4,24 @@ import { useAnnouncement } from '../../announcementContext';
 import { parseNaturalLanguageTask, type ParsedTask } from '../../lib/naturalLanguageTaskParser';
 import { AREA_VALUES, RISK_LEVEL_VALUES } from '../tasks/taskUtils';
 import { RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type RecurrenceFrequency } from '../../validation/recurrence';
-import { useHabitMutations, useNoteMutations, useSchedulerMutations, useTaskMutations, useTasksQuery } from '../../hooks/useApiQueries';
+import { useHabitMutations, useNoteMutations, useSchedulerMutations, useSearchQuery, useTaskMutations, useTasksQuery, type SearchResultRecord } from '../../hooks/useApiQueries';
 import type { TaskRecord } from '../tasks/taskTypes';
-import { Button, Checkbox, Collapsible, Dialog, Field, Input, Select, SegmentedControl, Textarea } from '../ui';
-import { AlertTriangle, ListTodo, Flame, StickyNote } from '../ui/icons';
+import { formatEnumLabel } from '../../lib/enumLabels';
+import { isQueryError } from '../../apiClient';
+import { Badge, Button, Checkbox, Collapsible, Dialog, Field, Input, Select, SegmentedControl, Textarea } from '../ui';
+import { AlertTriangle, Flame, ListTodo, Search, StickyNote, Tag as TagIcon } from '../ui/icons';
 
-type CaptureType = 'task' | 'note' | 'habit';
+type CaptureType = 'task' | 'note' | 'habit' | 'search';
 
 const CAPTURE_TYPE_OPTIONS: { value: CaptureType; label: string }[] = [
   { value: 'task', label: 'Task' },
   { value: 'note', label: 'Note' },
   { value: 'habit', label: 'Habit' },
+  { value: 'search', label: 'Search' },
 ];
 
-const TYPE_ICONS: Record<CaptureType, typeof ListTodo> = { task: ListTodo, note: StickyNote, habit: Flame };
+const TYPE_ICONS: Record<CaptureType, typeof ListTodo> = { task: ListTodo, note: StickyNote, habit: Flame, search: Search };
+const SEARCH_RESULT_ICONS: Record<SearchResultRecord['type'], typeof ListTodo> = { TASK: ListTodo, NOTE: StickyNote, HABIT: Flame, TAG: TagIcon };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -74,6 +78,7 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
   const [habitTitle, setHabitTitle] = useState('');
   const [habitArea, setHabitArea] = useState('');
   const [habitImportant, setHabitImportant] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const rawInputRef = useRef<HTMLInputElement>(null);
 
   const { createTask } = useTaskMutations();
@@ -89,6 +94,9 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
   const parsed = useMemo(() => (type === 'task' && rawInput.trim() ? parseNaturalLanguageTask(rawInput) : null), [type, rawInput]);
   const showUncertainNotice = Boolean(parsed && !parsed.confident);
 
+  const searchResultsQuery = useSearchQuery({ q: searchQuery, size: 8 }, type === 'search' && searchQuery.trim().length > 0);
+  const searchResults = searchResultsQuery.data?.data?.items ?? [];
+
   useEffect(() => {
     if (parsed) setTaskFields((current) => applyParseToFields(current, touchedFieldsRef.current, parsed));
   }, [parsed]);
@@ -103,6 +111,7 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
     setHabitTitle('');
     setHabitArea('');
     setHabitImportant(false);
+    setSearchQuery('');
   };
 
   const close = () => {
@@ -203,7 +212,12 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
   const submit = () => {
     if (type === 'task') submitTask();
     else if (type === 'note') submitNote();
-    else submitHabit();
+    else if (type === 'habit') submitHabit();
+  };
+
+  const goToResult = (result: SearchResultRecord) => {
+    navigate(result.url);
+    close();
   };
 
   const TypeIcon = TYPE_ICONS[type];
@@ -213,16 +227,20 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
       open={open}
       onOpenChange={(next) => { if (!next) close(); else onOpenChange(true); }}
       title="Quick capture"
-      description="Create a task, note, or habit without leaving what you're doing."
+      description="Create a task, note, or habit, or search everything, without leaving what you're doing."
       size="lg"
       footer={
-        <>
-          <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={busy}>
-            <TypeIcon className="h-4 w-4" aria-hidden />
-            {busy ? 'Creating...' : `Create ${type}`}
-          </Button>
-        </>
+        type === 'search' ? (
+          <Button variant="ghost" onClick={close}>Close</Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
+            <Button variant="primary" onClick={submit} disabled={busy}>
+              <TypeIcon className="h-4 w-4" aria-hidden />
+              {busy ? 'Creating...' : `Create ${type}`}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-4">
@@ -335,6 +353,46 @@ export function QuickCaptureModal({ open, onOpenChange, initialDate }: { open: b
               </div>
             </div>
             <p className="text-xs text-fg-subtle">Starts as a daily habit -- adjust the schedule anytime from the Habits page.</p>
+          </>
+        )}
+
+        {type === 'search' && (
+          <>
+            <Field label="Search" htmlFor="quickCaptureSearch" hint="Try type:task, status:blocked, due:this-week, area:work, or tag:decision.">
+              <Input
+                id="quickCaptureSearch"
+                ref={rawInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tasks, notes, habits, and tags"
+              />
+            </Field>
+            {searchQuery.trim() && (
+              <>
+                {searchResultsQuery.isFetching && <p className="text-sm text-fg-muted">Searching...</p>}
+                {isQueryError(searchResultsQuery.data) && <p className="text-sm text-critical">Search failed. Try again.</p>}
+                {!searchResultsQuery.isFetching && searchResults.length === 0 && !isQueryError(searchResultsQuery.data) && (
+                  <p className="text-sm text-fg-muted">No results for "{searchQuery.trim()}".</p>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  {searchResults.map((result) => {
+                    const ResultIcon = SEARCH_RESULT_ICONS[result.type];
+                    return (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        type="button"
+                        onClick={() => goToResult(result)}
+                        className="flex items-center gap-2.5 rounded-lg border border-line bg-inset/30 px-3 py-2 text-left transition-colors duration-(--duration-fast) hover:bg-inset"
+                      >
+                        <ResultIcon className="h-4 w-4 shrink-0 text-brand" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{result.title}</span>
+                        <Badge variant="outline">{formatEnumLabel(result.type)}</Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
