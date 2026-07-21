@@ -124,7 +124,15 @@ No breaking changes to any existing v1 contract in Phases 1–3.
   - [x] Backend tests: `HomeServiceTest` (unit), `HomeControllerTest` (`@WebMvcTest` slice), extended `ApiV1IntegrationTest` (full Spring context + H2 + real JWT auth)
   - [x] New `TodayPage` auto-loads on mount (no manual Refresh required); replaces `DashboardPage` (deleted)
   - [x] Greeting + date, Quick Add, summary cards (due today / overdue / habits completed / focus time), today timeline, top 3 recommended tasks, habits with one-click check-in, upcoming tasks, waiting & blocked, follow-ups due, empty-state onboarding for new accounts
-- [ ] Phase 4 — Global quick capture (backlog)
+- [x] Phase 4 — Global quick capture
+  - [x] Ctrl+K / Cmd+K, header button, and mobile bottom nav all open one global `QuickCaptureModal`
+  - [x] Local rule-based natural-language parser (`lib/naturalLanguageTaskParser.ts`, 15 unit tests) extracts title/date/time/tag→area/important/estimate
+  - [x] Simple default fields (Title, When, Priority, Project/area) with Estimate/Recurrence/Follow-up/Risk/Track/Phase/Parent task under "More options"; dependencies deliberately left to the full Tasks flow (see plan notes)
+  - [x] Low-confidence parses (e.g. a time with no explicit date) show a confirmation notice instead of silently guessing
+  - [x] Can create a Task, Note, or Habit from the same modal
+  - [x] 7 component tests (`QuickCaptureModal.test.tsx`) + 15 parser tests
+  - **Data-model note**: `Task.dueDate` is date-only (`LocalDate`) -- there is no due-*time* field on `Task`. When quick capture parses or is given a time-of-day, the task is still created with a date-only `dueDate`, and a follow-up `PUT /api/v1/scheduler/tasks/{id}` call places it at that time via the existing Scheduler/`TaskSchedule` mechanism, which is the app's actual time-of-day concept. This is the correct integration, not a workaround -- it mirrors how Day/Week scheduling already works everywhere else.
+  - **Fixed alongside**: `npm run test` was discovered to be a real, pre-existing suite (see the "Fix pre-existing App.test.tsx failures" commit) -- it now runs as part of every phase's verification, and `QuickCaptureModal`/the parser both ship with real Vitest coverage rather than being reasoned about by hand.
 - [ ] Phase 5 — Real calendar experience (backlog)
 - [ ] Phase 6 — Global search (backlog)
 - [ ] Phase 7 — Projects and goals (backlog)

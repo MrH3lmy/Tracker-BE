@@ -1,40 +1,8 @@
-# Backlog: Phases 4-10
+# Backlog: Phases 5-10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-3 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-4 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component.
-
----
-
-## Phase 4 — Global quick capture
-
-**User story**: As a user, I want to capture a task, note, or habit from anywhere in the app (header, mobile, or a keyboard shortcut) without navigating away from what I'm doing, including quickly typing a task in natural language.
-
-**Scope**: A command-palette-style modal (Ctrl+K / Cmd+K, header button, mobile center action) that can create a Task, Note, or Habit, with local natural-language parsing for the task path.
-
-**Backend tasks**: None required — reuses existing `POST /api/v1/tasks`, `POST /api/v1/notes`, `POST /api/v1/habits`.
-
-**Frontend tasks**:
-- Add `cmdk` (or a hand-rolled equivalent consistent with "no unnecessary dependencies" — evaluate against the existing Radix-based `Dialog`/`Popover` primitives first) for the palette shell.
-- `quickCaptureContext.tsx` + global keydown listener for Ctrl+K/Cmd+K (respect input-focus context so it doesn't fire while typing elsewhere).
-- `components/quickCapture/QuickCaptureModal.tsx`: type switcher (Task/Note/Habit), a simple default form (Title, When, Priority, Project/area) with advanced fields under a "More options" disclosure (Estimate, Recurrence, Dependencies, Follow-up, Risk, Track, Phase, Parent task) reusing `TaskCreateForm`'s field set rather than re-implementing it.
-- `lib/naturalLanguageTaskParser.ts`: pure function parsing strings like "Finish payment service tomorrow 4pm #work !important 90m" into `{ title, dueDate, dueTime, tag, important, estimatedMinutes }`. Rule-based (date keywords: today/tomorrow/weekday names, `#tag`, `!important`, `NNm`/`NNh` duration, time `Npm`/`HH:mm`) — no ML/LLM dependency needed for this scope.
-- Show a preview/confirmation step when parsing confidence is low (e.g., no recognized date, ambiguous tag) before submitting.
-- Wire header "Quick add" button and mobile bottom nav's "Quick add" action to open the palette instead of (or in addition to) navigating to `/tasks?quickAdd=1`.
-
-**Migration requirements**: None.
-
-**Acceptance criteria**:
-- Ctrl+K (Cmd+K on Mac) opens the palette from any authenticated route; Escape closes it; focus returns to the trigger on close.
-- Creating a task from natural-language input produces the same task shape as the existing Tasks drawer (verified against `CreateTaskPayload`).
-- Uncertain parses show an editable preview before save; never silently save a wrong interpretation.
-- Fully keyboard-operable; screen-reader announces the modal open/type/result via existing `useAnnouncement()`.
-
-**Test cases**: parser unit tests (date phrases, tags, duration, important flag, combinations, and unparseable input falling back to "title only"); modal open/close/keyboard nav; submit-per-type integration against existing mutations.
-
-**Dependencies**: None (can start immediately).
-
-**Estimated complexity**: M (parser + modal shell), S if reusing `TaskCreateForm` wholesale instead of rebuilding fields.
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
 
 ---
 

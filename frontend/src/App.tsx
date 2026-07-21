@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { appRoutes, appTabs, developerTabs, legacyRedirects, type AppRoute } from './router/routes';
 import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
 import { useHabitReminders } from './hooks/useHabitReminders';
@@ -9,6 +9,8 @@ import { AuthProvider } from './AuthProvider';
 import { useAuth } from './authContext';
 import { ThemeContext } from './themeContext';
 import { UndoToastContext, type UndoToastContextValue } from './undoToastContext';
+import { QuickCaptureContext, type QuickCaptureContextValue } from './quickCaptureContext';
+import { QuickCaptureModal } from './components/quickCapture/QuickCaptureModal';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -222,8 +224,8 @@ function MobileBottomNav({ onQuickAdd, onToggleMore, isMoreOpen }: { onQuickAdd:
 function AuthenticatedApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
   const [theme, setThemeState] = useState<AppTheme>(() => readStoredTheme() ?? DEFAULT_THEME);
   const [announcement, setAnnouncement] = useState('');
@@ -291,6 +293,19 @@ function AuthenticatedApp() {
     dismissUndoToast();
   };
   const undoToastContextValue = useMemo<UndoToastContextValue>(() => ({ showUndo }), [showUndo]);
+  const openQuickCapture = useCallback(() => setIsQuickCaptureOpen(true), []);
+  const quickCaptureContextValue = useMemo<QuickCaptureContextValue>(() => ({ openQuickCapture }), [openQuickCapture]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isCaptureShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (!isCaptureShortcut) return;
+      event.preventDefault();
+      setIsQuickCaptureOpen(true);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const visibleDeveloperTabs = isDevMode ? developerTabs : [];
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
   const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
@@ -315,6 +330,7 @@ function AuthenticatedApp() {
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
         <UndoToastContext.Provider value={undoToastContextValue}>
+        <QuickCaptureContext.Provider value={quickCaptureContextValue}>
           <a
             className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
             href="#task-tracker-main"
@@ -365,13 +381,15 @@ function AuthenticatedApp() {
               <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
               <div className="ml-auto flex items-center gap-2">
                 {!hideGlobalQuickAdd && (
-                  <NavLink
-                    to="/tasks"
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickCaptureOpen(true)}
                     className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"
+                    title="Quick add (Ctrl+K)"
                   >
                     <Plus className="h-4 w-4" aria-hidden />
                     Quick add
-                  </NavLink>
+                  </button>
                 )}
                 {user && (
                   <div className="flex items-center gap-2 border-l border-line pl-2">
@@ -425,7 +443,7 @@ function AuthenticatedApp() {
           onDismiss={dismissReminder}
         />
         <MobileBottomNav
-          onQuickAdd={() => navigate('/tasks?quickAdd=1')}
+          onQuickAdd={openQuickCapture}
           onToggleMore={() => setIsMobileMenuOpen((open) => !open)}
           isMoreOpen={isMobileMenuOpen}
         />
@@ -437,6 +455,8 @@ function AuthenticatedApp() {
             </div>
           </div>
         )}
+        <QuickCaptureModal open={isQuickCaptureOpen} onOpenChange={setIsQuickCaptureOpen} />
+        </QuickCaptureContext.Provider>
         </UndoToastContext.Provider>
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>
