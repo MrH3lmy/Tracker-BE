@@ -5,6 +5,7 @@ import type { TaskDetailRecord, TaskRecord } from '../components/tasks/taskTypes
 import type { BoardColumnRecord } from '../components/board/boardTypes';
 import type { CreateHabitPayload, HabitHistoryEntry, HabitRecord } from '../components/habits/habitTypes';
 import type { AutoScheduleScope, DayScheduleRecord, ScheduleHabitPayload, ScheduleTaskPayload, SuggestedSlotRecord } from '../components/scheduler/schedulerTypes';
+import type { CreateMilestonePayload, CreateProjectPayload, MilestoneRecord, ProjectOverviewRecord, ProjectRecord, UpdateMilestonePayload } from '../components/projects/projectTypes';
 import { isTaskStatus } from '../validation/taskStatus';
 
 export type TaskTab = 'active' | 'archive' | 'duplicates';
@@ -85,6 +86,11 @@ export const queryKeys = {
   schedulerDay: (date: string) => ['scheduler', 'day', date] as const,
   habits: ['habits'] as const,
   habitHistory: (from: string, to: string) => ['habits', 'history', from, to] as const,
+  projects: ['projects'] as const,
+  project: (id: number) => ['projects', id] as const,
+  projectOverview: (id: number) => ['projects', id, 'overview'] as const,
+  projectMilestones: (id: number) => ['projects', id, 'milestones'] as const,
+  projectTasks: (id: number) => ['projects', id, 'tasks'] as const,
 };
 
 const taskPathByTab: Record<TaskTab, string> = { active: '/api/v1/tasks', archive: '/api/v1/tasks/archive', duplicates: '/api/v1/tasks/duplicates' };
@@ -160,6 +166,11 @@ export const useHabitHistoryQuery = (from: string, to: string, enabled = true) =
   queryFn: () => apiJson<HabitHistoryEntry[]>('GET', `/api/v1/habits/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   enabled,
 });
+export const useProjectsQuery = (enabled = true) => useQuery({ queryKey: queryKeys.projects, queryFn: () => apiJson<ProjectRecord[]>('GET', '/api/v1/projects'), enabled });
+export const useProjectQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.project(id), queryFn: () => apiJson<ProjectRecord>('GET', `/api/v1/projects/${id}`), enabled: enabled && Number.isFinite(id) });
+export const useProjectOverviewQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectOverview(id), queryFn: () => apiJson<ProjectOverviewRecord>('GET', `/api/v1/projects/${id}/overview`), enabled: enabled && Number.isFinite(id) });
+export const useProjectMilestonesQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectMilestones(id), queryFn: () => apiJson<MilestoneRecord[]>('GET', `/api/v1/projects/${id}/milestones`), enabled: enabled && Number.isFinite(id) });
+export const useProjectTasksQuery = (id: number, enabled = true) => useQuery({ queryKey: queryKeys.projectTasks(id), queryFn: () => apiJson<TaskRecord[]>('GET', `/api/v1/projects/${id}/tasks`), enabled: enabled && Number.isFinite(id) });
 
 const invalidateTaskFamily = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -230,6 +241,10 @@ export function useTaskMutations() {
     }),
     addDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('POST', `/api/v1/tasks/${id}/dependencies`, { blocksTaskId }), onSuccess }),
     removeDependency: useMutation({ mutationFn: ({ id, blocksTaskId }: { id: number; blocksTaskId: number }) => apiJson('DELETE', `/api/v1/tasks/${id}/dependencies/${blocksTaskId}`), onSuccess }),
+    updateTaskProject: useMutation({
+      mutationFn: ({ id, projectId }: { id: number; projectId: number | null }) => apiJson('PATCH', `/api/v1/tasks/${id}/project`, { projectId }),
+      onSuccess: () => { invalidateTaskFamily(qc); qc.invalidateQueries({ queryKey: queryKeys.projects }); },
+    }),
   };
 }
 export function useSchedulerMutations() {
@@ -262,6 +277,41 @@ export function useHabitMutations() {
     deleteHabit: useMutation({ mutationFn: (id: number) => apiJson('DELETE', `/api/v1/habits/${id}`), onSuccess }),
     checkIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('PATCH', `/api/v1/habits/${id}/check-in`), onSuccess }),
     undoCheckIn: useMutation({ mutationFn: (id: number) => apiJson<HabitRecord>('DELETE', `/api/v1/habits/${id}/check-in`), onSuccess }),
+  };
+}
+
+export function useProjectMutations() {
+  const qc = useQueryClient();
+  const onSuccess = () => qc.invalidateQueries({ queryKey: queryKeys.projects });
+  return {
+    createProject: useMutation({ mutationFn: (body: CreateProjectPayload) => apiJson<ProjectRecord>('POST', '/api/v1/projects', body), onSuccess }),
+    updateProject: useMutation({
+      mutationFn: ({ id, body }: { id: number; body: CreateProjectPayload }) => apiJson<ProjectRecord>('PUT', `/api/v1/projects/${id}`, body),
+      onSuccess: (_data, variables) => { onSuccess(); qc.invalidateQueries({ queryKey: queryKeys.project(variables.id) }); qc.invalidateQueries({ queryKey: queryKeys.projectOverview(variables.id) }); },
+    }),
+    deleteProject: useMutation({
+      mutationFn: (id: number) => apiJson('DELETE', `/api/v1/projects/${id}`),
+      onSuccess: () => { onSuccess(); qc.invalidateQueries({ queryKey: ['tasks'] }); },
+    }),
+  };
+}
+
+export function useMilestoneMutations() {
+  const qc = useQueryClient();
+  const invalidate = (projectId: number) => { qc.invalidateQueries({ queryKey: queryKeys.projectMilestones(projectId) }); qc.invalidateQueries({ queryKey: queryKeys.projectOverview(projectId) }); };
+  return {
+    createMilestone: useMutation({
+      mutationFn: ({ projectId, body }: { projectId: number; body: CreateMilestonePayload }) => apiJson<MilestoneRecord>('POST', `/api/v1/projects/${projectId}/milestones`, body),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+    updateMilestone: useMutation({
+      mutationFn: ({ projectId, milestoneId, body }: { projectId: number; milestoneId: number; body: UpdateMilestonePayload }) => apiJson<MilestoneRecord>('PUT', `/api/v1/projects/${projectId}/milestones/${milestoneId}`, body),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
+    deleteMilestone: useMutation({
+      mutationFn: ({ projectId, milestoneId }: { projectId: number; milestoneId: number }) => apiJson('DELETE', `/api/v1/projects/${projectId}/milestones/${milestoneId}`),
+      onSuccess: (_data, variables) => invalidate(variables.projectId),
+    }),
   };
 }
 

@@ -25,7 +25,8 @@ import java.util.List;
         @Index(name = "idx_tasks_risk_level", columnList = "risk_level"),
         @Index(name = "idx_tasks_track", columnList = "track"),
         @Index(name = "idx_tasks_phase", columnList = "phase"),
-        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id")
+        @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id"),
+        @Index(name = "idx_tasks_project_id", columnList = "project_id")
 })
 public class Task {
 
@@ -70,6 +71,9 @@ public class Task {
 
     @Column(name = "parent_task_id")
     private Long parentTaskId;
+
+    @Column(name = "project_id")
+    private Long projectId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
@@ -179,6 +183,8 @@ public class Task {
     public void setPhase(String phase) { this.phase = phase; }
     public Long getParentTaskId() { return parentTaskId; }
     public void setParentTaskId(Long parentTaskId) { this.parentTaskId = parentTaskId; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
     public LocalDateTime getCompletedDate() { return completedDate; }

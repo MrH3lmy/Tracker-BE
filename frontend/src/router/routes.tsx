@@ -12,6 +12,8 @@ import { MatrixPage } from '../pages/MatrixPage';
 import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
+import { ProjectDetailPage } from '../pages/ProjectDetailPage';
+import { ProjectsPage } from '../pages/ProjectsPage';
 import { SchedulerPage } from '../pages/SchedulerPage';
 import { SearchPage } from '../pages/SearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
@@ -30,6 +32,7 @@ export const TASK_VIEW_TABS: SectionTabItem[] = [
   { path: '/tasks', label: 'List', end: true },
   { path: '/tasks/board', label: 'Board' },
   { path: '/tasks/matrix', label: 'Matrix' },
+  { path: '/tasks/projects', label: 'Projects' },
 ];
 
 /** Calendar section: Month / Week / Day / Auto-plan absorb the old standalone Calendar, Scheduler, and Planning pages. */
@@ -58,6 +61,7 @@ export const primaryRoutes: AppRoute[] = [
 export const sectionRoutes: AppRoute[] = [
   { label: 'Tasks Board', path: '/tasks/board', element: <BoardPage /> },
   { label: 'Tasks Matrix', path: '/tasks/matrix', element: <MatrixPage /> },
+  { label: 'Tasks Projects', path: '/tasks/projects', element: <ProjectsPage /> },
   { label: 'Calendar Week', path: '/calendar/week', element: <CalendarWeekPage /> },
   { label: 'Calendar Day', path: '/calendar/day', element: <SchedulerPage /> },
   { label: 'Calendar Auto-plan', path: '/calendar/auto-plan', element: <PlanningPage /> },
@@ -70,6 +74,7 @@ export const developerRoutes: AppRoute[] = [
 
 // Routes that render via the router but do not appear as sidebar tabs.
 export const detailRoutes: AppRoute[] = [
+  { label: 'Project Detail', path: '/tasks/projects/:id', element: <ProjectDetailPage /> },
   { label: 'Task Detail', path: '/tasks/:id', element: <TaskDetailPage /> },
   { label: 'Habit Analysis', path: '/habits/analysis', element: <HabitAnalysisPage /> },
 ];

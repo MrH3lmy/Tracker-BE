@@ -3,6 +3,7 @@ import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import { DAY_OF_WEEK_VALUES, RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type DayOfWeekValue, type RecurrenceFrequency } from '../../validation/recurrence';
 import { AREA_VALUES, EFFORT_VALUES, RISK_LEVEL_VALUES } from './taskUtils';
 import type { CreateTaskPayload, RecurrenceRuleRecord, RiskLevel, TaskRecord } from './taskTypes';
+import type { ProjectRecord } from '../projects/projectTypes';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../ui';
 
 const formatAnnualDate = (month: string, day: string): string | undefined => {
@@ -149,6 +150,9 @@ export interface TaskCreateFormHandle {
 
 interface TaskCreateFormProps {
   activeTasks: TaskRecord[];
+  projects?: ProjectRecord[];
+  projectId?: string;
+  onProjectIdChange?: (projectId: string) => void;
   busy: boolean;
   isSubmitting: boolean;
   mode?: 'create' | 'edit';
@@ -158,7 +162,7 @@ interface TaskCreateFormProps {
   onInvalidTitle: () => void;
 }
 
-export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormProps>(function TaskCreateForm({ activeTasks, busy, isSubmitting, mode = 'create', initialValue, onCancel, onSubmit, onInvalidTitle }, ref) {
+export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormProps>(function TaskCreateForm({ activeTasks, projects, projectId, onProjectIdChange, busy, isSubmitting, mode = 'create', initialValue, onCancel, onSubmit, onInvalidTitle }, ref) {
   const [form, dispatch] = useReducer(reducer, initialValue, mapRecordToFormState);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -230,6 +234,14 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
               {activeTasks.filter((task) => task.id !== initialValue?.id).map((task) => <option key={`parent-${task.id}`} value={task.id}>#{task.id} {task.title}</option>)}
             </Select>
           </Field>
+          {projects && onProjectIdChange && (
+            <Field label="Project" htmlFor="taskProject">
+              <Select id="taskProject" value={projectId ?? ''} onChange={(e) => onProjectIdChange(e.target.value)} disabled={busy}>
+                <option value="">No project</option>
+                {projects.map((project) => <option key={`project-${project.id}`} value={project.id}>{project.name}</option>)}
+              </Select>
+            </Field>
+          )}
           <Field label="Start date" htmlFor="taskStartDate">
             <Input id="taskStartDate" type="date" value={form.startDate} max={form.dueDate || undefined} onChange={(e) => setField('startDate', e.target.value)} disabled={busy} />
           </Field>

@@ -1,41 +1,10 @@
-# Backlog: Phases 7-10
+# Backlog: Phases 8-10
 
-Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-6 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
+Implementation-ready issues for the remaining phases of `PRODUCT_IMPROVEMENT_PLAN.md`. Phases 1-7 are complete (see that document's checklist). Each item below is scoped to be picked up independently; dependencies between items are called out explicitly.
 
-Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V34** (Phase 6 used V33).
+Conventions used throughout: all new tables get a `user_id BIGINT NOT NULL REFERENCES users(id)` column and an index on it, following `V28`/`V29`; all new endpoints require auth (default-deny, per `SecurityConfig`) and scope every query by `currentUserService.requireUserId()`; all new frontend data fetching goes through a `use<Thing>Query`/`use<Thing>Mutations` hook in `hooks/useApiQueries.ts`, never a raw `apiJson` call in a page component. `npm run test` (Vitest) is real and runs alongside `lint`/`build` for every phase — see Phase 4's notes in `PRODUCT_IMPROVEMENT_PLAN.md`. Date-only values now go through `lib/dateOnly.ts` (Phase 5) — reuse it, don't reinvent UTC-safe parsing again. Next free Flyway migration is **V36** (Phase 7 used V34/V35).
 
-**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6) -- see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
-
----
-
-## Phase 7 — Projects and goals
-
-**User story**: As a user, I want to group related tasks and notes under a Project with a target date, milestones, and a progress/risk summary, without losing the flexibility of `track`/`phase` grouping I already use.
-
-**Scope**: First-class `Project`/`Milestone` entities; project list/overview/milestones/tasks/notes/progress views; link existing tasks to a project.
-
-**Backend tasks**:
-- New `model/Project.java`, `model/Milestone.java` entities. `Project`: id, userId, name, description, status (enum: `PLANNING/ACTIVE/AT_RISK/ON_HOLD/DONE/ARCHIVED`), startDate, targetDate, area, goal (text), ownerUserId (defaults to userId — future-proofing for eventual sharing, not used for access control yet), createdDate. `Milestone`: id, userId, projectId, title, targetDate, completedDate, status.
-- Add `Task.projectId` (nullable `BIGINT`, FK to `projects.id`) — additive column, existing `track`/`phase` stay as-is and keep working for anyone not using Projects yet; do not remove or repurpose them.
-- New `project` package: `ProjectController` (`/api/v1/projects`: CRUD, `GET /{id}/overview` combining task/note/time rollups), `MilestoneController` (`/api/v1/projects/{id}/milestones`), `ProjectService` computing: task counts by status, estimated-vs-actual minutes (sum `Task.estimatedMinutes`/`actualMinutes` for tasks in the project — reuse, don't duplicate, the capacity-risk math already in `PlanningService.getProjectBoard()`), risk summary (reuse `PlannerRiskResponse`'s LOW/MEDIUM/HIGH shape for consistency).
-- `NoteTaskLink` already links notes to tasks; a project's "notes" view is simply the union of notes linked to any task where `task.projectId = :projectId` — no new note-project link table needed.
-- Validation: `targetDate` after `startDate` (Bean Validation `@AssertTrue`, same pattern as task start/due date validation already in the codebase); milestone `targetDate` should warn (not block) if past the project's `targetDate`.
-
-**Frontend tasks**:
-- `pages/ProjectsPage.tsx` (list, under Tasks section as a 4th view — "Projects" tab in `TASK_VIEW_TABS` — or its own nav slot if it grows past a simple list; start under Tasks per the original IA note "Projects placeholder only if not implemented yet" — now it is implemented, so promote it out of placeholder status here).
-- `pages/ProjectDetailPage.tsx` at `/tasks/projects/:id`: overview (progress ring, risk badge, estimated-vs-actual), Milestones list, Tasks (filtered task list reusing `TaskListView`), Notes (filtered note list reusing existing notes components).
-- `hooks/useApiQueries.ts`: `useProjectsQuery`, `useProjectQuery(id)`, `useProjectMutations()`, `useMilestoneMutations()`.
-- Task create/edit form: add an optional Project picker (under "More options", alongside track/phase/parentTaskId) that also lets someone set `track`/`phase` manually — don't force a migration of existing free-text grouping.
-
-**Migration requirements**: `V34__create_projects.sql` (projects, milestones tables + indexes), `V35__add_project_id_to_tasks.sql` (nullable FK + index). Forward-only; no backfill needed since the column is nullable and additive.
-
-**Acceptance criteria**: create/edit/archive a project; add milestones; assign tasks to a project via the task form; project overview shows real counts (not placeholders) computed from actual linked tasks; deleting a project does not delete its tasks (set `projectId` to null, confirmed via a dialog, not a cascade delete).
-
-**Test cases**: entity/migration tests (mirror `HabitsMigrationPostgresTest`'s pattern for a Testcontainers-backed migration test); `ProjectServiceTest` (progress/risk computation with 0, some, and all tasks done); `ProjectControllerTest` validation slice test; user-isolation test (project from user A invisible to user B).
-
-**Dependencies**: None technically, but pairs naturally with Phase 5 (calendar) since project target dates and milestones are calendar-relevant.
-
-**Estimated complexity**: L.
+**Left for a later pass**: Month-grid drag-and-drop (Phase 5); search result keyboard roving and a "recent items" empty state (Phase 6); a project-scoped Notes tab on `ProjectDetailPage` (Phase 7, union of notes linked to tasks in the project via the existing `NoteTaskLink` — the query is trivial, it's just not surfaced as a tab yet) -- see each phase's notes in `PRODUCT_IMPROVEMENT_PLAN.md`.
 
 ---
 

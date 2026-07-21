@@ -19,6 +19,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     boolean existsByUserIdAndId(Long userId, Long id);
 
     List<Task> findByUserIdAndStatus(Long userId, Status status);
+    List<Task> findByUserIdAndProjectId(Long userId, Long projectId);
 
     @Query("select t from Task t where t.userId = :userId and t.dueDate <= :date and t.status <> :status")
     List<Task> findOverdueTasks(Long userId, LocalDate date, Status status);

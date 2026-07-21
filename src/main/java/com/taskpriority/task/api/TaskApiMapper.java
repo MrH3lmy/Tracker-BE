@@ -39,6 +39,7 @@ public class TaskApiMapper {
                 task.getTrack(),
                 task.getPhase(),
                 task.getParentTaskId(),
+                task.getProjectId(),
                 task.getCreatedDate(),
                 task.getCompletedDate(),
                 task.isImportant(),

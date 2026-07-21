@@ -13,7 +13,8 @@ import { TaskListView } from '../components/tasks/TaskListView';
 import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, FilterValue, TaskRecord, TaskSortValue } from '../components/tasks/taskTypes';
 import { buildTaskTree, isOverdue, taskMatchesSearch, uniqueOptions } from '../components/tasks/taskUtils';
-import { latestResult, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
+import type { ProjectRecord } from '../components/projects/projectTypes';
+import { latestResult, useProjectsQuery, useTaskMutations, useTasksQuery } from '../hooks/useApiQueries';
 import { Badge, Button, Drawer, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl } from '../components/ui';
 import { Filter, Plus, Search } from '../components/ui/icons';
 import { SectionTabs } from '../components/SectionTabs';
@@ -87,6 +88,7 @@ export function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'active' | 'done' | 'archive'>('active');
   const [createOpen, setCreateOpen] = useState(false);
+  const [createProjectId, setCreateProjectId] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dependenciesOpen, setDependenciesOpen] = useState(false);
   const [dependencyTaskId, setDependencyTaskId] = useState('');
@@ -136,8 +138,10 @@ export function TasksPage() {
   const activeQuery = useTasksQuery('active');
   const archiveQuery = useTasksQuery('archive');
   const query = tab === 'archive' ? archiveQuery : activeQuery;
-  const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency } = useTaskMutations();
-  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending;
+  const { createTask, updateTask, deleteTask, completeTask, changeStatus, addDependency, removeDependency, updateTaskProject } = useTaskMutations();
+  const projectsQuery = useProjectsQuery();
+  const projects = useMemo<ProjectRecord[]>(() => (Array.isArray(projectsQuery.data?.data) ? (projectsQuery.data.data as ProjectRecord[]) : []), [projectsQuery.data]);
+  const busy = createTask.isPending || updateTask.isPending || deleteTask.isPending || completeTask.isPending || changeStatus.isPending || addDependency.isPending || removeDependency.isPending || updateTaskProject.isPending;
 
   const activeData = activeQuery.data?.data;
   const archiveData = archiveQuery.data?.data;
@@ -203,6 +207,7 @@ export function TasksPage() {
 
   const closeCreatePanel = () => {
     setCreateOpen(false);
+    setCreateProjectId('');
     window.requestAnimationFrame(() => createButtonRef.current?.focus());
   };
 
@@ -215,7 +220,15 @@ export function TasksPage() {
   };
 
   const submitCreate = (payload: CreateTaskPayload, onSuccess: () => void) => {
-    createTask.mutate(payload, { onSuccess: (result) => { if (result.ok) onSuccess(); } });
+    createTask.mutate(payload, {
+      onSuccess: (result) => {
+        if (!result.ok) return;
+        const createdId = (result.data as TaskRecord | null)?.id;
+        if (createdId && createProjectId) updateTaskProject.mutate({ id: createdId, projectId: Number(createProjectId) });
+        setCreateProjectId('');
+        onSuccess();
+      },
+    });
   };
 
   const updateTaskFromCard = (task: TaskRecord, updates: Partial<TaskRecord>) => {
@@ -392,6 +405,9 @@ export function TasksPage() {
         <TaskCreateForm
           ref={createFormRef}
           activeTasks={activeTasks}
+          projects={projects}
+          projectId={createProjectId}
+          onProjectIdChange={setCreateProjectId}
           busy={busy}
           isSubmitting={createTask.isPending}
           onCancel={closeCreatePanel}
