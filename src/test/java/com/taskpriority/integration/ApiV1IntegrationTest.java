@@ -169,5 +169,20 @@ class ApiV1IntegrationTest {
                 .andExpect(jsonPath("$.completionRate").exists())
                 .andExpect(jsonPath("$.byStatus").exists())
                 .andExpect(jsonPath("$.byPriorityCategory").exists());
+
+        mockMvc.perform(get("/api/v1/home/today"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.date").exists())
+                .andExpect(jsonPath("$.summary.totalTasks").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.dueToday").isArray())
+                .andExpect(jsonPath("$.overdue").isArray())
+                .andExpect(jsonPath("$.topRecommendations").isArray())
+                .andExpect(jsonPath("$.topRecommendations[*].task.title", hasItem("Test Task")))
+                .andExpect(jsonPath("$.todayTimeline").isArray())
+                .andExpect(jsonPath("$.scheduledFocusMinutes").value(0))
+                .andExpect(jsonPath("$.habitsToday").isArray())
+                .andExpect(jsonPath("$.upcomingTasks").isArray())
+                .andExpect(jsonPath("$.waitingOrBlocked").isArray())
+                .andExpect(jsonPath("$.followUpsDue").isArray());
     }
 }

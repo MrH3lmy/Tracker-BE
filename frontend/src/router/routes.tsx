@@ -2,7 +2,6 @@ import type { ReactElement } from 'react';
 import type { SectionTabItem } from '../components/SectionTabs';
 import { BoardPage } from '../pages/BoardPage';
 import { CalendarPage } from '../pages/CalendarPage';
-import { DashboardPage } from '../pages/DashboardPage';
 import { DeveloperToolsPage } from '../pages/DeveloperToolsPage';
 import { HabitAnalysisPage } from '../pages/HabitAnalysisPage';
 import { HabitsPage } from '../pages/HabitsPage';
@@ -16,6 +15,7 @@ import { SchedulerPage } from '../pages/SchedulerPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TaskDetailPage } from '../pages/TaskDetailPage';
 import { TasksPage } from '../pages/TasksPage';
+import { TodayPage } from '../pages/TodayPage';
 
 export interface AppRoute {
   label: string;
@@ -39,7 +39,7 @@ export const CALENDAR_VIEW_TABS: SectionTabItem[] = [
 
 // One entry per primary sidebar tab, pointing at that section's default view.
 export const primaryRoutes: AppRoute[] = [
-  { label: 'Today', path: '/today', element: <DashboardPage /> },
+  { label: 'Today', path: '/today', element: <TodayPage /> },
   { label: 'Tasks', path: '/tasks', element: <TasksPage /> },
   { label: 'Habits', path: '/habits', element: <HabitsPage /> },
   { label: 'Notes', path: '/notes', element: <NotesPage /> },

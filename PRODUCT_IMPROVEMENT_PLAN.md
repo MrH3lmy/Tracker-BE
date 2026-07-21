@@ -44,7 +44,9 @@ Old routes (`/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler`) redire
 
 ## 4. Backend changes
 
-- Phase 3: `GET /api/v1/home/today` — new `home` package (`HomeController`, `HomeService`) composing existing services: `DashboardService` (counts), `PlanningService.getTodayView()` (overdue/due-today/top-priority tasks), `TaskRecommendationService` (top 3 recommendations), `HabitService`/habit repositories (habits due today + check-in state), `TaskRepository` follow-up queries. No new tables — pure composition, read-only, scoped by `currentUserService.requireUserId()` like every other service.
+- Phase 3: `GET /api/v1/home/today` — new `home` package (`HomeController`, `HomeService`) composing existing services: `DashboardService` (counts), `PlanningService.getTodayView()` (overdue/due-today/top-priority tasks), `TaskRecommendationService` (top 3 recommendations), `SchedulerService.getDaySchedule()` (today's timeline + focus minutes), `HabitService.findAll()` (check-in state), and a single `TaskRepository.findByUserId()` scan (in-memory filtered for upcoming/waiting-blocked/follow-ups-due, avoiding N extra queries). No new tables — pure composition, read-only, scoped by `currentUserService.requireUserId()` like every other service.
+  - **Known simplification**: "habits today" returns all active habits (no backend concept of "due today" exists per habit's recurrence rule — e.g. a WEEKLY habit's `daysOfWeek` isn't checked against today). This matches how `HabitsPage` already treats habits today, so it's not a regression, but a real "due today" filter is backlog work if habits with sparse schedules turn out to need it.
+  - **Known tradeoff**: composing 5+ existing services means 5+ separate DB round trips per Today page load (each bounded, none N+1) rather than one fully unified query. Chosen deliberately over refactoring every composed service to share a single pre-fetched task list, per the instruction to reuse existing services rather than duplicate their logic.
 - Phase 7+ (backlog): `Project`/`Milestone` entities + Flyway migrations, `ProjectController`.
 - Phase 8+ (backlog): `FocusSession` entity + Flyway migration, session controller.
 - Phase 9+ (backlog): `WeeklyReview` entity + Flyway migration.
@@ -116,7 +118,11 @@ No breaking changes to any existing v1 contract in Phases 1–3.
   - [x] Calendar section: Month / Day / Auto-plan absorbing the old Calendar / Scheduler / Planning pages
   - [x] Redirects from `/dashboard`, `/board`, `/matrix`, `/planning`, `/scheduler` to their new homes
   - [x] New Insights page (Task analytics + Habit analytics, both backed by real existing data)
-- [ ] Phase 3 — Real Today page (`/api/v1/home/today`)
+- [x] Phase 3 — Real Today page (`/api/v1/home/today`)
+  - [x] New `home` package (`HomeController`, `HomeService`, `HomeTodayResponse`) composing `DashboardService`, `PlanningService`, `TaskRecommendationService`, `SchedulerService`, `HabitService` -- no duplicated scoring/planning logic
+  - [x] Backend tests: `HomeServiceTest` (unit), `HomeControllerTest` (`@WebMvcTest` slice), extended `ApiV1IntegrationTest` (full Spring context + H2 + real JWT auth)
+  - [x] New `TodayPage` auto-loads on mount (no manual Refresh required); replaces `DashboardPage` (deleted)
+  - [x] Greeting + date, Quick Add, summary cards (due today / overdue / habits completed / focus time), today timeline, top 3 recommended tasks, habits with one-click check-in, upcoming tasks, waiting & blocked, follow-ups due, empty-state onboarding for new accounts
 - [ ] Phase 4 — Global quick capture (backlog)
 - [ ] Phase 5 — Real calendar experience (backlog)
 - [ ] Phase 6 — Global search (backlog)

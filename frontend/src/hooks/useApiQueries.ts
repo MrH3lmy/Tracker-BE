@@ -98,6 +98,7 @@ export const useNoteSavedViewsQuery = () => useQuery({ queryKey: queryKeys.noteS
 export const useNoteVersionsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteVersions(noteId), queryFn: () => apiJson<NoteVersionRecord[]>('GET', `/api/v1/notes/${noteId}/versions`), enabled });
 export const useNoteAiGenerationsQuery = (noteId: number, enabled = true) => useQuery({ queryKey: queryKeys.noteAiGenerations(noteId), queryFn: () => apiJson<NoteAiGenerationRecord[]>('GET', `/api/v1/notes/${noteId}/ai-generations`), enabled });
 export const useDashboardQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.dashboard, queryFn: () => apiJson<unknown>('GET', '/api/v1/dashboard'), enabled });
+export const useHomeTodayQuery = (enabled = true) => useQuery({ queryKey: queryKeys.homeToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/home/today'), enabled });
 export const usePlanningTodayQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningToday, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/today'), enabled });
 export const usePlanningWeeklyQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningWeekly, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/weekly'), enabled });
 export const usePlanningRecommendationsQuery = (enabled: boolean) => useQuery({ queryKey: queryKeys.planningRecommendations, queryFn: () => apiJson<unknown>('GET', '/api/v1/planning/recommendations'), enabled });
