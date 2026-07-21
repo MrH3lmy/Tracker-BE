@@ -92,7 +92,8 @@ No breaking changes to any existing v1 contract in Phases 1–3.
 ## 9. Test strategy
 
 - Backend: `mvn test` (JUnit 5 + Mockito + MockMvc slice tests for the new `HomeController`; reuse of already-tested services means no new service-level logic to re-test).
-- Frontend: `npm run lint`, `npm run build` (`tsc -b && vite build`) — no frontend test runner is configured in this repo (per `CLAUDE.md`), so correctness is verified via type-checking, linting, and manual dev-server smoke checks.
+- Frontend: `npm run lint`, `npm run test` (Vitest + Testing Library — this predates this plan; `CLAUDE.md` incorrectly said no test framework existed, corrected as part of Phase 4), `npm run build` (`tsc -b && vite build`), plus manual dev-server smoke checks for things not worth a full render test.
+  - **Correction**: while verifying Phase 4, discovered `npm run test` was never actually run during Phases 1-3, and it had 3 pre-existing failures unrelated to those phases (the app shell test never reached an authenticated render because the mock `fetch` always rejected, including the auth-refresh call). Fixed alongside Phase 4 and folded into every phase's verification from here on.
 - Both suites run after every phase; regressions are fixed before moving on.
 
 ## 10. Ordered implementation phases

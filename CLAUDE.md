@@ -95,7 +95,7 @@ No checkstyle/spotless/jacoco — the backend has no enforced formatting or lint
 
 ## Frontend (Vite + React)
 
-**Stack**: React 19, TypeScript ~6.0 (project-references tsconfig; note `strict` is **not** explicitly set in `tsconfig.app.json` — only `noUnusedLocals`/`noUnusedParameters`/`noFallthroughCasesInSwitch` are on), Vite 8, `react-router-dom` v7, `@tanstack/react-query` v5. No axios, no zod, no UI/CSS framework, no Prettier, and no test framework/scripts configured.
+**Stack**: React 19, TypeScript ~6.0 (project-references tsconfig; note `strict` is **not** explicitly set in `tsconfig.app.json` — only `noUnusedLocals`/`noUnusedParameters`/`noFallthroughCasesInSwitch` are on), Vite 8, `react-router-dom` v7, `@tanstack/react-query` v5. No axios, no zod, no UI/CSS framework, no Prettier. Vitest + Testing Library (`@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`) are configured (`vitest.config.ts`) — colocated `*.test.tsx` files exist for a handful of components/pages; it's not exhaustive coverage, but it's a real, runnable suite, not empty scaffolding.
 
 Run from `frontend/`:
 
@@ -103,6 +103,7 @@ Run from `frontend/`:
 npm run dev       # Vite dev server
 npm run build     # tsc -b && vite build
 npm run lint      # eslint .
+npm run test      # vitest run
 npm run preview   # preview production build
 ```
 
@@ -166,4 +167,4 @@ Frequency semantics: `DAILY` adds `interval` days; `WEEKLY` honors `daysOfWeek` 
 - No Maven wrapper — use `mvn`, not `./mvnw`.
 - Add new Flyway migrations as new `V<n+1>__*.sql` files; never edit an applied one.
 - No formatter/linter is enforced on the backend; the frontend has ESLint but no Prettier — match existing style by hand in both.
-- Backend testing is `mvn test` only; the frontend currently has no test framework or `test` script at all.
+- Backend testing is `mvn test`. Frontend testing is `npm run test` (Vitest + Testing Library) — coverage is partial, not repo-wide, but the harness is real; run it alongside `lint`/`build` when touching tested files, and add a colocated `*.test.tsx` for new interactive components where practical.
