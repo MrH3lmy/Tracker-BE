@@ -74,7 +74,7 @@ class SchedulerServiceTest {
     @Test
     void scheduleTaskCreatesANewScheduleWhenNoneExists() {
         Task task = task(1L, "Gym");
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByUserIdAndId(USER_ID, 1L)).thenReturn(Optional.of(task));
         when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 1L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, LocalDate.of(2026, 7, 20))).thenReturn(List.of());
@@ -92,7 +92,7 @@ class SchedulerServiceTest {
     void scheduleTaskDefaultsDurationFromEstimatedMinutesWhenNotProvided() {
         Task task = task(2L, "Deep work block");
         task.setEstimatedMinutes(90);
-        when(taskRepository.findById(2L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByUserIdAndId(USER_ID, 2L)).thenReturn(Optional.of(task));
         when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 2L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskScheduleRepository.findByUserIdAndScheduledDate(eq(USER_ID), any())).thenReturn(List.of());
@@ -111,7 +111,7 @@ class SchedulerServiceTest {
         TaskSchedule existingSchedule = schedule(existingTask, date, LocalTime.of(9, 0), 30);
 
         Task newTask = task(4L, "Focus block");
-        when(taskRepository.findById(4L)).thenReturn(Optional.of(newTask));
+        when(taskRepository.findByUserIdAndId(USER_ID, 4L)).thenReturn(Optional.of(newTask));
         when(taskScheduleRepository.findByUserIdAndTaskId(USER_ID, 4L)).thenReturn(Optional.empty());
         when(taskScheduleRepository.save(any(TaskSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskScheduleRepository.findByUserIdAndScheduledDate(USER_ID, date)).thenReturn(List.of(existingSchedule));

@@ -117,7 +117,7 @@ class ScheduleSuggestionServiceTest {
         when(settingsService.getWorkingHours()).thenReturn(workingHoursNineToFive());
         when(settingsService.getSleepHours()).thenReturn(sleepHoursElevenToSeven());
         Task workTask = task(1L, Area.WORK, 30);
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(workTask));
+        when(taskRepository.findByUserIdAndId(USER_ID, 1L)).thenReturn(Optional.of(workTask));
 
         Optional<SuggestedSlot> slot = suggestionService.suggestForTask(1L, MONDAY);
 
@@ -131,7 +131,7 @@ class ScheduleSuggestionServiceTest {
         when(settingsService.getWorkingHours()).thenReturn(workingHoursNineToFive());
         when(settingsService.getSleepHours()).thenReturn(sleepHoursElevenToSeven());
         Habit personalHabit = habit(2L, Area.PERSONAL, 15);
-        when(habitRepository.findById(2L)).thenReturn(Optional.of(personalHabit));
+        when(habitRepository.findByUserIdAndId(USER_ID, 2L)).thenReturn(Optional.of(personalHabit));
 
         Optional<SuggestedSlot> slot = suggestionService.suggestForHabit(2L, MONDAY);
 
@@ -146,7 +146,7 @@ class ScheduleSuggestionServiceTest {
         when(settingsService.getWorkingHours()).thenReturn(workingHoursNineToFive());
         when(settingsService.getSleepHours()).thenReturn(sleepHoursElevenToSeven());
         Task workTask = task(3L, Area.WORK, 30);
-        when(taskRepository.findById(3L)).thenReturn(Optional.of(workTask));
+        when(taskRepository.findByUserIdAndId(USER_ID, 3L)).thenReturn(Optional.of(workTask));
 
         TaskSchedule existing = new TaskSchedule();
         Task existingTask = task(99L, Area.WORK, 30);

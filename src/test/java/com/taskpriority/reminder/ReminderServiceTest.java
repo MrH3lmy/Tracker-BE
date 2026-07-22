@@ -192,7 +192,7 @@ class ReminderServiceTest {
         dueReminder.setScheduledFor(LocalDateTime.now().minusMinutes(1));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(eq(ReminderStatus.PENDING), any())).thenReturn(List.of(dueReminder));
         when(notificationOutboxRepository.existsByReminderIdAndChannel(3L, NotificationChannel.IN_APP)).thenReturn(false);
-        when(taskRepository.findById(5L)).thenReturn(Optional.of(task(5L, Status.NOT_STARTED, LocalDate.now(), null)));
+        when(taskRepository.findByUserIdAndId(USER_ID, 5L)).thenReturn(Optional.of(task(5L, Status.NOT_STARTED, LocalDate.now(), null)));
 
         reminderService.produceReminders();
 
@@ -210,7 +210,7 @@ class ReminderServiceTest {
         dueReminder.setStatus(ReminderStatus.PENDING);
         dueReminder.setScheduledFor(LocalDateTime.now().minusMinutes(1));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(eq(ReminderStatus.PENDING), any())).thenReturn(List.of(dueReminder));
-        when(taskRepository.findById(999L)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserIdAndId(USER_ID, 999L)).thenReturn(Optional.empty());
 
         reminderService.produceReminders();
 

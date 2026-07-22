@@ -49,7 +49,7 @@ public class FocusSessionService {
     @Transactional
     public FocusSession start(StartFocusSessionRequest request) {
         Long userId = currentUserService.requireUserId();
-        if (request.taskId() != null && !taskRepository.existsById(request.taskId())) {
+        if (request.taskId() != null && !taskRepository.existsByUserIdAndId(userId, request.taskId())) {
             throw new ResourceNotFoundException("Task with id " + request.taskId() + " not found");
         }
         abandonActiveSession(userId);
@@ -136,7 +136,8 @@ public class FocusSessionService {
         FocusSession saved = focusSessionRepository.save(session);
 
         if (saved.getTaskId() != null) {
-            taskRepository.findById(saved.getTaskId()).ifPresent(task -> {
+            Long userId = currentUserService.requireUserId();
+            taskRepository.findByUserIdAndId(userId, saved.getTaskId()).ifPresent(task -> {
                 int previousActual = task.getActualMinutes() == null ? 0 : task.getActualMinutes();
                 task.setActualMinutes(previousActual + minutes);
                 taskRepository.save(task);
@@ -156,7 +157,11 @@ public class FocusSessionService {
     }
 
     Task findTaskOrNull(Long taskId) {
-        return taskId == null ? null : taskRepository.findById(taskId).orElse(null);
+        if (taskId == null) {
+            return null;
+        }
+        Long userId = currentUserService.requireUserId();
+        return taskRepository.findByUserIdAndId(userId, taskId).orElse(null);
     }
 
     private FocusSession findOwned(Long id) {

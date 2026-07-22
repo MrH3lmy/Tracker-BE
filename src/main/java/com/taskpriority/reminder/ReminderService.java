@@ -196,15 +196,15 @@ public class ReminderService {
 
     private NotificationContent buildContent(Reminder reminder) {
         return switch (reminder.getKind()) {
-            case TASK_DUE -> taskRepository.findById(reminder.getReferenceId())
+            case TASK_DUE -> taskRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(this::isActiveTask)
                     .map(task -> new NotificationContent("Task due today", task.getTitle(), "/tasks/" + task.getId()))
                     .orElse(null);
-            case FOLLOW_UP -> taskRepository.findById(reminder.getReferenceId())
+            case FOLLOW_UP -> taskRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(this::isActiveTask)
                     .map(task -> new NotificationContent("Follow-up due", task.getTitle(), "/tasks/" + task.getId()))
                     .orElse(null);
-            case HABIT -> habitRepository.findById(reminder.getReferenceId())
+            case HABIT -> habitRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(habit -> !habit.isDeleted())
                     .map(habit -> new NotificationContent("Habit reminder", habit.getTitle(), "/habits"))
                     .orElse(null);
