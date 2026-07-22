@@ -291,6 +291,26 @@ The Docker starter remains the easiest local option if you want the app, fronten
 
 ---
 
+## Tenant isolation model
+
+Every user-owned table has a `user_id` column, and application code scopes reads/writes to the authenticated user (see `TaskService.requireOwnedTask` and equivalents in other services). That's necessary but not sufficient on its own - a missed service-layer check could still create a cross-user relationship (Alice's task pointing at Bob's project) that the database would accept, since a plain `FOREIGN KEY (project_id) REFERENCES projects(id)` only checks that the id exists, not who owns it.
+
+`V42__enforce_composite_tenant_isolation.sql` closes that gap at the database level for most user-owned relationships:
+
+1. Every table referenced by id from another user-owned table gets a `UNIQUE (user_id, id)` key in addition to its primary key.
+2. Every FK column on a child table is paired with a composite FK: `FOREIGN KEY (user_id, <fk_column>) REFERENCES <parent>(user_id, id)`. Postgres's default `MATCH SIMPLE` FK semantics mean a `NULL` FK column always satisfies the constraint regardless of `user_id`, so nullable relationships (e.g. `notes.task_id`) keep accepting `NULL` exactly as before - only a *non-null* cross-user reference is rejected.
+
+**Not yet covered** (see the comment at the top of V42 for the full rationale):
+
+- `tasks.board_column_id -> board_columns` and `board_columns.board_id -> boards`: both `boards` and `board_columns` have a permanently `NULL` `user_id` (there's no per-user board-provisioning feature yet - see V29's comment). Enforcing this today would reject every task with a `board_column_id` already set.
+- `reminders.reference_id`: polymorphic (points at a task or a habit depending on `kind`), so a single composite FK can't express it.
+- `projects.owner_user_id`: not a real FK today (no `REFERENCES` clause anywhere).
+- `focus_session_pauses.session_id -> focus_sessions`: `focus_session_pauses` has no `user_id` column to build a composite key from.
+
+When adding a new table that references another user-owned table by id, add the same pair (composite unique key on the parent + composite FK on the child) in that table's own migration rather than waiting for a follow-up cleanup.
+
+---
+
 ## Migration workflow (Flyway)
 
 1. Add a new SQL migration file under:
