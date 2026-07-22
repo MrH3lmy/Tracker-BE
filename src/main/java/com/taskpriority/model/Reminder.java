@@ -43,6 +43,12 @@ public class Reminder {
     @Column(name = "snoozed_until")
     private LocalDateTime snoozedUntil;
 
+    // Deterministic per-occurrence key (userId:kind:referenceId:userLocalDate), enforced unique at
+    // the database level so two producer instances racing to create the same occurrence can never
+    // both succeed, even if they both pass the existsBy... pre-check. See ReminderService.
+    @Column(name = "idempotency_key", nullable = false, unique = true, length = 255)
+    private String idempotencyKey;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
 
@@ -62,6 +68,8 @@ public class Reminder {
     public void setStatus(ReminderStatus status) { this.status = status; }
     public LocalDateTime getSnoozedUntil() { return snoozedUntil; }
     public void setSnoozedUntil(LocalDateTime snoozedUntil) { this.snoozedUntil = snoozedUntil; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
 }

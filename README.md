@@ -402,6 +402,32 @@ curl -X POST http://localhost:8080/api/v1/import/csv -H "Content-Type: text/plai
 
 ---
 
+## Reminder/notification outbox operations
+
+The reminder producer (`ReminderService#produceReminders`) and outbox dispatcher (`#dispatchNotifications`) are `@Scheduled` jobs safe to run on multiple application instances at once:
+
+- Each job takes a PostgreSQL transaction-scoped advisory lock (`pg_try_advisory_xact_lock`) for the duration of its run, so only one instance does the work per tick; every other instance's attempt returns immediately and tries again next tick.
+- The dispatcher claims rows with `PENDING -> PROCESSING` via `FOR UPDATE SKIP LOCKED` in bounded batches (`app.notifications.dispatch-batch-size`, default 50), so two claim attempts can never select the same row.
+- A row stuck in `PROCESSING` (e.g. the instance that claimed it crashed before finishing) is automatically recovered back to `PENDING` after `app.notifications.processing-lease-timeout-minutes` (default 5) by the next dispatcher run.
+- A row that keeps failing moves to `FAILED` once `attempts` reaches `max_attempts` (`app.notifications.max-dispatch-attempts`, default 5) instead of retrying forever; each retry backs off exponentially (30s doubling, capped at 1 hour) via `next_attempt_at`.
+
+**Replaying `FAILED` notifications**: after fixing whatever caused the failures, requeue them explicitly rather than resetting blindly - a `FAILED` row's `last_error_code`/`last_error_message` tell you why it stopped, and some failures (e.g. a deleted task/habit the reminder referenced) mean the notification should stay dead, not be replayed:
+
+```sql
+-- Inspect what's dead-lettered and why, before touching anything.
+SELECT id, user_id, reminder_id, attempts, last_error_code, last_error_message
+FROM notification_outbox WHERE status = 'FAILED' ORDER BY created_at;
+
+-- Once you've confirmed a specific row's cause is fixed, requeue just that row.
+UPDATE notification_outbox
+SET status = 'PENDING', attempts = 0, next_attempt_at = now(), last_error_code = NULL, last_error_message = NULL
+WHERE id = :id;
+```
+
+A row that keeps failing for the same reason across multiple replay attempts (check `attempts`/`last_error_code` before requeuing) is a poison message - leave it `FAILED` rather than looping it back in, and fix or remove the underlying cause (e.g. the reminder it's tied to) instead.
+
+---
+
 ## OpenAPI / Swagger URL
 
 OpenAPI is enabled in this project via Springdoc. Local URLs:

@@ -57,6 +57,7 @@ class NotificationControllerIntegrationTest {
         reminder.setKind(ReminderKind.TASK_DUE);
         reminder.setScheduledFor(LocalDateTime.now());
         reminder.setStatus(ReminderStatus.SENT);
+        reminder.setIdempotencyKey("test-" + java.util.UUID.randomUUID());
         return reminderRepository.save(reminder);
     }
 
