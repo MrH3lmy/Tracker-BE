@@ -40,6 +40,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // Health checks come from infrastructure (Docker HEALTHCHECK, an
+                        // orchestrator's liveness/readiness probe), which never supplies a JWT -
+                        // only ever returns UP/DOWN plus liveness/readiness state, never internals
+                        // (see management.endpoints.web.exposure.include, which keeps every other
+                        // actuator endpoint off by default).
+                        .requestMatchers("/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint((request, response, ex) -> writeError(response, objectMapper, HttpStatus.UNAUTHORIZED, "Authentication is required.", request.getRequestURI()))

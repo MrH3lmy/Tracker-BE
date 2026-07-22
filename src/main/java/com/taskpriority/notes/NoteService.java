@@ -599,7 +599,8 @@ public class NoteService {
     }
 
     private Integer defaultZero(Integer value) {
-        return value == null ? 0 : value;
+        if (value == null) return 0;
+        return value;
     }
 
     private String normalizeColor(String color) {

@@ -448,6 +448,56 @@ A row that keeps failing for the same reason across multiple replay attempts (ch
 
 ---
 
+## CI and production readiness
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, as four independent jobs: `backend`, `frontend`, `dependency-and-secret-scan`, and `docker`. `.github/workflows/migration-immutability.yml` (see "Migration immutability policy" above) runs alongside them whenever a migration file changes. Mark all of these required in the repo's branch protection settings (Settings -> Branches -> add a rule for `main` -> Require status checks to pass) - a workflow file alone doesn't block merges by itself; someone with admin access has to opt the branch into requiring them.
+
+### Running the same checks locally
+
+```bash
+# Backend: unit tests + Postgres/Testcontainers integration tests (needs Docker running locally;
+# skipped automatically otherwise, same as `mvn test`) + JaCoCo coverage gate + SpotBugs, all
+# bound to the `verify` phase.
+mvn verify
+
+# Backend, faster inner loop (unit + Testcontainers tests only, no coverage/SpotBugs gating):
+mvn test
+
+# Frontend
+cd frontend
+npm run lint
+npm run test
+npm run build
+```
+
+Coverage and SpotBugs reports land in `target/site/jacoco/` and `target/spotbugsXml.xml` (open `target/site/jacoco/index.html` in a browser, or run `mvn spotbugs:gui` for an interactive SpotBugs viewer). The CI workflow uploads both as build artifacts on every run, pass or fail.
+
+To reproduce the Docker/Trivy job locally (needs Docker and [Trivy](https://trivy.dev/) installed):
+
+```bash
+docker build -t taskpriority-backend:local .
+docker run --rm taskpriority-backend:local id -u   # must not print 0
+trivy image taskpriority-backend:local
+trivy fs .
+```
+
+### What's covered vs. what isn't yet
+
+- **Coverage and SpotBugs thresholds are intentionally conservative** (see the comments next to their configuration in `pom.xml`) - set just below the measured baseline when each gate was added, not at some ideal target. Raise them over time rather than treating the current numbers as sufficient.
+- **"Previous release schema to latest" and "seeded legacy schema to latest" migration scenarios are not yet automated**: there's no tagged release history to snapshot a prior schema from yet. Every Postgres/Testcontainers test in the suite does exercise "empty database to latest Flyway version" plus `flyway validate` and Hibernate `ddl-auto=validate` (both happen implicitly - those tests use the default profile's `spring.flyway.enabled=true`/`ddl-auto=validate` against a real Postgres container, not the H2 `local-test` profile). Once there's a real release history, add a job that restores a snapshot from a prior tag and runs the upgrade path against it.
+- **OWASP Dependency-Check specifically isn't used** - Trivy's filesystem scan covers the same dependency-CVE-scanning need (plus secret scanning, replacing a separate Gitleaks step) with faster, more reliable CI runs than OWASP's NVD-sync-dependent tooling.
+- **A CVSS/severity exception policy**: `CRITICAL`/`HIGH` findings fail the build; base-image OS packages with no fix available yet are excluded from the image scan (`ignore-unfixed: true`) since those are upstream's timeline, not this repo's. There's no documented process yet for a one-off exception on a real, unfixed CRITICAL/HIGH finding in this repo's own dependencies - add one (e.g. a `.trivyignore` entry with a linked tracking issue and expiry) if that need comes up rather than lowering the severity threshold.
+
+### Production configuration
+
+- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it.
+- Required environment variables (the app fails fast at startup if these are missing/invalid rather than starting in a broken state): `JWT_SECRET` (32+ random bytes - see `JwtService#init`), and the database connection (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`, which fail via the standard "connection refused"/auth-failure path if wrong rather than a custom check).
+- Every request gets a correlation/request ID (`X-Request-Id` - reused from the inbound header if the caller already set one, otherwise generated) attached to the response and to the logging MDC for the duration of that request; see `RequestIdFilter`.
+- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this.
+- The Docker image runs as a dedicated non-root user (see the Dockerfile's `USER` directive) and defines a `HEALTHCHECK` against `/actuator/health`, which is reachable without authentication (see `SecurityConfig`) since orchestrator/container health probes never supply a JWT.
+
+---
+
 ## OpenAPI / Swagger URL
 
 OpenAPI is enabled in this project via Springdoc. Local URLs:
