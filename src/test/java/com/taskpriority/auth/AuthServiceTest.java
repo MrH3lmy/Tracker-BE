@@ -1,5 +1,6 @@
 package com.taskpriority.auth;
 
+import com.taskpriority.board.BoardProvisioningService;
 import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
@@ -32,6 +33,7 @@ class AuthServiceTest {
     private JwtService jwtService;
     private EntitlementService entitlementService;
     private NoteTemplateService noteTemplateService;
+    private BoardProvisioningService boardProvisioningService;
     private AuthService authService;
 
     @BeforeEach
@@ -42,7 +44,8 @@ class AuthServiceTest {
         jwtService = mock(JwtService.class);
         entitlementService = mock(EntitlementService.class);
         noteTemplateService = mock(NoteTemplateService.class);
-        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, 30);
+        boardProvisioningService = mock(BoardProvisioningService.class);
+        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, boardProvisioningService, 30);
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -72,6 +75,7 @@ class AuthServiceTest {
         assertEquals(Role.USER, response.user().role());
         verify(userSessionRepository).save(any(UserSession.class));
         verify(entitlementService).enforceSessionCap(any(), any());
+        verify(boardProvisioningService).provisionDefaultBoardForUser(any());
     }
 
     @Test

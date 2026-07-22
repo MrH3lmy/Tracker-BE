@@ -1,5 +1,6 @@
 package com.taskpriority.auth;
 
+import com.taskpriority.board.BoardProvisioningService;
 import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
@@ -30,6 +31,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final EntitlementService entitlementService;
     private final NoteTemplateService noteTemplateService;
+    private final BoardProvisioningService boardProvisioningService;
     private final long refreshTokenTtlDays;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -40,6 +42,7 @@ public class AuthService {
             JwtService jwtService,
             EntitlementService entitlementService,
             NoteTemplateService noteTemplateService,
+            BoardProvisioningService boardProvisioningService,
             @Value("${app.security.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays
     ) {
         this.userRepository = userRepository;
@@ -48,6 +51,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.entitlementService = entitlementService;
         this.noteTemplateService = noteTemplateService;
+        this.boardProvisioningService = boardProvisioningService;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
     }
 
@@ -64,6 +68,7 @@ public class AuthService {
         user.setRole(Role.USER);
         user = userRepository.save(user);
         noteTemplateService.seedDefaultTemplatesForUser(user.getId());
+        boardProvisioningService.provisionDefaultBoardForUser(user.getId());
         return issueSession(user, request.deviceLabel());
     }
 
