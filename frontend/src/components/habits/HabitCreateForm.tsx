@@ -125,7 +125,7 @@ const reducer = (state: HabitFormState, action: HabitFormAction): HabitFormState
         goalType: action.preset.goalType,
         countTarget: action.preset.dailyTargetCount !== undefined ? String(action.preset.dailyTargetCount) : state.countTarget,
         countUnit: action.preset.unit ?? inferHabitUnit(action.preset.title).value,
-        durationMinutes: '',
+        durationMinutes: action.preset.estimatedMinutes !== undefined ? String(action.preset.estimatedMinutes) : '',
       };
     default:
       return state;

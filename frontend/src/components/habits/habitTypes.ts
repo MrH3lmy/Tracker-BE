@@ -82,6 +82,11 @@ export const HABIT_UNIT_OPTIONS: HabitUnitOption[] = [
   { value: 'pages', label: 'Pages', singular: 'page' },
   { value: 'minutes', label: 'Minutes', singular: 'minute' },
   { value: 'kilometers', label: 'Kilometers', singular: 'kilometer' },
+  { value: 'steps', label: 'Steps', singular: 'step' },
+  { value: 'servings', label: 'Servings', singular: 'serving' },
+  { value: 'questions', label: 'Questions', singular: 'question' },
+  { value: 'cards', label: 'Cards', singular: 'card' },
+  { value: 'items', label: 'Items', singular: 'item' },
 ];
 
 export interface HabitPreset {
@@ -97,11 +102,32 @@ export interface HabitPreset {
 }
 
 export const HABIT_PRESETS: HabitPreset[] = [
+  // Health
   { label: 'Training', icon: '🏋️', title: 'Training', description: '30 minutes strength or skill session', area: 'HEALTH', goalType: 'COMPLETE_ONCE' },
   { label: 'Drink water', icon: '💧', title: 'Drink water', description: '8 glasses of water', area: 'HEALTH', dailyTargetCount: 8, goalType: 'COUNT', unit: 'glasses' },
   { label: 'Exercise', icon: '🏃', title: 'Exercise', description: '30 minutes of physical activity', area: 'HEALTH', goalType: 'COMPLETE_ONCE' },
-  { label: 'Read', icon: '📖', title: 'Read', description: 'Read a few pages', area: 'PERSONAL', dailyTargetCount: 10, goalType: 'COUNT', unit: 'pages' },
   { label: 'Brush teeth', icon: '🦷', title: 'Brush teeth', area: 'HEALTH', dailyTargetCount: 2, goalType: 'COUNT', unit: 'times' },
+  { label: 'Meditate', icon: '🧘', title: 'Meditate', description: 'Meditate for 10 minutes', area: 'HEALTH', goalType: 'DURATION', estimatedMinutes: 10 },
+  { label: 'Stretch', icon: '🤸', title: 'Stretch', description: 'Complete a short stretching session', area: 'HEALTH', goalType: 'DURATION', estimatedMinutes: 10 },
+  { label: 'Walk', icon: '🚶', title: 'Walk', description: 'Walk 3 kilometers', area: 'HEALTH', dailyTargetCount: 3, goalType: 'COUNT', unit: 'kilometers' },
+  { label: 'Sleep on time', icon: '😴', title: 'Sleep on time', description: 'Go to bed at the planned time', area: 'HEALTH', goalType: 'COMPLETE_ONCE' },
+
+  // Study
+  { label: 'Study', icon: '📚', title: 'Study', description: 'Complete a focused study session', area: 'STUDY', goalType: 'DURATION', estimatedMinutes: 30 },
+  { label: 'Practice a language', icon: '🗣️', title: 'Practice a language', description: 'Practice a language for 15 minutes', area: 'STUDY', goalType: 'DURATION', estimatedMinutes: 15 },
+
+  // Work
+  { label: 'Deep work', icon: '🎯', title: 'Deep work', description: 'Complete one distraction-free focus session', area: 'WORK', goalType: 'DURATION', estimatedMinutes: 60 },
+  { label: 'Plan the day', icon: '📋', title: 'Plan the day', description: 'Review priorities and plan the day', area: 'WORK', goalType: 'COMPLETE_ONCE' },
+
+  // Personal
+  { label: 'Read', icon: '📖', title: 'Read', description: 'Read a few pages', area: 'PERSONAL', dailyTargetCount: 10, goalType: 'COUNT', unit: 'pages' },
+  { label: 'Journal', icon: '✍️', title: 'Journal', description: 'Write a short daily journal entry', area: 'PERSONAL', goalType: 'COMPLETE_ONCE' },
+  { label: 'Gratitude', icon: '🙏', title: 'Gratitude', description: 'Write down 3 things you are grateful for', area: 'PERSONAL', dailyTargetCount: 3, goalType: 'COUNT', unit: 'items' },
+  { label: 'Tidy up', icon: '🧹', title: 'Tidy up', description: 'Spend 10 minutes tidying your space', area: 'PERSONAL', goalType: 'DURATION', estimatedMinutes: 10 },
+
+  // Family
+  { label: 'Call family', icon: '📞', title: 'Call family', description: 'Call or check in with a family member', area: 'FAMILY', goalType: 'COMPLETE_ONCE' },
 ];
 
 /** One row per (habit, day) with a check-in count > 0, from GET /api/v1/habits/history. */
