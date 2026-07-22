@@ -1,5 +1,6 @@
 package com.taskpriority.auth;
 
+import com.taskpriority.board.BoardProvisioningService;
 import com.taskpriority.entitlement.EntitlementService;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
@@ -32,6 +33,7 @@ class AuthServiceTest {
     private JwtService jwtService;
     private EntitlementService entitlementService;
     private NoteTemplateService noteTemplateService;
+    private BoardProvisioningService boardProvisioningService;
     private AuthService authService;
 
     @BeforeEach
@@ -42,7 +44,8 @@ class AuthServiceTest {
         jwtService = mock(JwtService.class);
         entitlementService = mock(EntitlementService.class);
         noteTemplateService = mock(NoteTemplateService.class);
-        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, 30);
+        boardProvisioningService = mock(BoardProvisioningService.class);
+        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, boardProvisioningService, 30);
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -72,6 +75,7 @@ class AuthServiceTest {
         assertEquals(Role.USER, response.user().role());
         verify(userSessionRepository).save(any(UserSession.class));
         verify(entitlementService).enforceSessionCap(any(), any());
+        verify(boardProvisioningService).provisionDefaultBoardForUser(any());
     }
 
     @Test
@@ -108,7 +112,7 @@ class AuthServiceTest {
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(1);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
 
-        AuthResponse response = authService.refresh(new RefreshRequest("some-refresh-token"));
+        AuthResponse response = authService.refresh("some-refresh-token");
 
         assertNotEquals("some-refresh-token", response.refreshToken());
         verify(userSessionRepository).consumeByTokenHash(anyString(), any());
@@ -124,7 +128,7 @@ class AuthServiceTest {
         // default int-returning methods to 0, but stub it explicitly for clarity.
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("expired-token")));
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("expired-token"));
     }
 
     @Test
@@ -144,7 +148,7 @@ class AuthServiceTest {
         when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("already-used-token")));
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("already-used-token"));
         verify(userRepository, org.mockito.Mockito.never()).findById(any());
     }
 

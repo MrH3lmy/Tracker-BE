@@ -62,10 +62,11 @@ public class ReminderService {
     private static final List<ReminderStatus> ACTIVE_REMINDER_STATUSES = List.of(ReminderStatus.PENDING, ReminderStatus.SENT);
     private static final int DEFAULT_REMINDER_HOUR = 9;
 
-    // Arbitrary distinct keys for pg_try_advisory_xact_lock - only their uniqueness (relative to
-    // each other and to locks taken elsewhere in the app) matters, not the values themselves.
+    // Arbitrary key for pg_try_advisory_xact_lock - only its uniqueness (relative to locks taken
+    // elsewhere in the app) matters, not the value itself. Reminder *production* still needs a
+    // singleton leader per tick (see produceReminders()); dispatch does not - claimBatch()'s
+    // FOR UPDATE SKIP LOCKED is what keeps concurrent dispatchers safe, so it has no lock key here.
     private static final long PRODUCE_REMINDERS_LOCK_KEY = 872_001_001L;
-    private static final long DISPATCH_NOTIFICATIONS_LOCK_KEY = 872_001_002L;
 
     private final ReminderRepository reminderRepository;
     private final NotificationOutboxRepository notificationOutboxRepository;
@@ -110,9 +111,14 @@ public class ReminderService {
     }
 
     @Scheduled(fixedDelay = 60_000)
+    public void scheduledProduceReminders() {
+        if (schedulingEnabled) {
+            produceReminders();
+        }
+    }
+
     @Transactional
     public void produceReminders() {
-        if (!schedulingEnabled) return;
         // Protects against every instance in a multi-instance deployment running this scan
         // concurrently. pg_try_advisory_xact_lock is scoped to this transaction and releases
         // automatically at commit/rollback - if another instance already holds it this tick,
@@ -130,20 +136,33 @@ public class ReminderService {
     }
 
     @Scheduled(fixedDelay = 30_000)
-    @Transactional
-    public void dispatchNotifications() {
-        if (!schedulingEnabled) return;
-        if (!leaderLock.tryAcquire(DISPATCH_NOTIFICATIONS_LOCK_KEY)) return;
+    public void scheduledDispatchNotifications() {
+        if (schedulingEnabled) {
+            dispatchNotifications();
+        }
+    }
 
+    /**
+     * Deliberately holds no leader lock: every healthy instance calls this concurrently, and
+     * {@code claimBatch}'s {@code FOR UPDATE SKIP LOCKED} is what guarantees disjoint claims
+     * across instances, not single-threaded access. Recovery, claiming, and each entry's delivery
+     * each run in their own short {@code REQUIRES_NEW} transaction (rather than one transaction
+     * spanning the whole method) so a slow delivery can never hold the claim's row locks, and so
+     * one instance's batch can't block another's for the duration of a full dispatch cycle.
+     */
+    public void dispatchNotifications() {
         LocalDateTime now = LocalDateTime.now();
-        int recovered = notificationOutboxRepository.recoverStuckProcessing(now.minus(processingLeaseTimeout), now);
-        if (recovered > 0) {
+
+        Integer recovered = requiresNewTransaction.execute(status ->
+                notificationOutboxRepository.recoverStuckProcessing(now.minus(processingLeaseTimeout), now));
+        if (recovered != null && recovered > 0) {
             logger.warn("Recovered {} notification(s) stuck in PROCESSING past the {}-lease", recovered, processingLeaseTimeout);
         }
 
-        List<NotificationOutboxEntry> claimed = notificationOutboxRepository.claimBatch(now, dispatchBatchSize);
-        for (NotificationOutboxEntry entry : claimed) {
-            deliver(entry);
+        List<NotificationOutboxEntry> claimed = requiresNewTransaction.execute(status ->
+                notificationOutboxRepository.claimBatch(now, dispatchBatchSize));
+        for (NotificationOutboxEntry entry : claimed == null ? List.<NotificationOutboxEntry>of() : claimed) {
+            requiresNewTransaction.executeWithoutResult(status -> deliver(entry));
         }
     }
 

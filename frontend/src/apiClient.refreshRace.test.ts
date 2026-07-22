@@ -3,15 +3,16 @@ import {
   apiJson,
   clearAuthTokens,
   getAccessToken,
-  getRefreshToken,
   onAuthFailure,
   refreshSession,
 } from './apiClient';
 
 // Regression coverage for GitHub issue #223: the backend now consumes a refresh token exactly
-// once, so two independent frontend refresh calls racing on the same stored refresh token would
+// once, so two independent frontend refresh calls racing on the same refresh-token cookie would
 // make the loser fail with an "invalid token" error even though nothing was actually wrong. Every
-// caller in the app must therefore share the single in-flight refresh in apiClient.ts.
+// caller in the app must therefore share the single in-flight refresh in apiClient.ts. The refresh
+// token itself (issue #257) now lives only in an HttpOnly cookie the browser attaches
+// automatically - these tests never see or seed it directly, only the mocked fetch responses.
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -23,11 +24,6 @@ function jsonResponse(status: number, body: unknown): Response {
 describe('apiClient refresh deduplication', () => {
   beforeEach(() => {
     clearAuthTokens();
-    // Seed a stored refresh token directly (rather than via setAuthTokens, which also sets the
-    // in-memory access token) to model "app just loaded, no access token yet, but a previous
-    // session's refresh token survived in localStorage" - the exact state that triggers the
-    // restoration-vs-interceptor race this fix closes.
-    window.localStorage.setItem('tracker.auth.refreshToken', 'stored-refresh-token');
   });
 
   afterEach(() => {
@@ -43,7 +39,6 @@ describe('apiClient refresh deduplication', () => {
         refreshCalls += 1;
         return jsonResponse(200, {
           accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token',
           user: { id: 1, email: 'a@example.com', tier: 'FREE', role: 'USER' },
         });
       }
@@ -66,7 +61,6 @@ describe('apiClient refresh deduplication', () => {
     expect(refreshCalls).toBe(1);
     expect(results.every((r) => r.ok)).toBe(true);
     expect(getAccessToken()).toBe('new-access-token');
-    expect(getRefreshToken()).toBe('new-refresh-token');
   });
 
   it('fails all queued callers cleanly when the shared refresh fails, without clobbering the stored token twice', async () => {
@@ -110,7 +104,6 @@ describe('apiClient refresh deduplication', () => {
         refreshCalls += 1;
         return jsonResponse(200, {
           accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token',
           user: { id: 1, email: 'a@example.com', tier: 'FREE', role: 'USER' },
         });
       }
@@ -142,7 +135,6 @@ describe('apiClient refresh deduplication', () => {
         await refreshGate;
         return jsonResponse(200, {
           accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token',
           user: { id: 1, email: 'a@example.com', tier: 'FREE', role: 'USER' },
         });
       }

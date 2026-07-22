@@ -37,6 +37,9 @@ services:
       # not application config - never reuse this value in a real deployment; override
       # JWT_SECRET with a real random secret there instead.
       JWT_SECRET: local-docker-compose-dev-only-jwt-secret-do-not-use-in-prod
+      # This stack serves both frontend and backend over plain HTTP - a browser will silently
+      # refuse to set/send a Secure cookie there. Only disable this for local, non-TLS setups.
+      COOKIE_SECURE: "false"
     ports:
       - "8080:8080"
 

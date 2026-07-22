@@ -26,6 +26,9 @@ public class FocusSessionPause {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "session_id", nullable = false)
@@ -42,6 +45,8 @@ public class FocusSessionPause {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public FocusSession getSession() { return session; }
     public void setSession(FocusSession session) { this.session = session; }
     public LocalDateTime getPausedAt() { return pausedAt; }

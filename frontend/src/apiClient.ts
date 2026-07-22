@@ -38,13 +38,14 @@ const apiHistoryListeners = new Set<() => void>();
 
 // --- Auth token handling -----------------------------------------------
 // Access token lives only in memory (module-level, not React state) since it
-// is short-lived and must never touch localStorage. The refresh token is
-// longer-lived and is persisted to localStorage so a session survives a
-// page reload. `authContext.tsx` owns the React-facing state; this module
-// just holds the tokens and lets interested parties (authContext) subscribe
-// to "the stored session is no longer valid" via the same
-// Set<() => void>-listener pattern used by apiHistoryListeners above.
-const REFRESH_TOKEN_STORAGE_KEY = 'tracker.auth.refreshToken';
+// is short-lived and must never touch localStorage. The refresh token lives
+// only in an HttpOnly cookie set by the backend (see AuthController) -
+// JavaScript never reads or stores it, so every request that needs it must
+// be sent with `credentials: 'include'`. `authContext.tsx` owns the
+// React-facing state; this module just holds the access token and lets
+// interested parties (authContext) subscribe to "the stored session is no
+// longer valid" via the same Set<() => void>-listener pattern used by
+// apiHistoryListeners above.
 const AUTH_PATH_PREFIX = '/api/v1/auth/';
 
 let accessToken: string | null = null;
@@ -55,31 +56,12 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-export function getRefreshToken(): string | null {
-  try {
-    return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setAuthTokens(nextAccessToken: string, nextRefreshToken: string): void {
+export function setAuthTokens(nextAccessToken: string): void {
   accessToken = nextAccessToken;
-  try {
-    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, nextRefreshToken);
-  } catch {
-    // Ignore storage failures (e.g. private browsing); the access token still
-    // works in-memory for the rest of this page load.
-  }
 }
 
 export function clearAuthTokens(): void {
   accessToken = null;
-  try {
-    window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
 }
 
 export function onAuthFailure(listener: () => void): () => void {
@@ -95,35 +77,31 @@ export function notifyAuthFailure(): void {
 // low-level module, depending on app-level types; AuthProvider re-types it as AuthUser.
 interface RefreshTokenResponseBody {
   accessToken: string;
-  refreshToken: string;
   user: unknown;
 }
 
 // Performs the silent refresh with a plain fetch (not apiRequest) so it never recurses into the
 // 401-retry logic below. Concurrent callers - whether triggered by a 401 interceptor or by
 // AuthProvider's session-restore-on-load effect - share this single in-flight promise instead of
-// each firing their own POST /auth/refresh with the same refresh token. That matters beyond
-// avoiding wasted requests: the backend now consumes (revokes) a refresh token exactly once
-// (see AuthService#refresh), so two independent refresh calls racing on the same stored token
-// would make the loser fail with "Invalid or expired refresh token" even though nothing was
-// actually wrong - every caller in this module MUST go through this shared promise rather than
-// issuing its own POST /auth/refresh.
+// each firing their own POST /auth/refresh. That matters beyond avoiding wasted requests: the
+// backend now consumes (revokes) a refresh token exactly once (see AuthService#refresh), so two
+// independent refresh calls racing on the same cookie would make the loser fail with "Invalid or
+// expired refresh token" even though nothing was actually wrong - every caller in this module
+// MUST go through this shared promise rather than issuing its own POST /auth/refresh. There's no
+// client-side way to check "is there a refresh cookie" before calling (it's HttpOnly), so this
+// always attempts the request and treats a non-ok response as "no valid session".
 async function refreshAccessToken(): Promise<RefreshTokenResponseBody | null> {
-  const storedRefreshToken = getRefreshToken();
-  if (!storedRefreshToken) return null;
-
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
         const normalizedBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
         const response = await fetch(`${normalizedBaseUrl}${AUTH_PATH_PREFIX}refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: storedRefreshToken }),
+          credentials: 'include',
         });
         if (!response.ok) return null;
         const body = (await response.json()) as RefreshTokenResponseBody;
-        setAuthTokens(body.accessToken, body.refreshToken);
+        setAuthTokens(body.accessToken);
         return body;
       } catch {
         return null;
@@ -235,7 +213,7 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
     : undefined;
 
   try {
-    const response = await fetch(url, { method, headers, body: options?.body, signal: mergedController.signal });
+    const response = await fetch(url, { method, headers, body: options?.body, signal: mergedController.signal, credentials: 'include' });
     const latencyMs = Math.round(performance.now() - startedAt);
     const { data, rawBody, parseError, contentType } = await readResponseBody(response, options?.downloadFileName);
 

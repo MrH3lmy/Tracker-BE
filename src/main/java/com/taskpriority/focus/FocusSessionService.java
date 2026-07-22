@@ -94,6 +94,7 @@ public class FocusSessionService {
             throw new IllegalArgumentException("Only a running focus session can be paused.");
         }
         FocusSessionPause pauseRow = new FocusSessionPause();
+        pauseRow.setUserId(session.getUserId());
         pauseRow.setSession(session);
         pauseRow.setPausedAt(LocalDateTime.now());
         pauseRepository.save(pauseRow);

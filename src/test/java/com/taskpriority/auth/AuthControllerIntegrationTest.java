@@ -1,26 +1,32 @@
 package com.taskpriority.auth;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.support.TestAuthSupport;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Regression coverage for GitHub issue #257: the refresh token now travels only via an HttpOnly
+ * {@code refreshToken} cookie (see AuthController), never in the JSON response body or a request
+ * body field.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local-test")
 class AuthControllerIntegrationTest {
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
@@ -30,21 +36,28 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void registerCreatesUserAndReturnsTokens() throws Exception {
+    void registerCreatesUserAndReturnsAccessTokenWithRefreshTokenOnlyInTheCookie() throws Exception {
         String email = uniqueEmail();
         String body = """
                 {"email":"%s","password":"correct-horse","displayName":"Test User","deviceLabel":"unit-test"}
                 """.formatted(email);
 
-        mockMvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content(body))
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andExpect(jsonPath("$.user.email").value(email))
                 .andExpect(jsonPath("$.user.displayName").value("Test User"))
                 .andExpect(jsonPath("$.user.tier").value("FREE"))
                 .andExpect(jsonPath("$.user.role").value("USER"))
-                .andExpect(jsonPath("$.user.id").isNumber());
+                .andExpect(jsonPath("$.user.id").isNumber())
+                .andReturn();
+
+        Cookie refreshCookie = result.getResponse().getCookie(AuthController.REFRESH_TOKEN_COOKIE_NAME);
+        assertThat(refreshCookie).isNotNull();
+        assertThat(refreshCookie.getValue()).isNotBlank();
+        assertThat(refreshCookie.isHttpOnly()).isTrue();
+        assertThat(refreshCookie.getPath()).isEqualTo("/api/v1/auth");
     }
 
     @Test
@@ -117,66 +130,66 @@ class AuthControllerIntegrationTest {
         String loginBody = """
                 {"email":"%s","password":"correct-horse","deviceLabel":"laptop"}
                 """.formatted(email);
-        String loginResponse = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andReturn().getResponse().getContentAsString();
-        JsonNode loginJson = jsonMapper.readTree(loginResponse);
-        String refreshToken = loginJson.get("refreshToken").asText();
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andReturn();
+        Cookie loginRefreshCookie = loginResult.getResponse().getCookie(AuthController.REFRESH_TOKEN_COOKIE_NAME);
+        assertThat(loginRefreshCookie).isNotNull();
 
-        // refresh
-        String refreshBody = """
-                {"refreshToken":"%s"}
-                """.formatted(refreshToken);
-        String refreshResponse = mockMvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON).content(refreshBody))
+        // refresh - the cookie is the only credential needed, no request body
+        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh").cookie(loginRefreshCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andReturn().getResponse().getContentAsString();
-        JsonNode refreshJson = jsonMapper.readTree(refreshResponse);
-        String newRefreshToken = refreshJson.get("refreshToken").asText();
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andReturn();
+        Cookie rotatedRefreshCookie = refreshResult.getResponse().getCookie(AuthController.REFRESH_TOKEN_COOKIE_NAME);
+        assertThat(rotatedRefreshCookie).isNotNull();
+        assertThat(rotatedRefreshCookie.getValue()).isNotEqualTo(loginRefreshCookie.getValue());
 
-        // the old (login) refresh token is now revoked - a second refresh attempt with it fails
-        mockMvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON).content(refreshBody))
+        // the old (login) refresh cookie is now revoked - a second refresh attempt with it fails
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(loginRefreshCookie))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid or expired refresh token."));
 
-        // logout with the current (post-refresh) refresh token
-        String logoutBody = """
-                {"refreshToken":"%s"}
-                """.formatted(newRefreshToken);
-        mockMvc.perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON).content(logoutBody))
-                .andExpect(status().isNoContent());
+        // logout with the current (post-refresh) cookie
+        MvcResult logoutResult = mockMvc.perform(post("/api/v1/auth/logout").cookie(rotatedRefreshCookie))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertCookieCleared(logoutResult.getResponse());
 
-        // a second use of the same refresh token now fails since logout revoked it
-        mockMvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON).content(logoutBody))
+        // a second use of the same refresh cookie now fails since logout revoked it
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(rotatedRefreshCookie))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid or expired refresh token."));
 
-        // logout-all requires an authenticated user
+        // logout-all requires an authenticated user and also clears this browser's cookie
         TestAuthSupport.loginAsNewUser(userRepository);
-        mockMvc.perform(post("/api/v1/auth/logout-all"))
-                .andExpect(status().isNoContent());
+        MvcResult logoutAllResult = mockMvc.perform(post("/api/v1/auth/logout-all"))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertCookieCleared(logoutAllResult.getResponse());
+    }
+
+    @Test
+    void refreshWithoutACookieReturns400() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/refresh"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid or expired refresh token."));
     }
 
     @Test
     void refreshWithUnknownTokenReturns400() throws Exception {
-        String body = """
-                {"refreshToken":"not-a-real-token"}
-                """;
-        mockMvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie(AuthController.REFRESH_TOKEN_COOKIE_NAME, "not-a-real-token")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid or expired refresh token."));
     }
 
     @Test
-    void logoutWithUnknownTokenIsStillNoContent() throws Exception {
-        // logout is best-effort: an unrecognized token doesn't error, per AuthService.logout
-        String body = """
-                {"refreshToken":"not-a-real-token"}
-                """;
-        mockMvc.perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON).content(body))
+    void logoutWithoutACookieIsStillNoContent() throws Exception {
+        // logout is best-effort: no cookie (or an unrecognized token) doesn't error, per AuthService.logout
+        mockMvc.perform(post("/api/v1/auth/logout"))
                 .andExpect(status().isNoContent());
     }
 
@@ -192,6 +205,12 @@ class AuthControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/auth/logout-all"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500));
+    }
+
+    private void assertCookieCleared(MockHttpServletResponse response) {
+        Cookie cleared = response.getCookie(AuthController.REFRESH_TOKEN_COOKIE_NAME);
+        assertThat(cleared).isNotNull();
+        assertThat(cleared.getMaxAge()).isEqualTo(0);
     }
 
     private void registerUser(String email, String password) throws Exception {

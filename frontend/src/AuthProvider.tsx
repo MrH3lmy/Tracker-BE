@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiJson, clearAuthTokens, getRefreshToken, onAuthFailure, refreshSession, setAuthTokens, type ApiCallResult } from './apiClient';
+import { apiJson, clearAuthTokens, onAuthFailure, refreshSession, setAuthTokens, type ApiCallResult } from './apiClient';
 import { AuthContext, type AuthActionResult, type AuthContextValue, type AuthUser } from './authContext';
 
 interface AuthResponseBody {
   accessToken: string;
-  refreshToken: string;
   user: AuthUser;
 }
 
@@ -34,23 +33,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On app load, try to silently turn a stored (long-lived) refresh token
-  // into a fresh access token + user, so a page reload doesn't force a
-  // re-login. If there's no stored refresh token, or the refresh fails,
-  // the user simply lands unauthenticated.
+  // On app load, try to silently turn the HttpOnly refresh-token cookie (if any) into a fresh
+  // access token + user, so a page reload doesn't force a re-login. There's no way to check
+  // client-side whether that cookie exists, so this always attempts it; if there's no valid
+  // cookie, or the refresh fails, the user simply lands unauthenticated.
   useEffect(() => {
     let cancelled = false;
 
     const restoreSession = async () => {
-      const storedRefreshToken = getRefreshToken();
-      if (!storedRefreshToken) {
-        if (!cancelled) setIsLoading(false);
-        return;
-      }
-
       // Goes through the same shared in-flight promise as the 401 interceptor in apiClient.ts
       // (rather than an independent POST /auth/refresh) so the two can't race on the same
-      // refresh token - the backend now consumes a refresh token exactly once, so two
+      // refresh cookie - the backend now consumes a refresh token exactly once, so two
       // concurrent refresh calls on app load would make one of them fail spuriously.
       const result = await refreshSession();
       if (cancelled) return;
@@ -85,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deviceLabel: currentDeviceLabel(),
     });
     if (result.ok && result.data) {
-      setAuthTokens(result.data.accessToken, result.data.refreshToken);
+      setAuthTokens(result.data.accessToken);
       setUser(result.data.user);
       return { ok: true };
     }
@@ -100,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       deviceLabel: currentDeviceLabel(),
     });
     if (result.ok && result.data) {
-      setAuthTokens(result.data.accessToken, result.data.refreshToken);
+      setAuthTokens(result.data.accessToken);
       setUser(result.data.user);
       return { ok: true };
     }
@@ -108,12 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async (): Promise<void> => {
-    const storedRefreshToken = getRefreshToken();
     clearAuthTokens();
     setUser(null);
-    if (storedRefreshToken) {
-      await apiJson('POST', '/api/v1/auth/logout', { refreshToken: storedRefreshToken });
-    }
+    // The refresh cookie (if any) travels automatically via credentials: 'include'; the backend
+    // revokes it server-side and clears the cookie in its response.
+    await apiJson('POST', '/api/v1/auth/logout');
   };
 
   const value = useMemo<AuthContextValue>(() => ({
