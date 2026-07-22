@@ -1,0 +1,59 @@
+name: Migration immutability
+
+# Flyway identifies each migration by its content checksum. Editing a migration file that has
+# already been merged to main changes that checksum, so any environment that already applied
+# the old content fails `flyway validate` (and refuses to start) on its next deploy, even though
+# its schema is fine. See the "Migration immutability policy" section in README.md.
+on:
+  pull_request:
+    paths:
+      - "src/main/resources/db/migration/**"
+
+jobs:
+  check-migrations-unchanged:
+    name: Fail if an existing migration file was modified or deleted
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Diff migration files against the merge base
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          MIGRATION_DIR="src/main/resources/db/migration"
+
+          if [ ! -d "$MIGRATION_DIR" ]; then
+            echo "No migration directory found; nothing to check."
+            exit 0
+          fi
+
+          violations=0
+
+          while IFS= read -r -d '' file; do
+            if git cat-file -e "$BASE_SHA:$file" 2>/dev/null; then
+              if ! git diff --quiet "$BASE_SHA" HEAD -- "$file"; then
+                echo "::error file=$file::Migration file was modified after merging to main. Applied migrations must never change - add a new forward-only migration instead. See README.md 'Migration immutability policy'."
+                violations=1
+              fi
+            fi
+          done < <(git ls-tree -r -z --name-only "$BASE_SHA" -- "$MIGRATION_DIR")
+
+          # Also catch migrations present at the base but deleted on this branch.
+          while IFS= read -r -d '' file; do
+            if ! git cat-file -e "HEAD:$file" 2>/dev/null; then
+              echo "::error file=$file::Migration file that exists on main was deleted. Applied migrations must never be removed."
+              violations=1
+            fi
+          done < <(git ls-tree -r -z --name-only "$BASE_SHA" -- "$MIGRATION_DIR")
+
+          if [ "$violations" -ne 0 ]; then
+            echo ""
+            echo "One or more already-merged migration files were changed or removed. Revert those files to their content on main and add a new V<n+1>__*.sql migration for the fix instead."
+            exit 1
+          fi
+
+          echo "No already-merged migration files were changed."

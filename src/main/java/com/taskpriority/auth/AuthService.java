@@ -80,16 +80,23 @@ public class AuthService {
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
         String presentedHash = sha256(request.refreshToken());
+        // Load first (for userId/deviceLabel) then atomically consume via a conditional UPDATE.
+        // The UPDATE - not this read - is what makes rotation exactly-once: concurrent callers
+        // presenting the same token will both reach this point seeing revoked=false (a plain
+        // SELECT never blocks), but only one of their UPDATEs will actually flip the row, because
+        // Postgres serializes concurrent UPDATEs against the same row and re-evaluates the WHERE
+        // clause after the first commits. The loser's UPDATE affects 0 rows and is rejected below
+        // with the same generic error as an unknown/expired/already-revoked token.
         UserSession session = userSessionRepository.findByTokenHash(presentedHash)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token."));
-        if (session.isRevoked() || session.getExpiresAt().isBefore(LocalDateTime.now())) {
+
+        int consumed = userSessionRepository.consumeByTokenHash(presentedHash, LocalDateTime.now());
+        if (consumed == 0) {
             throw new IllegalArgumentException("Invalid or expired refresh token.");
         }
+
         User user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token."));
-
-        session.setRevoked(true);
-        userSessionRepository.save(session);
 
         return issueSession(user, session.getDeviceLabel());
     }

@@ -185,7 +185,7 @@ class FocusSessionServiceTest {
         running.setTaskId(5L);
         Task linkedTask = task(5L, 60, 10, Area.WORK);
         when(focusSessionRepository.findByUserIdAndId(USER_ID, 1L)).thenReturn(Optional.of(running));
-        when(taskRepository.findById(5L)).thenReturn(Optional.of(linkedTask));
+        when(taskRepository.findByUserIdAndId(USER_ID, 5L)).thenReturn(Optional.of(linkedTask));
 
         focusSessionService.stop(1L, new StopFocusSessionRequest("Made progress", true));
 

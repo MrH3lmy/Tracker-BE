@@ -21,6 +21,8 @@ import com.taskpriority.settings.SettingsService;
 import com.taskpriority.settings.TimeWindow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,6 +33,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -46,6 +50,8 @@ class ReminderServiceTest {
     private HabitCheckInRepository habitCheckInRepository;
     private SettingsService settingsService;
     private CurrentUserService currentUserService;
+    private SchedulerLeaderLock leaderLock;
+    private PlatformTransactionManager transactionManager;
     private ReminderService reminderService;
 
     private User user(Long id) {
@@ -74,7 +80,8 @@ class ReminderServiceTest {
 
     private ReminderService buildService(boolean schedulingEnabled) {
         return new ReminderService(reminderRepository, notificationOutboxRepository, userRepository, taskRepository,
-                habitRepository, habitCheckInRepository, settingsService, currentUserService, schedulingEnabled);
+                habitRepository, habitCheckInRepository, settingsService, currentUserService, leaderLock, transactionManager,
+                schedulingEnabled, 50, 5, 5);
     }
 
     @BeforeEach
@@ -87,8 +94,12 @@ class ReminderServiceTest {
         habitCheckInRepository = mock(HabitCheckInRepository.class);
         settingsService = mock(SettingsService.class);
         currentUserService = mock(CurrentUserService.class);
+        leaderLock = mock(SchedulerLeaderLock.class);
+        transactionManager = mock(PlatformTransactionManager.class);
         when(currentUserService.requireUserId()).thenReturn(USER_ID);
-        when(userRepository.findAll()).thenReturn(List.of(user(USER_ID)));
+        when(leaderLock.tryAcquire(anyLong())).thenReturn(true);
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        when(userRepository.findAllUserIds()).thenReturn(List.of(USER_ID));
         when(settingsService.getTimezoneForUser(USER_ID)).thenReturn(USER_ZONE);
         when(settingsService.getQuietHoursForUser(USER_ID)).thenReturn(Optional.empty());
         when(taskRepository.findByUserIdAndDueDate(eq(USER_ID), any())).thenReturn(List.of());
@@ -97,6 +108,8 @@ class ReminderServiceTest {
         when(reminderRepository.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationOutboxRepository.save(any(NotificationOutboxEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(any(), any())).thenReturn(List.of());
+        when(notificationOutboxRepository.claimBatch(any(), anyInt())).thenReturn(List.of());
+        when(notificationOutboxRepository.recoverStuckProcessing(any(), any())).thenReturn(0);
         reminderService = buildService(true);
     }
 
@@ -182,6 +195,27 @@ class ReminderServiceTest {
     }
 
     @Test
+    void producedRemindersCarryADeterministicPerOccurrenceIdempotencyKey() {
+        LocalDate today = LocalDate.now(USER_ZONE);
+        when(taskRepository.findByUserIdAndDueDate(USER_ID, today)).thenReturn(List.of(task(5L, Status.NOT_STARTED, today, null)));
+
+        reminderService.produceReminders();
+
+        verify(reminderRepository).save(argThat(reminder ->
+                reminder.getIdempotencyKey().equals(USER_ID + ":" + ReminderKind.TASK_DUE + ":5:" + today)));
+    }
+
+    @Test
+    void aDuplicateIdempotencyKeyFromAConcurrentProducerIsSwallowedRatherThanPropagated() {
+        LocalDate today = LocalDate.now(USER_ZONE);
+        when(taskRepository.findByUserIdAndDueDate(USER_ID, today)).thenReturn(List.of(task(5L, Status.NOT_STARTED, today, null)));
+        when(reminderRepository.save(any(Reminder.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        assertDoesNotThrow(() -> reminderService.produceReminders());
+    }
+
+    @Test
     void activatesADueReminderIntoANewOutboxEntry() {
         Reminder dueReminder = new Reminder();
         dueReminder.setId(3L);
@@ -192,7 +226,7 @@ class ReminderServiceTest {
         dueReminder.setScheduledFor(LocalDateTime.now().minusMinutes(1));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(eq(ReminderStatus.PENDING), any())).thenReturn(List.of(dueReminder));
         when(notificationOutboxRepository.existsByReminderIdAndChannel(3L, NotificationChannel.IN_APP)).thenReturn(false);
-        when(taskRepository.findById(5L)).thenReturn(Optional.of(task(5L, Status.NOT_STARTED, LocalDate.now(), null)));
+        when(taskRepository.findByUserIdAndId(USER_ID, 5L)).thenReturn(Optional.of(task(5L, Status.NOT_STARTED, LocalDate.now(), null)));
 
         reminderService.produceReminders();
 
@@ -210,7 +244,7 @@ class ReminderServiceTest {
         dueReminder.setStatus(ReminderStatus.PENDING);
         dueReminder.setScheduledFor(LocalDateTime.now().minusMinutes(1));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(eq(ReminderStatus.PENDING), any())).thenReturn(List.of(dueReminder));
-        when(taskRepository.findById(999L)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserIdAndId(USER_ID, 999L)).thenReturn(Optional.empty());
 
         reminderService.produceReminders();
 
@@ -224,7 +258,8 @@ class ReminderServiceTest {
 
         disabled.produceReminders();
 
-        verify(userRepository, never()).findAll();
+        verify(userRepository, never()).findAllUserIds();
+        verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
     @Test
@@ -233,21 +268,49 @@ class ReminderServiceTest {
 
         disabled.dispatchNotifications();
 
-        verify(notificationOutboxRepository, never()).findByStatus(any());
+        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
+        verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
     @Test
-    void dispatchMarksPendingOutboxEntriesSentAndIncrementsAttempts() {
+    void producingSkipsEntirelyWhenAnotherInstanceHoldsTheLeaderLock() {
+        when(leaderLock.tryAcquire(anyLong())).thenReturn(false);
+
+        reminderService.produceReminders();
+
+        verify(userRepository, never()).findAllUserIds();
+    }
+
+    @Test
+    void dispatchingSkipsEntirelyWhenAnotherInstanceHoldsTheLeaderLock() {
+        when(leaderLock.tryAcquire(anyLong())).thenReturn(false);
+
+        reminderService.dispatchNotifications();
+
+        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
+    }
+
+    @Test
+    void dispatchClaimsABatchAndMarksEachEntrySentWithAProcessedTimestamp() {
         NotificationOutboxEntry entry = new NotificationOutboxEntry();
         entry.setId(1L);
-        entry.setStatus(NotificationStatus.PENDING);
-        entry.setAttempts(0);
-        when(notificationOutboxRepository.findByStatus(NotificationStatus.PENDING)).thenReturn(List.of(entry));
+        entry.setStatus(NotificationStatus.PROCESSING);
+        entry.setAttempts(1);
+        when(notificationOutboxRepository.claimBatch(any(), eq(50))).thenReturn(List.of(entry));
 
         reminderService.dispatchNotifications();
 
         assertEquals(NotificationStatus.SENT, entry.getStatus());
-        assertEquals(1, entry.getAttempts());
+        assertNotNull(entry.getProcessedAt());
+        verify(notificationOutboxRepository).save(entry);
+    }
+
+    @Test
+    void dispatchRecoversRowsStuckInProcessingBeforeClaimingANewBatch() {
+        reminderService.dispatchNotifications();
+
+        verify(notificationOutboxRepository).recoverStuckProcessing(any(), any());
+        verify(notificationOutboxRepository).claimBatch(any(), eq(50));
     }
 
     @Test

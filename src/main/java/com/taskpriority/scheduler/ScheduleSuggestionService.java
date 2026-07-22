@@ -73,7 +73,8 @@ public class ScheduleSuggestionService {
 
     @Transactional(readOnly = true)
     public Optional<SuggestedSlot> suggestForTask(Long taskId, LocalDate earliestDate) {
-        Task task = taskRepository.findById(taskId)
+        Long userId = currentUserService.requireUserId();
+        Task task = taskRepository.findByUserIdAndId(userId, taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + taskId + " not found"));
         LocalDate start = earliestDate != null ? earliestDate : LocalDate.now();
         int duration = task.getEstimatedMinutes() != null ? task.getEstimatedMinutes() : SchedulerService.DEFAULT_DURATION_MINUTES;
@@ -82,7 +83,8 @@ public class ScheduleSuggestionService {
 
     @Transactional(readOnly = true)
     public Optional<SuggestedSlot> suggestForHabit(Long habitId, LocalDate earliestDate) {
-        Habit habit = habitRepository.findById(habitId)
+        Long userId = currentUserService.requireUserId();
+        Habit habit = habitRepository.findByUserIdAndId(userId, habitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + habitId + " not found"));
         LocalDate start = earliestDate != null ? earliestDate : LocalDate.now();
         int duration = habit.getEstimatedMinutes() != null ? habit.getEstimatedMinutes() : SchedulerService.DEFAULT_DURATION_MINUTES;

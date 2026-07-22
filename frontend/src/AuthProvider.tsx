@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { apiJson, clearAuthTokens, getRefreshToken, onAuthFailure, setAuthTokens, type ApiCallResult } from './apiClient';
+import { apiJson, clearAuthTokens, getRefreshToken, onAuthFailure, refreshSession, setAuthTokens, type ApiCallResult } from './apiClient';
 import { AuthContext, type AuthActionResult, type AuthContextValue, type AuthUser } from './authContext';
 
 interface AuthResponseBody {
@@ -48,12 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const result = await apiJson<AuthResponseBody>('POST', '/api/v1/auth/refresh', { refreshToken: storedRefreshToken });
+      // Goes through the same shared in-flight promise as the 401 interceptor in apiClient.ts
+      // (rather than an independent POST /auth/refresh) so the two can't race on the same
+      // refresh token - the backend now consumes a refresh token exactly once, so two
+      // concurrent refresh calls on app load would make one of them fail spuriously.
+      const result = await refreshSession();
       if (cancelled) return;
 
-      if (result.ok && result.data) {
-        setAuthTokens(result.data.accessToken, result.data.refreshToken);
-        setUser(result.data.user);
+      if (result) {
+        setUser(result.user as AuthUser);
       } else {
         clearAuthTokens();
         setUser(null);

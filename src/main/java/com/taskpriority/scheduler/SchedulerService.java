@@ -121,7 +121,7 @@ public class SchedulerService {
     @Transactional
     public ScheduledTaskResponse scheduleTask(Long taskId, ScheduleTaskRequest request) {
         Long userId = currentUserService.requireUserId();
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByUserIdAndId(userId, taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + taskId + " not found"));
 
         TaskSchedule schedule = taskScheduleRepository.findByUserIdAndTaskId(userId, taskId).orElseGet(TaskSchedule::new);
@@ -148,7 +148,7 @@ public class SchedulerService {
     @Transactional
     public ScheduledHabitResponse scheduleHabit(Long habitId, ScheduleHabitRequest request) {
         Long userId = currentUserService.requireUserId();
-        Habit habit = habitRepository.findById(habitId)
+        Habit habit = habitRepository.findByUserIdAndId(userId, habitId)
                 .orElseThrow(() -> new ResourceNotFoundException("Habit with id " + habitId + " not found"));
 
         HabitSchedule schedule = habitScheduleRepository.findByUserIdAndHabitId(userId, habitId).orElseGet(HabitSchedule::new);

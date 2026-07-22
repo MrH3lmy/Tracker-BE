@@ -4,6 +4,7 @@ import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.repository.BoardColumnRepository;
+import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.task.application.RecurrenceService;
@@ -28,19 +29,31 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final TaskDependencyRepository taskDependencyRepository;
     private final BoardColumnRepository boardColumnRepository;
+    private final ProjectRepository projectRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
     private final CurrentUserService currentUserService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
+        this.projectRepository = projectRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
         this.taskApiMapper = taskApiMapper;
         this.currentUserService = currentUserService;
+    }
+
+    /**
+     * Loads a task by id, scoped to the authenticated user, so that another user's task id
+     * never resolves to a real entity (returns a generic 404 instead of leaking existence).
+     */
+    private Task requireOwnedTask(Long id) {
+        Long userId = currentUserService.requireUserId();
+        return taskRepository.findByUserIdAndId(userId, id)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
     }
 
     @Transactional
@@ -86,16 +99,14 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public Task findById(Long id) {
-        return taskRepository.findById(id)
-                .map(t -> { computeDerivedFields(t); return t; })
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
+        computeDerivedFields(task);
+        return task;
     }
 
     @Transactional(readOnly = true)
     public List<Task> findSubtasks(Long parentTaskId) {
-        if (!taskRepository.existsById(parentTaskId)) {
-            throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
-        }
+        requireOwnedTask(parentTaskId);
         Long userId = currentUserService.requireUserId();
         List<Task> subtasks = taskRepository.findByUserIdAndParentTaskIdOrderByPositionAscIdAsc(userId, parentTaskId);
         computeDerivedFieldsBatch(subtasks);
@@ -104,46 +115,51 @@ public class TaskService {
 
     @Transactional
     public Task createSubtask(Long parentTaskId, Task subtask) {
-        if (!taskRepository.existsById(parentTaskId)) {
-            throw new ResourceNotFoundException("Task with id " + parentTaskId + " not found");
-        }
+        requireOwnedTask(parentTaskId);
         subtask.setParentTaskId(parentTaskId);
         return save(subtask);
     }
 
     @Transactional
     public Task updateParent(Long id, Long parentTaskId) {
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
         task.setParentTaskId(parentTaskId);
         return save(task);
     }
 
     @Transactional
     public Task updateProject(Long id, Long projectId) {
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
+        if (projectId != null) {
+            Long userId = currentUserService.requireUserId();
+            if (!projectRepository.existsByUserIdAndId(userId, projectId)) {
+                throw new ResourceNotFoundException("Project with id " + projectId + " not found");
+            }
+        }
         task.setProjectId(projectId);
         return save(task);
     }
 
     @Transactional
     public Task updateDueDate(Long id, LocalDate dueDate) {
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
         task.setDueDate(dueDate);
         return save(task);
     }
 
     @Transactional
-    public void delete(Long id) { taskRepository.deleteById(id); }
+    public void delete(Long id) {
+        Long userId = currentUserService.requireUserId();
+        if (taskRepository.deleteByUserIdAndId(userId, id) == 0) {
+            throw new ResourceNotFoundException("Task with id " + id + " not found");
+        }
+    }
 
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
         Long userId = currentUserService.requireUserId();
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
-        Task blocksTask = taskRepository.findById(request.blocksTaskId())
+        Task task = requireOwnedTask(id);
+        Task blocksTask = taskRepository.findByUserIdAndId(userId, request.blocksTaskId())
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + request.blocksTaskId() + " not found"));
         if (task.getId().equals(blocksTask.getId())) {
             throw new IllegalArgumentException("A task cannot depend on itself");
@@ -163,8 +179,7 @@ public class TaskService {
     @Transactional
     public Task removeDependency(Long id, Long blocksTaskId) {
         Long userId = currentUserService.requireUserId();
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
         taskDependencyRepository.deleteByUserIdAndTaskIdAndBlocksTaskId(userId, id, blocksTaskId);
         computeDerivedFields(task);
         return task;
@@ -173,8 +188,7 @@ public class TaskService {
     @Transactional
     public Task replaceDependencies(Long id, List<Long> dependencyIds) {
         Long userId = currentUserService.requireUserId();
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
         for (TaskDependency existing : taskDependencyRepository.findByUserIdAndTaskId(userId, id)) {
             taskDependencyRepository.delete(existing);
         }
@@ -203,14 +217,13 @@ public class TaskService {
     @Transactional
     public Task moveTask(Long id, Status targetStatus, Long targetBoardColumnId, Integer targetPosition) {
         Long userId = currentUserService.requireUserId();
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + id + " not found"));
+        Task task = requireOwnedTask(id);
 
         Status resolvedStatus = targetStatus;
         Long resolvedColumnId = targetBoardColumnId;
         if (resolvedColumnId != null) {
             Long columnId = resolvedColumnId;
-            BoardColumn column = boardColumnRepository.findById(columnId)
+            BoardColumn column = boardColumnRepository.findByUserIdAndId(userId, columnId)
                     .orElseThrow(() -> new ResourceNotFoundException("Board column with id " + columnId + " not found"));
             if (column.getStatus() != null) {
                 resolvedStatus = column.getStatus();
@@ -273,14 +286,15 @@ public class TaskService {
         if (task.getId() != null && task.getId().equals(parentTaskId)) {
             throw new IllegalArgumentException("A task cannot be its own parent");
         }
-        Task parent = taskRepository.findById(parentTaskId)
+        Long userId = currentUserService.requireUserId();
+        Task parent = taskRepository.findByUserIdAndId(userId, parentTaskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Parent task with id " + parentTaskId + " not found"));
         while (parent.getParentTaskId() != null) {
             if (task.getId() != null && task.getId().equals(parent.getParentTaskId())) {
                 throw new IllegalArgumentException("Parent assignment would create a cycle");
             }
             Long ancestorId = parent.getParentTaskId();
-            parent = taskRepository.findById(ancestorId)
+            parent = taskRepository.findByUserIdAndId(userId, ancestorId)
                     .orElseThrow(() -> new ResourceNotFoundException("Parent task with id " + ancestorId + " not found"));
         }
     }
@@ -306,7 +320,7 @@ public class TaskService {
                     .ifPresent(task::setBoardColumnId);
             return;
         }
-        boardColumnRepository.findById(task.getBoardColumnId())
+        boardColumnRepository.findByUserIdAndId(userId, task.getBoardColumnId())
                 .filter(column -> column.getStatus() == task.getStatus())
                 .or(() -> boardColumnRepository.findFirstByUserIdAndStatusOrderByPositionAsc(userId, task.getStatus()))
                 .map(BoardColumn::getId)

@@ -291,6 +291,26 @@ The Docker starter remains the easiest local option if you want the app, fronten
 
 ---
 
+## Tenant isolation model
+
+Every user-owned table has a `user_id` column, and application code scopes reads/writes to the authenticated user (see `TaskService.requireOwnedTask` and equivalents in other services). That's necessary but not sufficient on its own - a missed service-layer check could still create a cross-user relationship (Alice's task pointing at Bob's project) that the database would accept, since a plain `FOREIGN KEY (project_id) REFERENCES projects(id)` only checks that the id exists, not who owns it.
+
+`V42__enforce_composite_tenant_isolation.sql` closes that gap at the database level for most user-owned relationships:
+
+1. Every table referenced by id from another user-owned table gets a `UNIQUE (user_id, id)` key in addition to its primary key.
+2. Every FK column on a child table is paired with a composite FK: `FOREIGN KEY (user_id, <fk_column>) REFERENCES <parent>(user_id, id)`. Postgres's default `MATCH SIMPLE` FK semantics mean a `NULL` FK column always satisfies the constraint regardless of `user_id`, so nullable relationships (e.g. `notes.task_id`) keep accepting `NULL` exactly as before - only a *non-null* cross-user reference is rejected.
+
+**Not yet covered** (see the comment at the top of V42 for the full rationale):
+
+- `tasks.board_column_id -> board_columns` and `board_columns.board_id -> boards`: both `boards` and `board_columns` have a permanently `NULL` `user_id` (there's no per-user board-provisioning feature yet - see V29's comment). Enforcing this today would reject every task with a `board_column_id` already set.
+- `reminders.reference_id`: polymorphic (points at a task or a habit depending on `kind`), so a single composite FK can't express it.
+- `projects.owner_user_id`: not a real FK today (no `REFERENCES` clause anywhere).
+- `focus_session_pauses.session_id -> focus_sessions`: `focus_session_pauses` has no `user_id` column to build a composite key from.
+
+When adding a new table that references another user-owned table by id, add the same pair (composite unique key on the parent + composite FK on the child) in that table's own migration rather than waiting for a follow-up cleanup.
+
+---
+
 ## Migration workflow (Flyway)
 
 1. Add a new SQL migration file under:
@@ -305,6 +325,26 @@ Notes:
 
 - Keep migrations forward-only and immutable once applied in shared environments.
 - Use one migration per logical schema change.
+
+### Migration immutability policy
+
+**Once a versioned migration file (`V<n>__*.sql`) has been merged to `main`, its content must never change again.** Editing an already-merged migration changes its Flyway checksum; any environment that already applied the old content will fail `flyway validate` (and refuse to start) the next time it deploys, even though nothing about its actual schema is wrong.
+
+If a merged migration turns out to be broken or needs a different approach:
+
+- **Do not edit the existing `V<n>__*.sql` file.** Leave it exactly as merged, bugs and all.
+- Add a new migration (e.g. `V<n+1>__fix_<description>.sql`) that corrects the schema/data going forward. Make it idempotent — safe to run whether or not the original migration's bug ever manifested in a given environment.
+- If the correction needs to special-case "did the broken version already run here", branch on the current schema/data state inside the new migration rather than assuming a starting point.
+
+This is not a hypothetical: `V29__backfill_and_enforce_user_id_not_null.sql`, `V30__rebuild_app_settings_composite_key.sql`, and `V31__rebuild_priority_scoring_settings_user_scope.sql` were each edited in place after merging to `main` (twice, in V29's case) before this policy was written down. Their current content is correct and is now the frozen, canonical version — **do not edit them again**, even to "clean up" the history. If you deployed from `main` at a commit between when one of those files was first merged and when it was last edited, your `flyway_schema_history` table has a checksum for the old content and `flyway validate` will fail on your next deploy. Recover with:
+
+1. **Back up your database first.**
+2. Confirm your actual schema matches what the *current* V29/V30/V31 content would have produced (for V29: `tasks`, `task_dependencies`, `task_schedules`, `habits`, `habit_schedules`, `habit_check_ins`, `notes`, `tags`, `note_collections`, `note_templates`, `note_saved_views`, `note_attachments`, `note_blocks`, `note_task_links`, `note_ai_generations`, and `note_versions` all have `user_id NOT NULL`; for V30: `app_settings` has a `(user_id, setting_key)` primary key; for V31: `priority_scoring_settings` has a `(user_id, setting_name)` unique constraint). If it doesn't, you're in a different, worse state — restore from backup rather than repairing.
+3. Once confirmed, run `flyway repair` to resync the recorded checksums with the current file content, then `flyway validate` to confirm the fix.
+
+`flyway repair` is a recovery tool for exactly this situation, not a substitute for the immutability rule above — it should never be part of the normal migration workflow.
+
+A CI check (`.github/workflows/migration-immutability.yml`) enforces this going forward: it fails any pull request that modifies or deletes a migration file that already exists on `main`.
 
 ---
 
@@ -379,6 +419,82 @@ curl http://localhost:8080/api/v1/settings
 curl -X PUT http://localhost:8080/api/v1/settings -H "Content-Type: application/json" -d '{"timezone":"UTC"}'
 curl -X POST http://localhost:8080/api/v1/import/csv -H "Content-Type: text/plain" --data-binary @tasks.csv
 ```
+
+---
+
+## Reminder/notification outbox operations
+
+The reminder producer (`ReminderService#produceReminders`) and outbox dispatcher (`#dispatchNotifications`) are `@Scheduled` jobs safe to run on multiple application instances at once:
+
+- Each job takes a PostgreSQL transaction-scoped advisory lock (`pg_try_advisory_xact_lock`) for the duration of its run, so only one instance does the work per tick; every other instance's attempt returns immediately and tries again next tick.
+- The dispatcher claims rows with `PENDING -> PROCESSING` via `FOR UPDATE SKIP LOCKED` in bounded batches (`app.notifications.dispatch-batch-size`, default 50), so two claim attempts can never select the same row.
+- A row stuck in `PROCESSING` (e.g. the instance that claimed it crashed before finishing) is automatically recovered back to `PENDING` after `app.notifications.processing-lease-timeout-minutes` (default 5) by the next dispatcher run.
+- A row that keeps failing moves to `FAILED` once `attempts` reaches `max_attempts` (`app.notifications.max-dispatch-attempts`, default 5) instead of retrying forever; each retry backs off exponentially (30s doubling, capped at 1 hour) via `next_attempt_at`.
+
+**Replaying `FAILED` notifications**: after fixing whatever caused the failures, requeue them explicitly rather than resetting blindly - a `FAILED` row's `last_error_code`/`last_error_message` tell you why it stopped, and some failures (e.g. a deleted task/habit the reminder referenced) mean the notification should stay dead, not be replayed:
+
+```sql
+-- Inspect what's dead-lettered and why, before touching anything.
+SELECT id, user_id, reminder_id, attempts, last_error_code, last_error_message
+FROM notification_outbox WHERE status = 'FAILED' ORDER BY created_at;
+
+-- Once you've confirmed a specific row's cause is fixed, requeue just that row.
+UPDATE notification_outbox
+SET status = 'PENDING', attempts = 0, next_attempt_at = now(), last_error_code = NULL, last_error_message = NULL
+WHERE id = :id;
+```
+
+A row that keeps failing for the same reason across multiple replay attempts (check `attempts`/`last_error_code` before requeuing) is a poison message - leave it `FAILED` rather than looping it back in, and fix or remove the underlying cause (e.g. the reminder it's tied to) instead.
+
+---
+
+## CI and production readiness
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, as four independent jobs: `backend`, `frontend`, `dependency-and-secret-scan`, and `docker`. `.github/workflows/migration-immutability.yml` (see "Migration immutability policy" above) runs alongside them whenever a migration file changes. Mark all of these required in the repo's branch protection settings (Settings -> Branches -> add a rule for `main` -> Require status checks to pass) - a workflow file alone doesn't block merges by itself; someone with admin access has to opt the branch into requiring them.
+
+### Running the same checks locally
+
+```bash
+# Backend: unit tests + Postgres/Testcontainers integration tests (needs Docker running locally;
+# skipped automatically otherwise, same as `mvn test`) + JaCoCo coverage gate + SpotBugs, all
+# bound to the `verify` phase.
+mvn verify
+
+# Backend, faster inner loop (unit + Testcontainers tests only, no coverage/SpotBugs gating):
+mvn test
+
+# Frontend
+cd frontend
+npm run lint
+npm run test
+npm run build
+```
+
+Coverage and SpotBugs reports land in `target/site/jacoco/` and `target/spotbugsXml.xml` (open `target/site/jacoco/index.html` in a browser, or run `mvn spotbugs:gui` for an interactive SpotBugs viewer). The CI workflow uploads both as build artifacts on every run, pass or fail.
+
+To reproduce the Docker/Trivy job locally (needs Docker and [Trivy](https://trivy.dev/) installed):
+
+```bash
+docker build -t taskpriority-backend:local .
+docker run --rm taskpriority-backend:local id -u   # must not print 0
+trivy image taskpriority-backend:local
+trivy fs .
+```
+
+### What's covered vs. what isn't yet
+
+- **Coverage and SpotBugs thresholds are intentionally conservative** (see the comments next to their configuration in `pom.xml`) - set just below the measured baseline when each gate was added, not at some ideal target. Raise them over time rather than treating the current numbers as sufficient.
+- **"Previous release schema to latest" and "seeded legacy schema to latest" migration scenarios are not yet automated**: there's no tagged release history to snapshot a prior schema from yet. Every Postgres/Testcontainers test in the suite does exercise "empty database to latest Flyway version" plus `flyway validate` and Hibernate `ddl-auto=validate` (both happen implicitly - those tests use the default profile's `spring.flyway.enabled=true`/`ddl-auto=validate` against a real Postgres container, not the H2 `local-test` profile). Once there's a real release history, add a job that restores a snapshot from a prior tag and runs the upgrade path against it.
+- **OWASP Dependency-Check specifically isn't used** - Trivy's filesystem scan covers the same dependency-CVE-scanning need (plus secret scanning, replacing a separate Gitleaks step) with faster, more reliable CI runs than OWASP's NVD-sync-dependent tooling.
+- **A CVSS/severity exception policy**: `CRITICAL`/`HIGH` findings fail the build; base-image OS packages with no fix available yet are excluded from the image scan (`ignore-unfixed: true`) since those are upstream's timeline, not this repo's. There's no documented process yet for a one-off exception on a real, unfixed CRITICAL/HIGH finding in this repo's own dependencies - add one (e.g. a `.trivyignore` entry with a linked tracking issue and expiry) if that need comes up rather than lowering the severity threshold.
+
+### Production configuration
+
+- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it.
+- Required environment variables (the app fails fast at startup if these are missing/invalid rather than starting in a broken state): `JWT_SECRET` (32+ random bytes - see `JwtService#init`), and the database connection (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`, which fail via the standard "connection refused"/auth-failure path if wrong rather than a custom check).
+- Every request gets a correlation/request ID (`X-Request-Id` - reused from the inbound header if the caller already set one, otherwise generated) attached to the response and to the logging MDC for the duration of that request; see `RequestIdFilter`.
+- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this.
+- The Docker image runs as a dedicated non-root user (see the Dockerfile's `USER` directive) and defines a `HEALTHCHECK` against `/actuator/health`, which is reachable without authentication (see `SecurityConfig`) since orchestrator/container health probes never supply a JWT.
 
 ---
 

@@ -1,5 +1,6 @@
 package com.taskpriority.notes;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.auth.CurrentUserService;
@@ -96,7 +97,7 @@ public class NoteTemplateService {
                 block.setPosition(i);
                 noteBlockRepository.save(block);
             }
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException ignored) {
             // Template body remains the source of truth if block JSON is malformed.
         }
     }

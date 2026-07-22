@@ -49,8 +49,23 @@ public class NotificationOutboxEntry {
     @Column(nullable = false)
     private int attempts;
 
+    @Column(name = "max_attempts", nullable = false)
+    private int maxAttempts = 5;
+
     @Column(name = "next_attempt_at")
     private LocalDateTime nextAttemptAt;
+
+    @Column(name = "processing_started_at")
+    private LocalDateTime processingStartedAt;
+
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
+
+    @Column(name = "last_error_code", length = 50)
+    private String lastErrorCode;
+
+    @Column(name = "last_error_message", length = 500)
+    private String lastErrorMessage;
 
     @Column(nullable = false)
     private boolean read;
@@ -78,8 +93,18 @@ public class NotificationOutboxEntry {
     public void setStatus(NotificationStatus status) { this.status = status; }
     public int getAttempts() { return attempts; }
     public void setAttempts(int attempts) { this.attempts = attempts; }
+    public int getMaxAttempts() { return maxAttempts; }
+    public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
     public LocalDateTime getNextAttemptAt() { return nextAttemptAt; }
     public void setNextAttemptAt(LocalDateTime nextAttemptAt) { this.nextAttemptAt = nextAttemptAt; }
+    public LocalDateTime getProcessingStartedAt() { return processingStartedAt; }
+    public void setProcessingStartedAt(LocalDateTime processingStartedAt) { this.processingStartedAt = processingStartedAt; }
+    public LocalDateTime getProcessedAt() { return processedAt; }
+    public void setProcessedAt(LocalDateTime processedAt) { this.processedAt = processedAt; }
+    public String getLastErrorCode() { return lastErrorCode; }
+    public void setLastErrorCode(String lastErrorCode) { this.lastErrorCode = lastErrorCode; }
+    public String getLastErrorMessage() { return lastErrorMessage; }
+    public void setLastErrorMessage(String lastErrorMessage) { this.lastErrorMessage = lastErrorMessage; }
     public boolean isRead() { return read; }
     public void setRead(boolean read) { this.read = read; }
     public LocalDateTime getCreatedDate() { return createdDate; }

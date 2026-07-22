@@ -11,7 +11,6 @@ import com.taskpriority.model.ReminderKind;
 import com.taskpriority.model.ReminderStatus;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
-import com.taskpriority.model.User;
 import com.taskpriority.repository.HabitCheckInRepository;
 import com.taskpriority.repository.HabitRepository;
 import com.taskpriority.repository.NotificationOutboxRepository;
@@ -23,10 +22,14 @@ import com.taskpriority.settings.TimeWindow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -59,6 +62,11 @@ public class ReminderService {
     private static final List<ReminderStatus> ACTIVE_REMINDER_STATUSES = List.of(ReminderStatus.PENDING, ReminderStatus.SENT);
     private static final int DEFAULT_REMINDER_HOUR = 9;
 
+    // Arbitrary distinct keys for pg_try_advisory_xact_lock - only their uniqueness (relative to
+    // each other and to locks taken elsewhere in the app) matters, not the values themselves.
+    private static final long PRODUCE_REMINDERS_LOCK_KEY = 872_001_001L;
+    private static final long DISPATCH_NOTIFICATIONS_LOCK_KEY = 872_001_002L;
+
     private final ReminderRepository reminderRepository;
     private final NotificationOutboxRepository notificationOutboxRepository;
     private final UserRepository userRepository;
@@ -67,13 +75,22 @@ public class ReminderService {
     private final HabitCheckInRepository habitCheckInRepository;
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
+    private final SchedulerLeaderLock leaderLock;
+    private final TransactionTemplate requiresNewTransaction;
     private final boolean schedulingEnabled;
+    private final int dispatchBatchSize;
+    private final int maxDispatchAttempts;
+    private final Duration processingLeaseTimeout;
 
     public ReminderService(ReminderRepository reminderRepository, NotificationOutboxRepository notificationOutboxRepository,
                             UserRepository userRepository, TaskRepository taskRepository, HabitRepository habitRepository,
                             HabitCheckInRepository habitCheckInRepository, SettingsService settingsService,
-                            CurrentUserService currentUserService,
-                            @Value("${app.reminders.scheduling-enabled:true}") boolean schedulingEnabled) {
+                            CurrentUserService currentUserService, SchedulerLeaderLock leaderLock,
+                            PlatformTransactionManager transactionManager,
+                            @Value("${app.reminders.scheduling-enabled:true}") boolean schedulingEnabled,
+                            @Value("${app.notifications.dispatch-batch-size:50}") int dispatchBatchSize,
+                            @Value("${app.notifications.max-dispatch-attempts:5}") int maxDispatchAttempts,
+                            @Value("${app.notifications.processing-lease-timeout-minutes:5}") long processingLeaseTimeoutMinutes) {
         this.reminderRepository = reminderRepository;
         this.notificationOutboxRepository = notificationOutboxRepository;
         this.userRepository = userRepository;
@@ -82,18 +99,31 @@ public class ReminderService {
         this.habitCheckInRepository = habitCheckInRepository;
         this.settingsService = settingsService;
         this.currentUserService = currentUserService;
+        this.leaderLock = leaderLock;
         this.schedulingEnabled = schedulingEnabled;
+        this.dispatchBatchSize = dispatchBatchSize;
+        this.maxDispatchAttempts = maxDispatchAttempts;
+        this.processingLeaseTimeout = Duration.ofMinutes(processingLeaseTimeoutMinutes);
+
+        this.requiresNewTransaction = new TransactionTemplate(transactionManager);
+        this.requiresNewTransaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Scheduled(fixedDelay = 60_000)
     @Transactional
     public void produceReminders() {
         if (!schedulingEnabled) return;
-        for (User user : userRepository.findAll()) {
+        // Protects against every instance in a multi-instance deployment running this scan
+        // concurrently. pg_try_advisory_xact_lock is scoped to this transaction and releases
+        // automatically at commit/rollback - if another instance already holds it this tick,
+        // skip cleanly rather than doing redundant (and potentially duplicate-creating) work.
+        if (!leaderLock.tryAcquire(PRODUCE_REMINDERS_LOCK_KEY)) return;
+
+        for (Long userId : userRepository.findAllUserIds()) {
             try {
-                produceRemindersForUser(user.getId());
+                produceRemindersForUser(userId);
             } catch (RuntimeException ex) {
-                logger.error("Failed to produce reminders for user {}", user.getId(), ex);
+                logger.error("Failed to produce reminders for user {}", userId, ex);
             }
         }
         activateDueReminders();
@@ -103,11 +133,56 @@ public class ReminderService {
     @Transactional
     public void dispatchNotifications() {
         if (!schedulingEnabled) return;
-        for (NotificationOutboxEntry entry : notificationOutboxRepository.findByStatus(NotificationStatus.PENDING)) {
-            entry.setAttempts(entry.getAttempts() + 1);
-            entry.setStatus(NotificationStatus.SENT);
-            notificationOutboxRepository.save(entry);
+        if (!leaderLock.tryAcquire(DISPATCH_NOTIFICATIONS_LOCK_KEY)) return;
+
+        LocalDateTime now = LocalDateTime.now();
+        int recovered = notificationOutboxRepository.recoverStuckProcessing(now.minus(processingLeaseTimeout), now);
+        if (recovered > 0) {
+            logger.warn("Recovered {} notification(s) stuck in PROCESSING past the {}-lease", recovered, processingLeaseTimeout);
         }
+
+        List<NotificationOutboxEntry> claimed = notificationOutboxRepository.claimBatch(now, dispatchBatchSize);
+        for (NotificationOutboxEntry entry : claimed) {
+            deliver(entry);
+        }
+    }
+
+    /**
+     * "Delivery" for the only channel implemented today (IN_APP) just means becoming visible via
+     * the notifications API, so this can't actually fail yet - the try/catch and backoff/DLQ path
+     * exist for a future channel (e.g. browser push) that talks to a real provider.
+     */
+    private void deliver(NotificationOutboxEntry entry) {
+        try {
+            entry.setStatus(NotificationStatus.SENT);
+            entry.setProcessedAt(LocalDateTime.now());
+            notificationOutboxRepository.save(entry);
+        } catch (RuntimeException ex) {
+            handleDeliveryFailure(entry, ex);
+        }
+    }
+
+    private void handleDeliveryFailure(NotificationOutboxEntry entry, RuntimeException ex) {
+        logger.error("Failed to dispatch notification {}", entry.getId(), ex);
+        entry.setLastErrorCode(ex.getClass().getSimpleName());
+        entry.setLastErrorMessage(truncate(ex.getMessage(), 500));
+        if (entry.getAttempts() >= entry.getMaxAttempts()) {
+            entry.setStatus(NotificationStatus.FAILED);
+        } else {
+            entry.setStatus(NotificationStatus.PENDING);
+            entry.setNextAttemptAt(LocalDateTime.now().plus(backoff(entry.getAttempts())));
+        }
+        notificationOutboxRepository.save(entry);
+    }
+
+    private Duration backoff(int attempts) {
+        long seconds = Math.min(30L * (1L << Math.min(attempts, 10)), Duration.ofHours(1).toSeconds());
+        return Duration.ofSeconds(seconds);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null) return null;
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     private void produceRemindersForUser(Long userId) {
@@ -162,7 +237,23 @@ public class ReminderService {
         reminder.setReferenceId(referenceId);
         reminder.setScheduledFor(toSystemLocalDateTime(userLocalDateTime, zone));
         reminder.setStatus(ReminderStatus.PENDING);
-        reminderRepository.save(reminder);
+        reminder.setIdempotencyKey(occurrenceIdempotencyKey(userId, kind, referenceId, userToday));
+
+        // The existsBy... check above is the fast path; this insert's unique constraint on
+        // idempotency_key is the real guarantee against two producer runs (e.g. the advisory
+        // lock's holder crashing mid-tick right as another instance's tick starts) both creating
+        // the same occurrence. Runs in its own transaction so a caught constraint violation here
+        // can't poison the outer produceReminders() transaction that's still processing the rest
+        // of this user's (and other users') reminders.
+        try {
+            requiresNewTransaction.executeWithoutResult(status -> reminderRepository.save(reminder));
+        } catch (DataIntegrityViolationException ex) {
+            logger.debug("Reminder occurrence {} already exists (idempotency key collision) - skipping", reminder.getIdempotencyKey());
+        }
+    }
+
+    private String occurrenceIdempotencyKey(Long userId, ReminderKind kind, Long referenceId, LocalDate userToday) {
+        return userId + ":" + kind + ":" + referenceId + ":" + userToday;
     }
 
     private void activateDueReminders() {
@@ -196,15 +287,15 @@ public class ReminderService {
 
     private NotificationContent buildContent(Reminder reminder) {
         return switch (reminder.getKind()) {
-            case TASK_DUE -> taskRepository.findById(reminder.getReferenceId())
+            case TASK_DUE -> taskRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(this::isActiveTask)
                     .map(task -> new NotificationContent("Task due today", task.getTitle(), "/tasks/" + task.getId()))
                     .orElse(null);
-            case FOLLOW_UP -> taskRepository.findById(reminder.getReferenceId())
+            case FOLLOW_UP -> taskRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(this::isActiveTask)
                     .map(task -> new NotificationContent("Follow-up due", task.getTitle(), "/tasks/" + task.getId()))
                     .orElse(null);
-            case HABIT -> habitRepository.findById(reminder.getReferenceId())
+            case HABIT -> habitRepository.findByUserIdAndId(reminder.getUserId(), reminder.getReferenceId())
                     .filter(habit -> !habit.isDeleted())
                     .map(habit -> new NotificationContent("Habit reminder", habit.getTitle(), "/habits"))
                     .orElse(null);
@@ -271,6 +362,9 @@ public class ReminderService {
         snoozed.setReferenceId(original != null ? original.getReferenceId() : null);
         snoozed.setScheduledFor(scheduledFor);
         snoozed.setStatus(ReminderStatus.PENDING);
+        // Manually-triggered, not produced by the (idempotent-by-day) producer scan, so this key
+        // just needs to be unique per snooze action rather than deterministic per occurrence.
+        snoozed.setIdempotencyKey("snooze:" + id + ":" + scheduledFor);
         reminderRepository.save(snoozed);
 
         if (original != null) {

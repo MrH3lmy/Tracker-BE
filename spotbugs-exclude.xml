@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+    EI_EXPOSE_REP/EI_EXPOSE_REP2 fire on every record or DTO that stores/returns a List/Map field
+    directly - which is effectively all of them in this codebase (CreateTaskRequest, TaskResponse,
+    WeeklyReviewDraftResponse, service constructors storing injected repositories, etc.). That's
+    idiomatic, intentional Spring/Java 21 style here, not a defect - excluded wholesale rather than
+    per-class so this doesn't need updating every time a new DTO is added.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

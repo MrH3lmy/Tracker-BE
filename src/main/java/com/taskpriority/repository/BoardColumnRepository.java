@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface BoardColumnRepository extends JpaRepository<BoardColumn, Long> {
     Optional<BoardColumn> findFirstByUserIdAndStatusOrderByPositionAsc(Long userId, Status status);
     List<BoardColumn> findAllByUserIdOrderByPositionAsc(Long userId);
+    Optional<BoardColumn> findByUserIdAndId(Long userId, Long id);
 }
