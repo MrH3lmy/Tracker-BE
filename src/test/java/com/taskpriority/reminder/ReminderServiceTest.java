@@ -253,23 +253,41 @@ class ReminderServiceTest {
     }
 
     @Test
-    void schedulingDisabledSkipsProducingEntirely() {
+    void schedulingDisabledSkipsScheduledProducingEntirely() {
         ReminderService disabled = buildService(false);
 
-        disabled.produceReminders();
+        disabled.scheduledProduceReminders();
 
         verify(userRepository, never()).findAllUserIds();
         verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
     @Test
-    void schedulingDisabledSkipsDispatchingEntirely() {
+    void schedulingDisabledSkipsScheduledDispatchingEntirely() {
+        ReminderService disabled = buildService(false);
+
+        disabled.scheduledDispatchNotifications();
+
+        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
+        verify(leaderLock, never()).tryAcquire(anyLong());
+    }
+
+    @Test
+    void schedulingDisabledStillAllowsProduceRemindersCalledDirectly() {
+        ReminderService disabled = buildService(false);
+
+        disabled.produceReminders();
+
+        verify(userRepository).findAllUserIds();
+    }
+
+    @Test
+    void schedulingDisabledStillAllowsDispatchNotificationsCalledDirectly() {
         ReminderService disabled = buildService(false);
 
         disabled.dispatchNotifications();
 
-        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
-        verify(leaderLock, never()).tryAcquire(anyLong());
+        verify(notificationOutboxRepository).claimBatch(any(), anyInt());
     }
 
     @Test

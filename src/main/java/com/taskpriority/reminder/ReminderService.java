@@ -110,9 +110,14 @@ public class ReminderService {
     }
 
     @Scheduled(fixedDelay = 60_000)
+    public void scheduledProduceReminders() {
+        if (schedulingEnabled) {
+            produceReminders();
+        }
+    }
+
     @Transactional
     public void produceReminders() {
-        if (!schedulingEnabled) return;
         // Protects against every instance in a multi-instance deployment running this scan
         // concurrently. pg_try_advisory_xact_lock is scoped to this transaction and releases
         // automatically at commit/rollback - if another instance already holds it this tick,
@@ -130,9 +135,14 @@ public class ReminderService {
     }
 
     @Scheduled(fixedDelay = 30_000)
+    public void scheduledDispatchNotifications() {
+        if (schedulingEnabled) {
+            dispatchNotifications();
+        }
+    }
+
     @Transactional
     public void dispatchNotifications() {
-        if (!schedulingEnabled) return;
         if (!leaderLock.tryAcquire(DISPATCH_NOTIFICATIONS_LOCK_KEY)) return;
 
         LocalDateTime now = LocalDateTime.now();

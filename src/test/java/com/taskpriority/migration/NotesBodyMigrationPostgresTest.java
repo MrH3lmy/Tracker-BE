@@ -48,15 +48,28 @@ class NotesBodyMigrationPostgresTest {
     @Autowired
     NoteRepository noteRepository;
 
+    // V1-V5 are executed for real through Flyway so the fixture can never drift from the actual
+    // historical schema (boards, task_dependencies, recurrence_rules, etc. all come from the real
+    // migration files, not a hand-copied subset). Only the notes table - the one V6 table this test
+    // actually cares about - is recreated by hand, matching V6__create_notes.sql exactly except for
+    // "body BYTEA" in place of "body TEXT", reproducing the legacy pre-conversion column type that
+    // V7 is responsible for fixing.
     @BeforeEach
-    void setUpBadPreMigrationSchema() {
+    void setUpLegacyByteaSchema() {
         jdbcTemplate.execute("DROP SCHEMA public CASCADE");
         jdbcTemplate.execute("CREATE SCHEMA public");
-        jdbcTemplate.execute("""
-                CREATE TABLE tasks (
-                    id BIGSERIAL PRIMARY KEY
-                )
-                """);
+
+        Flyway.configure()
+                .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                .locations("classpath:db/migration")
+                .target("5")
+                .load()
+                .migrate();
+
+        // Forget Flyway's own bookkeeping (but keep the real V1-V5 tables/data it just created) so
+        // the test method below can re-baseline at version 6 once the legacy notes table exists.
+        jdbcTemplate.execute("DROP TABLE flyway_schema_history");
+
         jdbcTemplate.execute("""
                 CREATE TABLE notes (
                     id BIGSERIAL PRIMARY KEY,
