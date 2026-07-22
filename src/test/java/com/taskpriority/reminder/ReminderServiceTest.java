@@ -300,12 +300,13 @@ class ReminderServiceTest {
     }
 
     @Test
-    void dispatchingSkipsEntirelyWhenAnotherInstanceHoldsTheLeaderLock() {
+    void dispatchingNeverConsultsTheLeaderLockSoConcurrentInstancesCanAllDispatch() {
         when(leaderLock.tryAcquire(anyLong())).thenReturn(false);
 
         reminderService.dispatchNotifications();
 
-        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
+        verify(notificationOutboxRepository).claimBatch(any(), anyInt());
+        verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
     @Test
