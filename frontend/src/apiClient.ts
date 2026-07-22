@@ -48,7 +48,7 @@ const REFRESH_TOKEN_STORAGE_KEY = 'tracker.auth.refreshToken';
 const AUTH_PATH_PREFIX = '/api/v1/auth/';
 
 let accessToken: string | null = null;
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: Promise<RefreshTokenResponseBody | null> | null = null;
 const authFailureListeners = new Set<() => void>();
 
 export function getAccessToken(): string | null {
@@ -91,17 +91,26 @@ export function notifyAuthFailure(): void {
   authFailureListeners.forEach((listener) => listener());
 }
 
+// `user` is typed loosely here (not imported from authContext.ts) to avoid apiClient.ts, a
+// low-level module, depending on app-level types; AuthProvider re-types it as AuthUser.
 interface RefreshTokenResponseBody {
   accessToken: string;
   refreshToken: string;
+  user: unknown;
 }
 
-// Performs the silent refresh with a plain fetch (not apiRequest) so it never
-// recurses into the 401-retry logic below. Concurrent callers share a single
-// in-flight request instead of firing one refresh per failed call.
-async function refreshAccessToken(): Promise<boolean> {
+// Performs the silent refresh with a plain fetch (not apiRequest) so it never recurses into the
+// 401-retry logic below. Concurrent callers - whether triggered by a 401 interceptor or by
+// AuthProvider's session-restore-on-load effect - share this single in-flight promise instead of
+// each firing their own POST /auth/refresh with the same refresh token. That matters beyond
+// avoiding wasted requests: the backend now consumes (revokes) a refresh token exactly once
+// (see AuthService#refresh), so two independent refresh calls racing on the same stored token
+// would make the loser fail with "Invalid or expired refresh token" even though nothing was
+// actually wrong - every caller in this module MUST go through this shared promise rather than
+// issuing its own POST /auth/refresh.
+async function refreshAccessToken(): Promise<RefreshTokenResponseBody | null> {
   const storedRefreshToken = getRefreshToken();
-  if (!storedRefreshToken) return false;
+  if (!storedRefreshToken) return null;
 
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
@@ -112,12 +121,12 @@ async function refreshAccessToken(): Promise<boolean> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: storedRefreshToken }),
         });
-        if (!response.ok) return false;
+        if (!response.ok) return null;
         const body = (await response.json()) as RefreshTokenResponseBody;
         setAuthTokens(body.accessToken, body.refreshToken);
-        return true;
+        return body;
       } catch {
-        return false;
+        return null;
       } finally {
         refreshInFlight = null;
       }
@@ -125,6 +134,13 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 
   return refreshInFlight;
+}
+
+// Exposed so AuthProvider's session-restore-on-load effect shares the same in-flight refresh as
+// the 401 interceptor below, instead of issuing an independent POST /auth/refresh with the same
+// refresh token (see the comment on refreshAccessToken above).
+export async function refreshSession(): Promise<RefreshTokenResponseBody | null> {
+  return refreshAccessToken();
 }
 
 function recordApiCall<T>(result: ApiCallResult<T>): ApiCallResult<T> {
@@ -237,7 +253,7 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
     if (!response.ok) {
       if (response.status === 401 && !isRetryAfterRefresh && !normalizedPath.startsWith(AUTH_PATH_PREFIX)) {
         const refreshed = await refreshAccessToken();
-        if (refreshed) {
+        if (refreshed !== null) {
           return apiRequest<T>(method, path, options, true);
         }
         clearAuthTokens();

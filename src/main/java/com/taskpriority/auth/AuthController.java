@@ -1,6 +1,7 @@
 package com.taskpriority.auth;
 
 import com.taskpriority.common.exception.ApiErrorResponse;
+import com.taskpriority.common.exception.TooManyRequestsException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -24,10 +26,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final CurrentUserService currentUserService;
+    private final RefreshAttemptLimiter refreshAttemptLimiter;
 
-    public AuthController(AuthService authService, CurrentUserService currentUserService) {
+    public AuthController(AuthService authService, CurrentUserService currentUserService, RefreshAttemptLimiter refreshAttemptLimiter) {
         this.authService = authService;
         this.currentUserService = currentUserService;
+        this.refreshAttemptLimiter = refreshAttemptLimiter;
     }
 
     @Operation(summary = "Register a new user", description = "Creates a user account and returns an access/refresh token pair. Public endpoint, no bearer token required.")
@@ -57,11 +61,23 @@ public class AuthController {
     @SecurityRequirements
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Token refreshed"),
-            @ApiResponse(responseCode = "400", description = "Invalid, expired, or revoked refresh token", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+            @ApiResponse(responseCode = "400", description = "Invalid, expired, or revoked refresh token", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "429", description = "Too many failed refresh attempts from this client", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping("/refresh")
-    public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
-        return authService.refresh(request);
+    public AuthResponse refresh(@Valid @RequestBody RefreshRequest request, HttpServletRequest httpRequest) {
+        String clientKey = httpRequest.getRemoteAddr();
+        if (refreshAttemptLimiter.isBlocked(clientKey)) {
+            throw new TooManyRequestsException("Too many failed refresh attempts. Try again later.");
+        }
+        try {
+            AuthResponse response = authService.refresh(request);
+            refreshAttemptLimiter.recordSuccess(clientKey);
+            return response;
+        } catch (IllegalArgumentException ex) {
+            refreshAttemptLimiter.recordFailure(clientKey);
+            throw ex;
+        }
     }
 
     @Operation(summary = "Log out", description = "Revokes the given refresh token. Public endpoint, no bearer token required.")

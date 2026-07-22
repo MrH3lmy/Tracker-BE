@@ -105,12 +105,13 @@ class AuthServiceTest {
         session.setRevoked(false);
 
         when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(1);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
 
         AuthResponse response = authService.refresh(new RefreshRequest("some-refresh-token"));
 
         assertNotEquals("some-refresh-token", response.refreshToken());
-        assertEquals(true, session.isRevoked());
+        verify(userSessionRepository).consumeByTokenHash(anyString(), any());
     }
 
     @Test
@@ -118,8 +119,33 @@ class AuthServiceTest {
         UserSession session = new UserSession();
         session.setExpiresAt(LocalDateTime.now().minusMinutes(1));
         when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        // consumeByTokenHash's WHERE clause excludes expired rows, so the conditional UPDATE
+        // affects 0 rows here - same as an unknown/revoked token, and unstubbed mocks already
+        // default int-returning methods to 0, but stub it explicitly for clarity.
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
         assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("expired-token")));
+    }
+
+    @Test
+    void refreshRejectsAlreadyConsumedTokenEvenWhenTheCachedEntityLooksValid() {
+        // Simulates the race this fix closes: a second concurrent request reads the session
+        // before the first request's UPDATE commits, so the plain SELECT still shows
+        // revoked=false, but the atomic conditional UPDATE (which is what actually matters)
+        // affects 0 rows because the first request already consumed it.
+        User user = existingUser("user@example.com", "correct-password");
+        user.setId(7L);
+        UserSession session = new UserSession();
+        session.setId(99L);
+        session.setUserId(7L);
+        session.setExpiresAt(LocalDateTime.now().plusDays(1));
+        session.setRevoked(false);
+
+        when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
+
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("already-used-token")));
+        verify(userRepository, org.mockito.Mockito.never()).findById(any());
     }
 
     private User existingUser(String email, String rawPassword) {
