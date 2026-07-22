@@ -4,15 +4,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
-const REFRESH_TOKEN_STORAGE_KEY = 'tracker.auth.refreshToken';
 const AUTH_USER = { id: 1, email: 'test@example.com', displayName: 'Test User', tier: 'FREE', role: 'USER' };
 
 async function renderAppAt(path: string) {
-  window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, 'stub-refresh-token');
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith('/api/v1/auth/refresh')) {
-      return Promise.resolve(new Response(JSON.stringify({ accessToken: 'stub-access-token', refreshToken: 'stub-refresh-token', user: AUTH_USER }), {
+      return Promise.resolve(new Response(JSON.stringify({ accessToken: 'stub-access-token', user: AUTH_USER }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }));

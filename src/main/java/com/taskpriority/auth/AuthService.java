@@ -83,8 +83,8 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse refresh(RefreshRequest request) {
-        String presentedHash = sha256(request.refreshToken());
+    public AuthResponse refresh(String rawRefreshToken) {
+        String presentedHash = sha256(rawRefreshToken);
         // Load first (for userId/deviceLabel) then atomically consume via a conditional UPDATE.
         // The UPDATE - not this read - is what makes rotation exactly-once: concurrent callers
         // presenting the same token will both reach this point seeing revoked=false (a plain
@@ -107,8 +107,8 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(RefreshRequest request) {
-        String presentedHash = sha256(request.refreshToken());
+    public void logout(String rawRefreshToken) {
+        String presentedHash = sha256(rawRefreshToken);
         userSessionRepository.findByTokenHash(presentedHash).ifPresent(session -> {
             session.setRevoked(true);
             userSessionRepository.save(session);

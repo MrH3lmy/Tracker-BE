@@ -19,7 +19,6 @@ function Consumer() {
 
 beforeEach(() => {
   clearAuthTokens();
-  window.localStorage.setItem('tracker.auth.refreshToken', 'stored-refresh-token');
 });
 
 afterEach(() => {
@@ -45,7 +44,6 @@ describe('AuthProvider session restoration', () => {
         await refreshGate;
         return jsonResponse(200, {
           accessToken: 'new-access-token',
-          refreshToken: 'new-refresh-token',
           user: { id: 1, email: 'racer@example.com', tier: 'FREE', role: 'USER' },
         });
       }

@@ -32,6 +32,11 @@ public class WebConfig {
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Content-Disposition"));
         configuration.setMaxAge(3600L);
+        // Required for the browser to send/receive the HttpOnly refresh-token cookie cross-origin
+        // (frontend and backend run on different ports even in local dev). Safe only because
+        // allowedOrigins is always an explicit list, never "*" - CORS forbids combining
+        // allowCredentials(true) with a wildcard origin, and Spring enforces that at request time.
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -71,7 +71,7 @@ class AuthServiceRefreshConcurrencyPostgresTest {
             Callable<Object> attempt = () -> {
                 barrier.await(10, TimeUnit.SECONDS);
                 try {
-                    return authService.refresh(new RefreshRequest(sharedRefreshToken));
+                    return authService.refresh(sharedRefreshToken);
                 } catch (IllegalArgumentException ex) {
                     return ex;
                 }

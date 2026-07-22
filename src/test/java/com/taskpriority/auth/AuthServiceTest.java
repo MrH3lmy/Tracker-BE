@@ -112,7 +112,7 @@ class AuthServiceTest {
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(1);
         when(userRepository.findById(7L)).thenReturn(Optional.of(user));
 
-        AuthResponse response = authService.refresh(new RefreshRequest("some-refresh-token"));
+        AuthResponse response = authService.refresh("some-refresh-token");
 
         assertNotEquals("some-refresh-token", response.refreshToken());
         verify(userSessionRepository).consumeByTokenHash(anyString(), any());
@@ -128,7 +128,7 @@ class AuthServiceTest {
         // default int-returning methods to 0, but stub it explicitly for clarity.
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("expired-token")));
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("expired-token"));
     }
 
     @Test
@@ -148,7 +148,7 @@ class AuthServiceTest {
         when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThrows(IllegalArgumentException.class, () -> authService.refresh(new RefreshRequest("already-used-token")));
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("already-used-token"));
         verify(userRepository, org.mockito.Mockito.never()).findById(any());
     }
 
