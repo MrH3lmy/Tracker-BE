@@ -306,6 +306,26 @@ Notes:
 - Keep migrations forward-only and immutable once applied in shared environments.
 - Use one migration per logical schema change.
 
+### Migration immutability policy
+
+**Once a versioned migration file (`V<n>__*.sql`) has been merged to `main`, its content must never change again.** Editing an already-merged migration changes its Flyway checksum; any environment that already applied the old content will fail `flyway validate` (and refuse to start) the next time it deploys, even though nothing about its actual schema is wrong.
+
+If a merged migration turns out to be broken or needs a different approach:
+
+- **Do not edit the existing `V<n>__*.sql` file.** Leave it exactly as merged, bugs and all.
+- Add a new migration (e.g. `V<n+1>__fix_<description>.sql`) that corrects the schema/data going forward. Make it idempotent — safe to run whether or not the original migration's bug ever manifested in a given environment.
+- If the correction needs to special-case "did the broken version already run here", branch on the current schema/data state inside the new migration rather than assuming a starting point.
+
+This is not a hypothetical: `V29__backfill_and_enforce_user_id_not_null.sql`, `V30__rebuild_app_settings_composite_key.sql`, and `V31__rebuild_priority_scoring_settings_user_scope.sql` were each edited in place after merging to `main` (twice, in V29's case) before this policy was written down. Their current content is correct and is now the frozen, canonical version — **do not edit them again**, even to "clean up" the history. If you deployed from `main` at a commit between when one of those files was first merged and when it was last edited, your `flyway_schema_history` table has a checksum for the old content and `flyway validate` will fail on your next deploy. Recover with:
+
+1. **Back up your database first.**
+2. Confirm your actual schema matches what the *current* V29/V30/V31 content would have produced (for V29: `tasks`, `task_dependencies`, `task_schedules`, `habits`, `habit_schedules`, `habit_check_ins`, `notes`, `tags`, `note_collections`, `note_templates`, `note_saved_views`, `note_attachments`, `note_blocks`, `note_task_links`, `note_ai_generations`, and `note_versions` all have `user_id NOT NULL`; for V30: `app_settings` has a `(user_id, setting_key)` primary key; for V31: `priority_scoring_settings` has a `(user_id, setting_name)` unique constraint). If it doesn't, you're in a different, worse state — restore from backup rather than repairing.
+3. Once confirmed, run `flyway repair` to resync the recorded checksums with the current file content, then `flyway validate` to confirm the fix.
+
+`flyway repair` is a recovery tool for exactly this situation, not a substitute for the immutability rule above — it should never be part of the normal migration workflow.
+
+A CI check (`.github/workflows/migration-immutability.yml`) enforces this going forward: it fails any pull request that modifies or deletes a migration file that already exists on `main`.
+
 ---
 
 ## Recurring task completion strategy
