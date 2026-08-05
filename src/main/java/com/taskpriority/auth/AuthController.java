@@ -16,6 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -41,6 +44,7 @@ public class AuthController {
     private final long refreshTokenTtlDays;
     private final boolean secureCookies;
     private final String sameSitePolicy;
+    private final List<String> allowedOrigins;
 
     public AuthController(
             AuthService authService,
@@ -48,7 +52,8 @@ public class AuthController {
             RefreshAttemptLimiter refreshAttemptLimiter,
             @Value("${app.security.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays,
             @Value("${app.security.cookies.secure:true}") boolean secureCookies,
-            @Value("${app.security.cookies.same-site:Lax}") String sameSitePolicy
+            @Value("${app.security.cookies.same-site:Lax}") String sameSitePolicy,
+            @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}") String allowedOrigins
     ) {
         this.authService = authService;
         this.currentUserService = currentUserService;
@@ -56,6 +61,10 @@ public class AuthController {
         this.refreshTokenTtlDays = refreshTokenTtlDays;
         this.secureCookies = secureCookies;
         this.sameSitePolicy = sameSitePolicy;
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
     }
 
     @Operation(summary = "Register a new user", description = "Creates a user account and returns an access token + user. The refresh token is set as an HttpOnly cookie, never returned in the response body. Public endpoint, no bearer token required.")
@@ -94,6 +103,7 @@ public class AuthController {
             @CookieValue(name = REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenCookie,
             HttpServletRequest httpRequest
     ) {
+        rejectDisallowedOrigin(httpRequest);
         String clientKey = httpRequest.getRemoteAddr();
         if (refreshAttemptLimiter.isBlocked(clientKey)) {
             throw new TooManyRequestsException("Too many failed refresh attempts. Try again later.");
@@ -118,7 +128,11 @@ public class AuthController {
             @ApiResponse(responseCode = "204", description = "Logged out")
     })
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@CookieValue(name = REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenCookie) {
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenCookie,
+            HttpServletRequest httpRequest
+    ) {
+        rejectDisallowedOrigin(httpRequest);
         if (refreshTokenCookie != null && !refreshTokenCookie.isBlank()) {
             authService.logout(refreshTokenCookie);
         }
@@ -138,6 +152,22 @@ public class AuthController {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, expiredRefreshCookie().toString())
                 .build();
+    }
+
+    // Defense-in-depth CSRF check for the two endpoints that authenticate purely off the ambient
+    // HttpOnly refresh-token cookie (no bearer token, no explicit consent gesture): the SameSite=
+    // Lax cookie attribute already stops a cross-site POST from carrying the cookie in modern
+    // browsers, but this backs that up in case a browser mishandles SameSite or the cookie is
+    // ever loosened to None for a cross-site frontend deployment. Only rejects when the browser
+    // *does* send an Origin header and it isn't one of the configured frontend origins - Origin is
+    // reliably sent by browsers on cross-origin and same-origin fetch/XHR POSTs, but some
+    // non-browser or legacy clients omit it entirely, so a missing header is not itself treated as
+    // suspicious (that's what SameSite/cookie scoping already guards).
+    private void rejectDisallowedOrigin(HttpServletRequest request) {
+        String origin = request.getHeader(HttpHeaders.ORIGIN);
+        if (origin != null && !allowedOrigins.contains(origin)) {
+            throw new AccessDeniedException("Request origin is not allowed.");
+        }
     }
 
     private ResponseEntity<AuthResponseBody> withRefreshCookie(ResponseEntity.BodyBuilder responseBuilder, AuthResponse result) {

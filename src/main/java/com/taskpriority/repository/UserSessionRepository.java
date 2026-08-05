@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface UserSessionRepository extends JpaRepository<UserSession, Long> {
     Optional<UserSession> findByTokenHash(String tokenHash);
@@ -28,4 +29,12 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     @Modifying
     @Query("UPDATE UserSession s SET s.revoked = true WHERE s.tokenHash = :tokenHash AND s.revoked = false AND s.expiresAt > :now")
     int consumeByTokenHash(String tokenHash, LocalDateTime now);
+
+    /**
+     * Revokes every active session descended from the same login/registration as a replayed
+     * token, not just the one that was presented - see AuthService#refresh.
+     */
+    @Modifying
+    @Query("UPDATE UserSession s SET s.revoked = true WHERE s.familyId = :familyId AND s.revoked = false")
+    int revokeByFamilyId(UUID familyId);
 }

@@ -152,6 +152,44 @@ class AuthServiceTest {
         verify(userRepository, org.mockito.Mockito.never()).findById(any());
     }
 
+    @Test
+    void refreshOfAnAlreadyConsumedTokenRevokesTheWholeFamily() {
+        // Distinct from the concurrent-race test above: here the session was ALREADY revoked at
+        // read time (not flipped mid-flight by a concurrent winner), so this is a token being
+        // replayed well after its legitimate rotation already completed - the strong signal of
+        // theft that should nuke every session descended from the same login, not just reject
+        // this one request.
+        java.util.UUID familyId = java.util.UUID.randomUUID();
+        UserSession session = new UserSession();
+        session.setId(99L);
+        session.setUserId(7L);
+        session.setFamilyId(familyId);
+        session.setExpiresAt(LocalDateTime.now().plusDays(1));
+        session.setRevoked(true);
+
+        when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
+
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("stolen-already-used-token"));
+        verify(userSessionRepository).revokeByFamilyId(familyId);
+    }
+
+    @Test
+    void refreshRejectsAlreadyConsumedTokenEvenWhenTheCachedEntityLooksValidWithoutRevokingFamily() {
+        UserSession session = new UserSession();
+        session.setId(99L);
+        session.setUserId(7L);
+        session.setFamilyId(java.util.UUID.randomUUID());
+        session.setExpiresAt(LocalDateTime.now().plusDays(1));
+        session.setRevoked(false);
+
+        when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
+
+        assertThrows(IllegalArgumentException.class, () -> authService.refresh("racing-token"));
+        verify(userSessionRepository, org.mockito.Mockito.never()).revokeByFamilyId(any());
+    }
+
     private User existingUser(String email, String rawPassword) {
         User user = new User();
         user.setId(1L);

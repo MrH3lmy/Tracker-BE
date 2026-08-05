@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -69,7 +70,7 @@ public class AuthService {
         user = userRepository.save(user);
         noteTemplateService.seedDefaultTemplatesForUser(user.getId());
         boardProvisioningService.provisionDefaultBoardForUser(user.getId());
-        return issueSession(user, request.deviceLabel());
+        return issueSession(user, request.deviceLabel(), UUID.randomUUID());
     }
 
     @Transactional
@@ -79,31 +80,40 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new IllegalArgumentException("Invalid email or password.");
         }
-        return issueSession(user, request.deviceLabel());
+        return issueSession(user, request.deviceLabel(), UUID.randomUUID());
     }
 
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
         String presentedHash = sha256(rawRefreshToken);
-        // Load first (for userId/deviceLabel) then atomically consume via a conditional UPDATE.
-        // The UPDATE - not this read - is what makes rotation exactly-once: concurrent callers
-        // presenting the same token will both reach this point seeing revoked=false (a plain
-        // SELECT never blocks), but only one of their UPDATEs will actually flip the row, because
-        // Postgres serializes concurrent UPDATEs against the same row and re-evaluates the WHERE
-        // clause after the first commits. The loser's UPDATE affects 0 rows and is rejected below
-        // with the same generic error as an unknown/expired/already-revoked token.
+        // Load first (for userId/deviceLabel/familyId) then atomically consume via a conditional
+        // UPDATE. The UPDATE - not this read - is what makes rotation exactly-once: concurrent
+        // callers presenting the same token will both reach this point seeing revoked=false (a
+        // plain SELECT never blocks), but only one of their UPDATEs will actually flip the row,
+        // because Postgres serializes concurrent UPDATEs against the same row and re-evaluates the
+        // WHERE clause after the first commits. The loser's UPDATE affects 0 rows and is rejected
+        // below with the same generic error as an unknown/expired token.
         UserSession session = userSessionRepository.findByTokenHash(presentedHash)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token."));
 
         int consumed = userSessionRepository.consumeByTokenHash(presentedHash, LocalDateTime.now());
         if (consumed == 0) {
+            // session.isRevoked() was already true at the SELECT above (not just flipped by a
+            // concurrent winner we lost a race against) means this exact token was consumed in an
+            // earlier, already-committed rotation - a legitimate client would never present a
+            // token again after receiving its replacement, so this is a strong signal the token
+            // was stolen. Revoke every session descended from the same login, not just this one
+            // presented token, so the thief's downstream (already-rotated-to) session dies too.
+            if (session.isRevoked()) {
+                userSessionRepository.revokeByFamilyId(session.getFamilyId());
+            }
             throw new IllegalArgumentException("Invalid or expired refresh token.");
         }
 
         User user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token."));
 
-        return issueSession(user, session.getDeviceLabel());
+        return issueSession(user, session.getDeviceLabel(), session.getFamilyId());
     }
 
     @Transactional
@@ -120,7 +130,7 @@ public class AuthService {
         userSessionRepository.findByUserIdAndRevokedFalse(userId).forEach(session -> session.setRevoked(true));
     }
 
-    private AuthResponse issueSession(User user, String deviceLabel) {
+    private AuthResponse issueSession(User user, String deviceLabel, UUID familyId) {
         entitlementService.enforceSessionCap(user.getId(), user.getTier());
 
         String rawRefreshToken = generateOpaqueToken();
@@ -128,6 +138,7 @@ public class AuthService {
         session.setUserId(user.getId());
         session.setTokenHash(sha256(rawRefreshToken));
         session.setDeviceLabel(deviceLabel);
+        session.setFamilyId(familyId);
         session.setExpiresAt(LocalDateTime.now().plus(refreshTokenTtlDays, ChronoUnit.DAYS));
         userSessionRepository.save(session);
 
