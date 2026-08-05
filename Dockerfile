@@ -19,9 +19,11 @@ RUN apt-get update \
 
 # Run as a dedicated non-root user rather than the image's default root, so a container escape or
 # arbitrary-file-write vulnerability in the app/JVM doesn't hand an attacker root inside the
-# container.
-RUN groupadd --system --gid 1000 taskpriority \
-    && useradd --system --uid 1000 --gid taskpriority --no-create-home taskpriority
+# container. IDs are auto-assigned (not pinned to e.g. 1000) - nothing here depends on the exact
+# value, and the base image has started shipping its own GID/UID 1000 (an "ubuntu" user), which a
+# hardcoded --gid/--uid 1000 collides with.
+RUN groupadd --system taskpriority \
+    && useradd --system --gid taskpriority --no-create-home taskpriority
 
 COPY --from=build /build/target/*.jar app.jar
 RUN chown taskpriority:taskpriority /app/app.jar
