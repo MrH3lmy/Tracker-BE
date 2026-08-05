@@ -207,8 +207,18 @@ Services:
 - Frontend: `http://localhost:5173`
 - App/API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
+- MinIO (S3-compatible object storage for note attachments): API `http://localhost:9000`, console `http://localhost:9001` (`taskpriority-dev` / `taskpriority-dev-secret`)
 
 The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
+
+### Note attachment storage
+
+Note screenshot attachments (`NoteAttachment`) can live in one of two places, selected per-row by `storage_provider`:
+
+- **`DATABASE`** (default everywhere `app.storage.s3.enabled` isn't explicitly set to `true`): bytes live in `note_attachments.data` (`bytea`), exactly as before. Every existing environment, and every test in this repo, uses this path unless it opts in.
+- **`S3`**: bytes live in an S3-compatible bucket instead - see `AttachmentStorage`/`S3AttachmentStorage`/`AttachmentStorageConfig`. Uploads stream directly from the multipart request to the bucket (no `MultipartFile#getBytes()` buffering); downloads/deletes go through the same interface. `docker compose up` enables this against the `minio` service automatically. To point at real S3 (or a different MinIO/LocalStack instance) elsewhere, set: `STORAGE_S3_ENABLED=true`, `STORAGE_S3_BUCKET`, `STORAGE_S3_REGION`, `STORAGE_S3_ACCESS_KEY`/`STORAGE_S3_SECRET_KEY` (omit both to fall back to the AWS SDK's normal credential chain), `STORAGE_S3_ENDPOINT` (only for a non-AWS provider), `STORAGE_S3_PATH_STYLE_ACCESS` (`true` for MinIO/LocalStack, generally `false` for real AWS S3).
+
+Known gaps, tracked as follow-up rather than blocking this pass (issue #261): there is no backfill job to migrate already-stored `DATABASE`-provider rows to `S3` after enabling it - existing rows keep reading from PostgreSQL indefinitely (which is a legitimate documented behavior, not a bug, but the issue's "migrate everything to object storage" goal isn't automated). Deleting a note cascades attachment rows away in PostgreSQL (`ON DELETE CASCADE`) without going through `NoteService.deleteScreenshot`, so it does **not** delete the corresponding S3 objects - only deleting a screenshot individually does. Antivirus/malware scanning, per-file/per-user upload quota beyond the existing size limit, and presigned client-direct-upload are not implemented.
 
 ---
 

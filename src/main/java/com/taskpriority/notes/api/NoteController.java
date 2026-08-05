@@ -213,7 +213,7 @@ public class NoteController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(attachment.getContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + attachment.getFileName() + "\"")
-                .body(attachment.getData());
+                .body(noteService.readScreenshotBytes(attachment));
     }
 
     @Operation(summary = "Delete a note screenshot")
