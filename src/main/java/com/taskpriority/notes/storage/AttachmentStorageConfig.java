@@ -39,7 +39,8 @@ public class AttachmentStorageConfig {
     @Bean
     @ConditionalOnProperty(prefix = "app.storage.s3", name = "enabled", havingValue = "true")
     public AttachmentStorage attachmentStorage(S3Client s3Client, AttachmentStorageProperties properties) {
-        return new S3AttachmentStorage(s3Client, properties.getBucket());
+        AttachmentStorage s3Storage = new S3AttachmentStorage(s3Client, properties.getBucket());
+        return new TransactionAwareAttachmentStorage(s3Storage);
     }
 
     private static AwsCredentialsProvider credentialsProvider(AttachmentStorageProperties properties) {
