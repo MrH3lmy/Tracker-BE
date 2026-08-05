@@ -531,7 +531,7 @@ To reproduce the Docker/Trivy job locally (needs Docker and [Trivy](https://triv
 
 ```bash
 docker build -t taskpriority-backend:local .
-docker run --rm taskpriority-backend:local id -u   # must not print 0
+docker run --rm --entrypoint id taskpriority-backend:local -u   # must not print 0
 trivy image taskpriority-backend:local
 trivy fs .
 ```
