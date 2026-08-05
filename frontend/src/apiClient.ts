@@ -313,7 +313,6 @@ async function fetchAllTaskPages<T>(path: string, options?: { signal?: AbortSign
   const combined: unknown[] = [];
   let page = 0;
   let totalLatencyMs = 0;
-  let lastResult: ApiCallResult<unknown[]> | null = null;
 
   while (true) {
     const result = await apiRequest<unknown[]>('GET', withTaskPage(path, page), {
@@ -330,21 +329,16 @@ async function fetchAllTaskPages<T>(path: string, options?: { signal?: AbortSign
     }
 
     combined.push(...result.data);
-    lastResult = result;
-    if (result.data.length < TASK_COMPATIBILITY_PAGE_SIZE) break;
+    if (result.data.length < TASK_COMPATIBILITY_PAGE_SIZE) {
+      return {
+        ...result,
+        latencyMs: totalLatencyMs,
+        data: combined as T,
+        rawBody: JSON.stringify(combined),
+      };
+    }
     page += 1;
   }
-
-  if (lastResult === null) {
-    throw new Error('Task pagination completed without a response.');
-  }
-
-  return {
-    ...lastResult,
-    latencyMs: totalLatencyMs,
-    data: combined as T,
-    rawBody: JSON.stringify(combined),
-  };
 }
 
 export async function apiJson<T>(method: HttpMethod, path: string, body?: unknown, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ApiCallResult<T>> {
