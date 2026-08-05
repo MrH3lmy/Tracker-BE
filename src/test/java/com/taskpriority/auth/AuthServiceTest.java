@@ -34,6 +34,7 @@ class AuthServiceTest {
     private EntitlementService entitlementService;
     private NoteTemplateService noteTemplateService;
     private BoardProvisioningService boardProvisioningService;
+    private SessionRevocationService sessionRevocationService;
     private AuthService authService;
 
     @BeforeEach
@@ -45,7 +46,8 @@ class AuthServiceTest {
         entitlementService = mock(EntitlementService.class);
         noteTemplateService = mock(NoteTemplateService.class);
         boardProvisioningService = mock(BoardProvisioningService.class);
-        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, boardProvisioningService, 30);
+        sessionRevocationService = mock(SessionRevocationService.class);
+        authService = new AuthService(userRepository, userSessionRepository, passwordEncoder, jwtService, entitlementService, noteTemplateService, boardProvisioningService, sessionRevocationService, 30);
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -171,7 +173,7 @@ class AuthServiceTest {
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
         assertThrows(IllegalArgumentException.class, () -> authService.refresh("stolen-already-used-token"));
-        verify(userSessionRepository).revokeByFamilyId(familyId);
+        verify(sessionRevocationService).revokeFamily(familyId);
     }
 
     @Test
@@ -187,7 +189,7 @@ class AuthServiceTest {
         when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(0);
 
         assertThrows(IllegalArgumentException.class, () -> authService.refresh("racing-token"));
-        verify(userSessionRepository, org.mockito.Mockito.never()).revokeByFamilyId(any());
+        verify(sessionRevocationService, org.mockito.Mockito.never()).revokeFamily(any());
     }
 
     private User existingUser(String email, String rawPassword) {

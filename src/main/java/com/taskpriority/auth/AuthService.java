@@ -12,6 +12,7 @@ import com.taskpriority.repository.UserSessionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,7 @@ public class AuthService {
     private final EntitlementService entitlementService;
     private final NoteTemplateService noteTemplateService;
     private final BoardProvisioningService boardProvisioningService;
+    private final SessionRevocationService sessionRevocationService;
     private final long refreshTokenTtlDays;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -44,6 +46,7 @@ public class AuthService {
             EntitlementService entitlementService,
             NoteTemplateService noteTemplateService,
             BoardProvisioningService boardProvisioningService,
+            SessionRevocationService sessionRevocationService,
             @Value("${app.security.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays
     ) {
         this.userRepository = userRepository;
@@ -53,6 +56,7 @@ public class AuthService {
         this.entitlementService = entitlementService;
         this.noteTemplateService = noteTemplateService;
         this.boardProvisioningService = boardProvisioningService;
+        this.sessionRevocationService = sessionRevocationService;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
     }
 
@@ -105,7 +109,7 @@ public class AuthService {
             // was stolen. Revoke every session descended from the same login, not just this one
             // presented token, so the thief's downstream (already-rotated-to) session dies too.
             if (session.isRevoked()) {
-                userSessionRepository.revokeByFamilyId(session.getFamilyId());
+                sessionRevocationService.revokeFamily(session.getFamilyId());
             }
             throw new IllegalArgumentException("Invalid or expired refresh token.");
         }

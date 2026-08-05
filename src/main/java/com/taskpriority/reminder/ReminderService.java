@@ -297,6 +297,10 @@ public class ReminderService {
             entry.setBody(content.body());
             entry.setLink(content.link());
             entry.setStatus(NotificationStatus.PENDING);
+            // next_attempt_at is NOT NULL (V41) with a DB-side DEFAULT CURRENT_TIMESTAMP, but
+            // Hibernate always includes every mapped column in its INSERT - an explicit NULL here
+            // would override that default rather than falling back to it, and fail the constraint.
+            entry.setNextAttemptAt(now);
             notificationOutboxRepository.save(entry);
 
             reminder.setStatus(ReminderStatus.SENT);
