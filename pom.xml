@@ -96,6 +96,16 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
             <version>2.51.0</version>
+            <exclusions>
+                <!-- S3AttachmentStorage only uses the synchronous S3Client, which defaults to the
+                     Apache HTTP client (already a direct/transitive dependency elsewhere) - the
+                     Netty-based async transport this otherwise pulls in is unused dead weight, and
+                     its own CVEs (Trivy image scan) aren't worth tracking for code we never run. -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
