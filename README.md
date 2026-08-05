@@ -566,10 +566,21 @@ trivy fs .
 
 ### Production configuration
 
-- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it.
-- Required environment variables (the app fails fast at startup if these are missing/invalid rather than starting in a broken state): `JWT_SECRET` (32+ random bytes - see `JwtService#init`), and the database connection (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`, which fail via the standard "connection refused"/auth-failure path if wrong rather than a custom check).
+- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it - and the base file's convenient localhost/dev-credential defaults are exactly what `application-prod.properties` overrides with no-default placeholders (issue #259), so the two files together are what makes `prod` fail fast instead of silently starting against `localhost`.
+- **`dev`/local profiles are the only place with convenient defaults.** Only the `prod` and `local-test` (automated tests, H2) profiles have dedicated properties files; running without `SPRING_PROFILES_ACTIVE` set at all uses the base `application.properties` defaults directly - fine for `mvn spring-boot:run` against a local Postgres, not a supported production configuration. `prod` is the only profile intended for a real deployment.
+- **Required environment variables** in the `prod` profile - the app fails at startup (before accepting any traffic) if one is missing, naming the property without ever printing a value:
+
+  | Variable | Secret? | Enforced by |
+  |---|---|---|
+  | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | password is secret | no-default placeholder in `application-prod.properties` (Spring's own placeholder resolution) |
+  | `JWT_SECRET` (32+ random bytes) | secret | `JwtService#init` (`@PostConstruct`), checked everywhere, all profiles |
+  | `CORS_ALLOWED_ORIGINS` | not secret | no-default placeholder + `ProductionConfigValidator` (also rejects a wildcard origin) |
+  | `REDIS_HOST` (backs distributed auth rate limiting, see below) | not secret | no-default placeholder in `application-prod.properties` |
+
+  `ProductionConfigValidator` (`com.taskpriority.config`, `@Profile("prod")`) additionally sanity-checks that `app.notifications.dispatch-batch-size`/`max-dispatch-attempts`/`processing-lease-timeout-minutes` are positive. There are currently no external email/SMS notification providers in this API (`NotificationChannel` only has `IN_APP`), so there's nothing else in that category to require yet - add it here when one is introduced.
+- **Redis is deliberately not a hard runtime dependency.** `REDIS_HOST` must be set explicitly in `prod` (so a real deployment can't silently default to `localhost` and quietly lose cross-instance rate-limit sharing), but if Redis becomes unreachable *after* startup, `RedisRateLimiter` fails open rather than taking authentication down with it - see "Authentication rate limiting" above. `management.health.redis.enabled=false` keeps a Redis outage from flipping `/actuator/health` (and therefore the Docker `HEALTHCHECK`/orchestrator readiness probe) to `DOWN` for the same reason.
 - Every request gets a correlation/request ID (`X-Request-Id` - reused from the inbound header if the caller already set one, otherwise generated) attached to the response and to the logging MDC for the duration of that request; see `RequestIdFilter`.
-- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this.
+- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this, and `AuthRateLimitService`/`RedisRateLimiter` never put a raw email in a rate-limit key or log line either (see "Authentication rate limiting").
 - The Docker image runs as a dedicated non-root user (see the Dockerfile's `USER` directive) and defines a `HEALTHCHECK` against `/actuator/health`, which is reachable without authentication (see `SecurityConfig`) since orchestrator/container health probes never supply a JWT.
 
 ---
