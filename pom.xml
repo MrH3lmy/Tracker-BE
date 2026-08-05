@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <version>3.5.12</version>
         <relativePath/>
     </parent>
 
@@ -87,6 +87,9 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <!-- Boot 3.5.12 manages 42.7.10, which still misses the CVE-2026-54291 fix (42.7.12+) -
+                 pin explicitly until the parent's managed version catches up. -->
+            <version>42.7.12</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>

@@ -91,7 +91,7 @@ class CompositeTenantIsolationPostgresTest {
 
     private Long insertProject(Long userId, String name) {
         return jdbcTemplate.queryForObject(
-                "INSERT INTO projects (user_id, name) VALUES (?, ?) RETURNING id", Long.class, userId, name);
+                "INSERT INTO projects (user_id, name, owner_user_id) VALUES (?, ?, ?) RETURNING id", Long.class, userId, name, userId);
     }
 
     @Test

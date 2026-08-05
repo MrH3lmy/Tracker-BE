@@ -452,6 +452,34 @@ A row that keeps failing for the same reason across multiple replay attempts (ch
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, as four independent jobs: `backend`, `frontend`, `dependency-and-secret-scan`, and `docker`. `.github/workflows/migration-immutability.yml` (see "Migration immutability policy" above) runs alongside them whenever a migration file changes. Mark all of these required in the repo's branch protection settings (Settings -> Branches -> add a rule for `main` -> Require status checks to pass) - a workflow file alone doesn't block merges by itself; someone with admin access has to opt the branch into requiring them.
 
+### Branch protection / merge policy for `main`
+
+A workflow file only *runs* checks; it doesn't *block* merges on its own. An admin must configure a branch protection rule or repository ruleset for `main` (Settings -> Rules -> Rulesets, or the legacy Settings -> Branches -> Branch protection rules) with:
+
+- Require a pull request before merging, with conversation resolution required.
+- Require branches to be up to date with `main` before merging (or use the merge queue).
+- Require these status checks to pass, using their exact job names so the rule keeps matching after workflow refactors:
+  - `Backend build, test, coverage, static analysis` (from `ci.yml`, job `backend`)
+  - `Frontend build, lint, test` (from `ci.yml`, job `frontend`)
+  - `Dependency + secret scan (Trivy)` (from `ci.yml`, job `dependency-and-secret-scan`)
+  - `Docker build + image scan` (from `ci.yml`, job `docker`)
+  - `Fail if an existing migration file was modified or deleted` (from `migration-immutability.yml`, only runs when migration files change - configure it as required anyway so a PR that touches migrations can't merge without it reporting)
+- Do not allow cancelled, skipped, neutral, or timed-out mandatory jobs to satisfy the rule (this is the default GitHub Actions status-check behavior as long as the job names above are marked required and are not wrapped in a `continue-on-error: true` step).
+- Block force pushes and branch deletion on `main`.
+- Apply the rule to administrators as well, with a documented break-glass exception (below) for the rare case that requires bypassing it.
+
+#### Emergency bypass ("break glass") process
+
+Bypassing required checks on `main` must be exceptional and auditable:
+
+1. State the reason for the bypass in the merge commit message or a linked issue comment.
+2. Get explicit approval from a named repository admin before merging.
+3. Open a follow-up issue tracking the underlying CI/check failure that was bypassed.
+4. Trigger an immediate post-merge CI run against `main` (push an empty commit or re-run the workflow) and confirm its result.
+5. Have a rollback plan (revert commit or previous known-good SHA) ready before merging.
+
+Verify the policy works by opening a temporary draft PR with a deliberately failing test - GitHub should grey out/disable the merge button until the check passes.
+
 ### Running the same checks locally
 
 ```bash
