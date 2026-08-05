@@ -39,7 +39,12 @@ public class AttachmentStorageConfig {
     @Bean
     @ConditionalOnProperty(prefix = "app.storage.s3", name = "enabled", havingValue = "true")
     public AttachmentStorage attachmentStorage(S3Client s3Client, AttachmentStorageProperties properties) {
-        AttachmentStorage s3Storage = new S3AttachmentStorage(s3Client, properties.getBucket());
+        S3AttachmentStorage s3Storage = new S3AttachmentStorage(s3Client, properties.getBucket());
+        // The S3 implementation is wrapped rather than registered as the returned bean, so Spring
+        // cannot invoke its @PostConstruct callback automatically. Initialize it explicitly before
+        // exposing the transaction-aware decorator; this keeps Docker Compose/MinIO first-run
+        // behavior identical to the unwrapped implementation.
+        s3Storage.ensureBucketExists();
         return new TransactionAwareAttachmentStorage(s3Storage);
     }
 
