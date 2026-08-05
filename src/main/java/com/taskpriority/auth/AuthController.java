@@ -1,7 +1,7 @@
 package com.taskpriority.auth;
 
 import com.taskpriority.common.exception.ApiErrorResponse;
-import com.taskpriority.common.exception.TooManyRequestsException;
+import com.taskpriority.ratelimit.AuthRateLimitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -40,7 +40,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final CurrentUserService currentUserService;
-    private final RefreshAttemptLimiter refreshAttemptLimiter;
+    private final AuthRateLimitService rateLimitService;
     private final long refreshTokenTtlDays;
     private final boolean secureCookies;
     private final String sameSitePolicy;
@@ -49,7 +49,7 @@ public class AuthController {
     public AuthController(
             AuthService authService,
             CurrentUserService currentUserService,
-            RefreshAttemptLimiter refreshAttemptLimiter,
+            AuthRateLimitService rateLimitService,
             @Value("${app.security.jwt.refresh-token-ttl-days:30}") long refreshTokenTtlDays,
             @Value("${app.security.cookies.secure:true}") boolean secureCookies,
             @Value("${app.security.cookies.same-site:Lax}") String sameSitePolicy,
@@ -57,7 +57,7 @@ public class AuthController {
     ) {
         this.authService = authService;
         this.currentUserService = currentUserService;
-        this.refreshAttemptLimiter = refreshAttemptLimiter;
+        this.rateLimitService = rateLimitService;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
         this.secureCookies = secureCookies;
         this.sameSitePolicy = sameSitePolicy;
@@ -74,7 +74,8 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Validation error or email already in use", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping("/register")
-    public ResponseEntity<AuthResponseBody> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthResponseBody> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        rateLimitService.enforceRegister(httpRequest);
         AuthResponse result = authService.register(request);
         return withRefreshCookie(ResponseEntity.status(HttpStatus.CREATED), result);
     }
@@ -86,8 +87,10 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid credentials", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseBody> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<AuthResponseBody> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        rateLimitService.enforceLogin(httpRequest, request.email());
         AuthResponse result = authService.login(request);
+        rateLimitService.recordLoginSuccess(httpRequest, request.email());
         return withRefreshCookie(ResponseEntity.ok(), result);
     }
 
@@ -104,22 +107,13 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
         rejectDisallowedOrigin(httpRequest);
-        String clientKey = httpRequest.getRemoteAddr();
-        if (refreshAttemptLimiter.isBlocked(clientKey)) {
-            throw new TooManyRequestsException("Too many failed refresh attempts. Try again later.");
-        }
+        rateLimitService.enforceRefresh(httpRequest);
         if (refreshTokenCookie == null || refreshTokenCookie.isBlank()) {
-            refreshAttemptLimiter.recordFailure(clientKey);
             throw new IllegalArgumentException("Invalid or expired refresh token.");
         }
-        try {
-            AuthResponse result = authService.refresh(refreshTokenCookie);
-            refreshAttemptLimiter.recordSuccess(clientKey);
-            return withRefreshCookie(ResponseEntity.ok(), result);
-        } catch (IllegalArgumentException ex) {
-            refreshAttemptLimiter.recordFailure(clientKey);
-            throw ex;
-        }
+        AuthResponse result = authService.refresh(refreshTokenCookie);
+        rateLimitService.recordRefreshSuccess(httpRequest);
+        return withRefreshCookie(ResponseEntity.ok(), result);
     }
 
     @Operation(summary = "Log out", description = "Revokes the refresh token from the cookie (if present) and clears the cookie. Public endpoint, no bearer token required.")

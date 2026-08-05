@@ -1,0 +1,109 @@
+package com.taskpriority.ratelimit;
+
+import com.taskpriority.common.exception.TooManyRequestsException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.util.HexFormat;
+import java.util.Locale;
+
+/**
+ * Applies separate, independently configurable rate-limit policies to the unauthenticated
+ * high-cost auth endpoints (issue #258). Each policy is enforced through {@link RateLimiter},
+ * which is Redis-backed (shared across instances) unless {@code app.rate-limit.redis-enabled} is
+ * turned off for local/single-instance use.
+ */
+@Service
+public class AuthRateLimitService {
+    private final RateLimiter rateLimiter;
+    private final TrustedProxyResolver trustedProxyResolver;
+    private final MeterRegistry meterRegistry;
+
+    private final RateLimitPolicy loginIpPolicy;
+    private final RateLimitPolicy loginAccountPolicy;
+    private final RateLimitPolicy registerIpPolicy;
+    private final RateLimitPolicy refreshIpPolicy;
+
+    public AuthRateLimitService(
+            RateLimiter rateLimiter,
+            TrustedProxyResolver trustedProxyResolver,
+            MeterRegistry meterRegistry,
+            @Value("${app.rate-limit.login.ip.max-attempts:20}") int loginIpMaxAttempts,
+            @Value("${app.rate-limit.login.ip.window-seconds:900}") long loginIpWindowSeconds,
+            @Value("${app.rate-limit.login.account.max-attempts:5}") int loginAccountMaxAttempts,
+            @Value("${app.rate-limit.login.account.window-seconds:900}") long loginAccountWindowSeconds,
+            @Value("${app.rate-limit.register.ip.max-attempts:10}") int registerIpMaxAttempts,
+            @Value("${app.rate-limit.register.ip.window-seconds:3600}") long registerIpWindowSeconds,
+            @Value("${app.rate-limit.refresh.ip.max-attempts:10}") int refreshIpMaxAttempts,
+            @Value("${app.rate-limit.refresh.ip.window-seconds:300}") long refreshIpWindowSeconds
+    ) {
+        this.rateLimiter = rateLimiter;
+        this.trustedProxyResolver = trustedProxyResolver;
+        this.meterRegistry = meterRegistry;
+        this.loginIpPolicy = new RateLimitPolicy(loginIpMaxAttempts, Duration.ofSeconds(loginIpWindowSeconds));
+        this.loginAccountPolicy = new RateLimitPolicy(loginAccountMaxAttempts, Duration.ofSeconds(loginAccountWindowSeconds));
+        this.registerIpPolicy = new RateLimitPolicy(registerIpMaxAttempts, Duration.ofSeconds(registerIpWindowSeconds));
+        this.refreshIpPolicy = new RateLimitPolicy(refreshIpMaxAttempts, Duration.ofSeconds(refreshIpWindowSeconds));
+    }
+
+    public void enforceLogin(HttpServletRequest request, String email) {
+        String ip = clientIp(request);
+        enforce("login:ip:" + ip, loginIpPolicy, "login", "ip");
+        enforce("login:account:" + accountKey(email), loginAccountPolicy, "login", "account");
+    }
+
+    public void recordLoginSuccess(HttpServletRequest request, String email) {
+        // Resets the failure buckets this exact login just cleared, without touching unrelated
+        // abuse signals (e.g. a different account's failures against the same shared IP).
+        rateLimiter.reset("login:ip:" + clientIp(request));
+        rateLimiter.reset("login:account:" + accountKey(email));
+    }
+
+    public void enforceRegister(HttpServletRequest request) {
+        enforce("register:ip:" + clientIp(request), registerIpPolicy, "register", "ip");
+    }
+
+    public void enforceRefresh(HttpServletRequest request) {
+        enforce("refresh:ip:" + clientIp(request), refreshIpPolicy, "refresh", "ip");
+    }
+
+    public void recordRefreshSuccess(HttpServletRequest request) {
+        rateLimiter.reset("refresh:ip:" + clientIp(request));
+    }
+
+    private void enforce(String key, RateLimitPolicy policy, String endpoint, String dimension) {
+        RateLimitDecision decision = rateLimiter.consume(key, policy);
+        Counter.builder("auth.ratelimit.requests")
+                .tag("endpoint", endpoint)
+                .tag("dimension", dimension)
+                .tag("outcome", decision.allowed() ? "allowed" : "blocked")
+                .register(meterRegistry)
+                .increment();
+        if (!decision.allowed()) {
+            throw new TooManyRequestsException("Too many attempts. Try again later.", decision.retryAfterSeconds());
+        }
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        return trustedProxyResolver.resolveClientAddress(request);
+    }
+
+    // Never put a raw email in a rate-limit key (or, transitively, in Redis/logs) - hash it the
+    // same way AuthService hashes refresh tokens before persisting them.
+    private static String accountKey(String email) {
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(normalized.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
+    }
+}
