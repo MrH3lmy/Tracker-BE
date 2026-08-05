@@ -18,6 +18,7 @@ class ProductionConfigValidatorTest {
     void startsSuccessfullyWithCompleteValidConfiguration() {
         runner.withPropertyValues(
                         "app.cors.allowed-origins=https://app.example.com,https://admin.example.com",
+                        "REDIS_HOST=redis.internal",
                         "app.notifications.dispatch-batch-size=50",
                         "app.notifications.max-dispatch-attempts=5",
                         "app.notifications.processing-lease-timeout-minutes=5")
@@ -26,8 +27,20 @@ class ProductionConfigValidatorTest {
 
     @Test
     void failsWhenCorsOriginsIsEmpty() {
-        runner.withPropertyValues("app.cors.allowed-origins=")
+        runner.withPropertyValues("app.cors.allowed-origins=", "REDIS_HOST=redis.internal")
                 .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void failsWhenRedisHostIsNotSet() {
+        // RedisProperties has its own Java-level "localhost" default that silently wins over an
+        // unresolvable spring.data.redis.host placeholder (see application-prod.properties and the
+        // class comment) - REDIS_HOST is checked directly here instead of trusting that placeholder.
+        runner.withPropertyValues("app.cors.allowed-origins=https://app.example.com")
+                .run(context -> assertThat(context)
+                        .getFailure()
+                        .rootCause()
+                        .hasMessageContaining("REDIS_HOST"));
     }
 
     @Test

@@ -81,12 +81,12 @@ class ProductionProfileStartupPostgresTest {
         assertThrows(Exception.class, () -> run(properties));
     }
 
-    @Test
-    void failsImmediatelyWithoutJwtSecret() {
-        Map<String, Object> properties = completeValidProperties();
-        properties.remove("JWT_SECRET");
-        assertThrows(Exception.class, () -> run(properties));
-    }
+    // No failsImmediatelyWithoutJwtSecret case here: SpringApplicationBuilder#properties() adds a
+    // low-priority "default properties" source, which OS environment variables always outrank -
+    // and this repo's own ci.yml sets JWT_SECRET as a real OS env var for the whole `mvn verify`
+    // step (other tests need it), so "removing" it from this test's property map can't actually
+    // make it absent in this environment. JwtService#init's blank/short-secret rejection is
+    // covered directly and reliably at the unit level instead - see JwtServiceTest.
 
     @Test
     void failsImmediatelyWithoutCorsAllowedOrigins() {
