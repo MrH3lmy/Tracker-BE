@@ -48,7 +48,10 @@ describe('apiClient task pagination compatibility', () => {
   });
 
   it('also preserves complete archive lists', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => jsonResponse([{ id: 1 }]));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain('/api/v1/tasks/archive?page=0&size=500');
+      return jsonResponse([{ id: 1 }]);
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await apiJson<Array<{ id: number }>>('GET', '/api/v1/tasks/archive');
@@ -56,6 +59,5 @@ describe('apiClient task pagination compatibility', () => {
     expect(result.ok).toBe(true);
     expect(result.data).toEqual([{ id: 1 }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/tasks/archive?page=0&size=500');
   });
 });
