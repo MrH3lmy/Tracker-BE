@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "user_sessions")
@@ -38,6 +39,12 @@ public class UserSession {
     @Column(nullable = false)
     private boolean revoked = false;
 
+    // Shared by every session descended from the same original login/registration via refresh
+    // rotation, so a detected replay of an already-consumed token can revoke the whole chain
+    // instead of just the one presented token - see AuthService#refresh.
+    @Column(name = "family_id", nullable = false)
+    private UUID familyId;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -54,6 +61,8 @@ public class UserSession {
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
     public boolean isRevoked() { return revoked; }
     public void setRevoked(boolean revoked) { this.revoked = revoked; }
+    public UUID getFamilyId() { return familyId; }
+    public void setFamilyId(UUID familyId) { this.familyId = familyId; }
 
     @PrePersist
     public void onCreate() {

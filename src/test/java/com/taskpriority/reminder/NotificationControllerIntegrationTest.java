@@ -71,6 +71,7 @@ class NotificationControllerIntegrationTest {
         entry.setLink("/tasks/1");
         entry.setStatus(NotificationStatus.PENDING);
         entry.setRead(read);
+        entry.setNextAttemptAt(LocalDateTime.now());
         return notificationOutboxRepository.save(entry);
     }
 

@@ -51,9 +51,19 @@ public class NoteAttachment {
     @Column(name = "storage_key", nullable = false, unique = true)
     private String storageKey;
 
+    // Nullable as of V48: an S3-provider row stores its bytes in object storage instead - see
+    // AttachmentStorageProvider.
     @JdbcTypeCode(SqlTypes.VARBINARY)
-    @Column(nullable = false, columnDefinition = "bytea")
+    @Column(columnDefinition = "bytea")
     private byte[] data;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_provider", nullable = false, length = 20)
+    private AttachmentStorageProvider storageProvider = AttachmentStorageProvider.DATABASE;
+
+    @Column(name = "checksum_sha256", length = 64)
+    private String checksumSha256;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -89,6 +99,10 @@ public class NoteAttachment {
     public void setStorageKey(String storageKey) { this.storageKey = storageKey; }
     public byte[] getData() { return data; }
     public void setData(byte[] data) { this.data = data; }
+    public AttachmentStorageProvider getStorageProvider() { return storageProvider; }
+    public void setStorageProvider(AttachmentStorageProvider storageProvider) { this.storageProvider = storageProvider; }
+    public String getChecksumSha256() { return checksumSha256; }
+    public void setChecksumSha256(String checksumSha256) { this.checksumSha256 = checksumSha256; }
     public NoteAttachmentKind getKind() { return kind; }
     public void setKind(NoteAttachmentKind kind) { this.kind = kind; }
     public String getCaption() { return caption; }

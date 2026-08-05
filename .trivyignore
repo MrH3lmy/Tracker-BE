@@ -1,0 +1,10 @@
+# GHSA-qwww-vcr4-c8h2 - react-router "RSC mode CSRF bypass allows action execution before 400
+# response" (affects react-router/react-router-dom >=7.12.0 <8.3.0, currently 7.18.2 here).
+# Not reachable in this codebase: frontend/ is a plain Vite SPA (@vitejs/plugin-react, client-side
+# rendering only, see frontend/vite.config.ts) - RSC mode requires explicit framework-level wiring
+# (unstable_RSCStaticRouter and a server entry point) that this app does not have anywhere.
+# The real fix is react-router-dom 8.x, which is a semver-major jump off the v7 line CLAUDE.md
+# documents as the current stack - deferred as a dedicated, tested migration rather than forced by
+# CI pressure. Tracked in https://github.com/MrH3lmy/Tracker-BE/issues/268.
+# Expires 2026-11-05 - re-assess even if #268 hasn't otherwise been revisited by then.
+GHSA-qwww-vcr4-c8h2

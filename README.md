@@ -63,6 +63,16 @@ Flyway is enabled by default and runs migrations at startup from `classpath:db/m
 
 - `JWT_SECRET` (**required**, no default) — random string of at least 32 bytes used to sign access/refresh tokens. If unset (or too short), the app fails to start with `app.security.jwt.secret must be set to a random string of at least 32 bytes` and nothing binds to port 8080 — this is a common cause of `ERR_CONNECTION_REFUSED` from the frontend. `docker-compose.yml` and `start-tracker.sh`/`start-tracker.bat` set a local-dev-only default for you; if you run `mvn spring-boot:run` directly, set it yourself, e.g. `export JWT_SECRET=$(openssl rand -base64 48)`.
 
+### Session model (access/refresh tokens)
+
+- The access token is a short-lived JWT (`app.security.jwt.access-token-ttl-minutes`, default 15) returned in the JSON response body and sent by clients as `Authorization: Bearer <token>`. It is never persisted server-side.
+- The refresh token is a long-lived (`app.security.jwt.refresh-token-ttl-days`, default 30), opaque, single-use, randomly generated value. Only its SHA-256 hash is stored, in `user_sessions` (see `AuthService`/`UserSessionRepository`) - the raw value is never persisted or logged.
+- **Web client contract**: the refresh token is set via `Set-Cookie` (`HttpOnly`, `Secure` outside local dev, configurable `SameSite`, scoped to `Path=/api/v1/auth`) and is never present in a JSON response or request body. `POST /api/v1/auth/refresh` and `POST /api/v1/auth/logout` read it from that cookie only.
+- Every refresh rotates the token exactly once (enforced by an atomic conditional `UPDATE`, see `AuthServiceRefreshConcurrencyPostgresTest`) and all sessions issued from the same original login/registration share a `family_id`. Presenting a token that was already consumed in an earlier, already-committed rotation is treated as a replay/theft signal and revokes every active session in that family, not just the presented one (see `AuthService#refresh` and `AuthServiceRefreshConcurrencyPostgresTest#replayingAnAlreadyRotatedTokenRevokesTheDescendantSession`).
+- **CSRF model**: `/refresh` and `/logout` authenticate purely from the ambient cookie (no bearer token, no CSRF token). Primary defense is `SameSite=Lax`/`Strict`, which stops browsers from attaching the cookie to a cross-site POST; as defense in depth, both endpoints also reject the request (`403`) when a browser-supplied `Origin` header is present and isn't one of `app.cors.allowed-origins`. A request with no `Origin` header at all is allowed through (some non-browser/legacy clients omit it, and that case is covered by cookie scoping instead) - see `AuthController#rejectDisallowedOrigin`.
+- CORS is credentialed (`Access-Control-Allow-Credentials: true`) but only ever for the explicit origin list in `app.cors.allowed-origins`, never `*` (see `WebConfig`).
+- **Native/desktop (Flutter) client contract**: not implemented in this repository yet - there is no native client to build it against. The intended shape (per issue #257 and roadmap issue #266) is a separate, explicitly registered native-client flow (never spoofable `User-Agent`/header detection) that returns the refresh token in the response body instead of a cookie, for storage in OS-backed secure storage (iOS Keychain / Android Keystore / platform equivalents on desktop). Design and implement this alongside the `TRACKER-FLUTTER` client, reusing the same `UserSession`/rotation/replay-family model documented above.
+
 ---
 
 ## One-click / easy start
@@ -197,8 +207,18 @@ Services:
 - Frontend: `http://localhost:5173`
 - App/API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
+- MinIO (S3-compatible object storage for note attachments): API `http://localhost:9000`, console `http://localhost:9001` (`taskpriority-dev` / `taskpriority-dev-secret`)
 
 The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
+
+### Note attachment storage
+
+Note screenshot attachments (`NoteAttachment`) can live in one of two places, selected per-row by `storage_provider`:
+
+- **`DATABASE`** (default everywhere `app.storage.s3.enabled` isn't explicitly set to `true`): bytes live in `note_attachments.data` (`bytea`), exactly as before. Every existing environment, and every test in this repo, uses this path unless it opts in.
+- **`S3`**: bytes live in an S3-compatible bucket instead - see `AttachmentStorage`/`S3AttachmentStorage`/`AttachmentStorageConfig`. Uploads stream directly from the multipart request to the bucket (no `MultipartFile#getBytes()` buffering); downloads/deletes go through the same interface. `docker compose up` enables this against the `minio` service automatically. To point at real S3 (or a different MinIO/LocalStack instance) elsewhere, set: `STORAGE_S3_ENABLED=true`, `STORAGE_S3_BUCKET`, `STORAGE_S3_REGION`, `STORAGE_S3_ACCESS_KEY`/`STORAGE_S3_SECRET_KEY` (omit both to fall back to the AWS SDK's normal credential chain), `STORAGE_S3_ENDPOINT` (only for a non-AWS provider), `STORAGE_S3_PATH_STYLE_ACCESS` (`true` for MinIO/LocalStack, generally `false` for real AWS S3).
+
+Known gaps, tracked as follow-up rather than blocking this pass (issue #261): there is no backfill job to migrate already-stored `DATABASE`-provider rows to `S3` after enabling it - existing rows keep reading from PostgreSQL indefinitely (which is a legitimate documented behavior, not a bug, but the issue's "migrate everything to object storage" goal isn't automated). Deleting a note cascades attachment rows away in PostgreSQL (`ON DELETE CASCADE`) without going through `NoteService.deleteScreenshot`, so it does **not** delete the corresponding S3 objects - only deleting a screenshot individually does. Antivirus/malware scanning, per-file/per-user upload quota beyond the existing size limit, and presigned client-direct-upload are not implemented.
 
 ---
 
@@ -375,9 +395,16 @@ This project uses a **same-task reset** strategy for recurring tasks:
 
 ### Task APIs
 
+`GET /api/v1/tasks` and `GET /api/v1/tasks/archive` are paginated and filtered in PostgreSQL (see `TaskSpecifications`/`TaskService#findPage`), not loaded in full and filtered in Java. The JSON body stays a plain array for backward compatibility; page metadata is returned in response headers instead: `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `X-Has-Next`. Query params: `page` (default `0`), `size` (default `200`, server-capped at `500` regardless of what's requested), `status` (repeatable), `projectId`, `boardColumnId`, `area`, `riskLevel`, `dueDateFrom`/`dueDateTo` (`yyyy-MM-dd`), `search` (case-insensitive title substring). Sort order is always `position` then `id` ascending, matching every other position-ordered task query in this codebase, so ordering stays deterministic across pages.
+
+Known gaps, tracked as follow-up rather than blocking this pass: the matrix view (`GET /api/v1/matrix`) still groups by `priorityCategory`, which is computed at request time by `PriorityEngine` and isn't a database column, so it isn't paginated/DB-filtered here; the frontend still requests a single page (defaulting to the 200-row page size above) rather than offering incremental loading/page navigation - both are real, just out of scope for this change.
+
 ```bash
-# List tasks
+# List tasks (first page, default size)
 curl http://localhost:8080/api/v1/tasks
+
+# Filtered + paginated
+curl "http://localhost:8080/api/v1/tasks?status=NOT_STARTED&status=IN_PROGRESS&projectId=1&page=0&size=50"
 
 # Create task
 curl -X POST http://localhost:8080/api/v1/tasks \
@@ -452,6 +479,34 @@ A row that keeps failing for the same reason across multiple replay attempts (ch
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, as four independent jobs: `backend`, `frontend`, `dependency-and-secret-scan`, and `docker`. `.github/workflows/migration-immutability.yml` (see "Migration immutability policy" above) runs alongside them whenever a migration file changes. Mark all of these required in the repo's branch protection settings (Settings -> Branches -> add a rule for `main` -> Require status checks to pass) - a workflow file alone doesn't block merges by itself; someone with admin access has to opt the branch into requiring them.
 
+### Branch protection / merge policy for `main`
+
+A workflow file only *runs* checks; it doesn't *block* merges on its own. An admin must configure a branch protection rule or repository ruleset for `main` (Settings -> Rules -> Rulesets, or the legacy Settings -> Branches -> Branch protection rules) with:
+
+- Require a pull request before merging, with conversation resolution required.
+- Require branches to be up to date with `main` before merging (or use the merge queue).
+- Require these status checks to pass, using their exact job names so the rule keeps matching after workflow refactors:
+  - `Backend build, test, coverage, static analysis` (from `ci.yml`, job `backend`)
+  - `Frontend build, lint, test` (from `ci.yml`, job `frontend`)
+  - `Dependency + secret scan (Trivy)` (from `ci.yml`, job `dependency-and-secret-scan`)
+  - `Docker build + image scan` (from `ci.yml`, job `docker`)
+  - `Fail if an existing migration file was modified or deleted` (from `migration-immutability.yml`, only runs when migration files change - configure it as required anyway so a PR that touches migrations can't merge without it reporting)
+- Do not allow cancelled, skipped, neutral, or timed-out mandatory jobs to satisfy the rule (this is the default GitHub Actions status-check behavior as long as the job names above are marked required and are not wrapped in a `continue-on-error: true` step).
+- Block force pushes and branch deletion on `main`.
+- Apply the rule to administrators as well, with a documented break-glass exception (below) for the rare case that requires bypassing it.
+
+#### Emergency bypass ("break glass") process
+
+Bypassing required checks on `main` must be exceptional and auditable:
+
+1. State the reason for the bypass in the merge commit message or a linked issue comment.
+2. Get explicit approval from a named repository admin before merging.
+3. Open a follow-up issue tracking the underlying CI/check failure that was bypassed.
+4. Trigger an immediate post-merge CI run against `main` (push an empty commit or re-run the workflow) and confirm its result.
+5. Have a rollback plan (revert commit or previous known-good SHA) ready before merging.
+
+Verify the policy works by opening a temporary draft PR with a deliberately failing test - GitHub should grey out/disable the merge button until the check passes.
+
 ### Running the same checks locally
 
 ```bash
@@ -476,7 +531,7 @@ To reproduce the Docker/Trivy job locally (needs Docker and [Trivy](https://triv
 
 ```bash
 docker build -t taskpriority-backend:local .
-docker run --rm taskpriority-backend:local id -u   # must not print 0
+docker run --rm --entrypoint id taskpriority-backend:local -u   # must not print 0
 trivy image taskpriority-backend:local
 trivy fs .
 ```
@@ -486,7 +541,7 @@ trivy fs .
 - **Coverage and SpotBugs thresholds are intentionally conservative** (see the comments next to their configuration in `pom.xml`) - set just below the measured baseline when each gate was added, not at some ideal target. Raise them over time rather than treating the current numbers as sufficient.
 - **"Previous release schema to latest" and "seeded legacy schema to latest" migration scenarios are not yet automated**: there's no tagged release history to snapshot a prior schema from yet. Every Postgres/Testcontainers test in the suite does exercise "empty database to latest Flyway version" plus `flyway validate` and Hibernate `ddl-auto=validate` (both happen implicitly - those tests use the default profile's `spring.flyway.enabled=true`/`ddl-auto=validate` against a real Postgres container, not the H2 `local-test` profile). Once there's a real release history, add a job that restores a snapshot from a prior tag and runs the upgrade path against it.
 - **OWASP Dependency-Check specifically isn't used** - Trivy's filesystem scan covers the same dependency-CVE-scanning need (plus secret scanning, replacing a separate Gitleaks step) with faster, more reliable CI runs than OWASP's NVD-sync-dependent tooling.
-- **A CVSS/severity exception policy**: `CRITICAL`/`HIGH` findings fail the build; base-image OS packages with no fix available yet are excluded from the image scan (`ignore-unfixed: true`) since those are upstream's timeline, not this repo's. There's no documented process yet for a one-off exception on a real, unfixed CRITICAL/HIGH finding in this repo's own dependencies - add one (e.g. a `.trivyignore` entry with a linked tracking issue and expiry) if that need comes up rather than lowering the severity threshold.
+- **A CVSS/severity exception policy**: `CRITICAL`/`HIGH` findings fail the build; base-image OS packages with no fix available yet are excluded from the image scan (`ignore-unfixed: true`) since those are upstream's timeline, not this repo's. For a real, unfixed CRITICAL/HIGH finding whose vulnerable code path genuinely isn't reachable, add a `.trivyignore` entry (repo root - Trivy loads it automatically, no workflow change needed) with a comment explaining why it doesn't apply here, a linked tracking issue for the real fix, and an expiry date to force re-assessment - see the `GHSA-qwww-vcr4-c8h2` entry (issue #268) for the pattern. Never lower the severity threshold instead.
 
 ### Production configuration
 

@@ -1,6 +1,8 @@
 package com.taskpriority.task.api;
 
 import com.taskpriority.common.exception.ApiErrorResponse;
+import com.taskpriority.model.Area;
+import com.taskpriority.model.RiskLevel;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.service.TaskService;
@@ -9,22 +11,37 @@ import com.taskpriority.notes.NoteService;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.task.application.DuplicateDetectionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/tasks")
 @Tag(name = "Tasks", description = "Task CRUD, status transitions, recurrence completion, subtasks, and dependencies")
 public class TaskControllerV1 {
+    // Server-enforced pagination bounds for the task listing/archive endpoints (issue #260) - a
+    // client can request a smaller page but never an unbounded or excessively large one. Default
+    // sort is the same (position, id) tiebreaker every other position-ordered task query in this
+    // repo already uses, so ordering is deterministic across pages even when many tasks share a
+    // position.
+    static final int DEFAULT_PAGE_SIZE = 200;
+    static final int MAX_PAGE_SIZE = 500;
+    private static final Sort DEFAULT_TASK_SORT = Sort.by(Sort.Order.asc("position"), Sort.Order.asc("id"));
+
     private final TaskService taskService;
     private final TaskApiMapper mapper;
     private final DuplicateDetectionService duplicateDetectionService;
@@ -35,9 +52,23 @@ public class TaskControllerV1 {
         this.taskService = taskService; this.mapper = mapper; this.duplicateDetectionService = duplicateDetectionService; this.blockerAnalysisService = blockerAnalysisService; this.noteService = noteService;
     }
 
-    @Operation(summary = "List all tasks")
+    @Operation(summary = "List tasks", description = "Paginated and filtered at the database level. Page metadata (total count/pages, current page/size, hasNext) is returned in X-Total-Count/X-Total-Pages/X-Page/X-Page-Size/X-Has-Next response headers rather than the JSON body, so the body stays a plain array for backward compatibility with existing clients. size is capped server-side at " + MAX_PAGE_SIZE + " regardless of what's requested.")
     @GetMapping
-    public List<TaskResponse> all(){ return taskService.findAll().stream().map(mapper::toResponse).toList(); }
+    public ResponseEntity<List<TaskResponse>> all(
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size, capped at " + MAX_PAGE_SIZE) @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
+            @Parameter(description = "Filter by one or more statuses") @RequestParam(required = false) List<Status> status,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long boardColumnId,
+            @RequestParam(required = false) Area area,
+            @RequestParam(required = false) RiskLevel riskLevel,
+            @Parameter(description = "Inclusive due-date range start (yyyy-MM-dd)") @RequestParam(required = false) LocalDate dueDateFrom,
+            @Parameter(description = "Inclusive due-date range end (yyyy-MM-dd)") @RequestParam(required = false) LocalDate dueDateTo,
+            @Parameter(description = "Case-insensitive title substring search") @RequestParam(required = false) String search
+    ) {
+        Page<Task> result = taskService.findPage(status, projectId, boardColumnId, area, riskLevel, dueDateFrom, dueDateTo, search, pageable(page, size));
+        return pagedResponse(result);
+    }
 
     @Operation(summary = "Get a task by id")
     @ApiResponses({
@@ -158,9 +189,14 @@ public class TaskControllerV1 {
     @PatchMapping("/{id}/due-date")
     public TaskResponse updateDueDate(@PathVariable Long id,@Validated @RequestBody UpdateTaskDueDateRequest request){return mapper.toResponse(taskService.updateDueDate(id, request.dueDate()));}
 
-    @Operation(summary = "List archived (completed non-recurring) tasks")
+    @Operation(summary = "List archived (DONE/CANCELLED) tasks", description = "Paginated the same way as the main listing endpoint - see its description for the header-based page metadata contract.")
     @GetMapping("/archive")
-    public List<TaskResponse> archive(){ return taskService.getArchive().stream().map(mapper::toResponse).toList(); }
+    public ResponseEntity<List<TaskResponse>> archive(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+    ) {
+        return pagedResponse(taskService.findArchivePage(pageable(page, size)));
+    }
 
     @Operation(summary = "Find potential duplicate tasks", description = "Heuristic grouping of tasks that look like duplicates of one another.")
     @GetMapping("/duplicates")
@@ -186,4 +222,21 @@ public class TaskControllerV1 {
     })
     @DeleteMapping("/{id}/dependencies/{blocksTaskId}")
     public TaskResponse removeDependency(@PathVariable Long id, @PathVariable Long blocksTaskId){ return mapper.toResponse(taskService.removeDependency(id, blocksTaskId)); }
+
+    private static Pageable pageable(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        return PageRequest.of(safePage, safeSize, DEFAULT_TASK_SORT);
+    }
+
+    private ResponseEntity<List<TaskResponse>> pagedResponse(Page<Task> result) {
+        List<TaskResponse> body = result.getContent().stream().map(mapper::toResponse).toList();
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(result.getTotalElements()))
+                .header("X-Total-Pages", String.valueOf(result.getTotalPages()))
+                .header("X-Page", String.valueOf(result.getNumber()))
+                .header("X-Page-Size", String.valueOf(result.getSize()))
+                .header("X-Has-Next", String.valueOf(result.hasNext()))
+                .body(body);
+    }
 }

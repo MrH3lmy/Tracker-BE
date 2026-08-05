@@ -128,7 +128,11 @@ jobs:
 
       - name: Verify the container runs as a non-root user
         run: |
-          user=$(docker run --rm taskpriority-backend:${{ github.sha }} id -u)
+          # The image's ENTRYPOINT is the java launch command (exec form, no CMD), so a plain
+          # `docker run image id -u` appends "id -u" as extra arguments to that java command
+          # instead of replacing it - it never actually runs `id`. --entrypoint overrides just
+          # this diagnostic invocation without touching the image's real entrypoint.
+          user=$(docker run --rm --entrypoint id taskpriority-backend:${{ github.sha }} -u)
           echo "Container UID: $user"
           if [ "$user" = "0" ]; then
             echo "::error::Container runs as root (UID 0) - see the Dockerfile's USER directive."

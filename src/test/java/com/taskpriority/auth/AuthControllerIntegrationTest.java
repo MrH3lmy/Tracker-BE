@@ -187,6 +187,32 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    void refreshWithDisallowedOriginIsRejected() throws Exception {
+        String email = uniqueEmail();
+        registerUser(email, "correct-horse");
+        String loginBody = """
+                {"email":"%s","password":"correct-horse"}
+                """.formatted(email);
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
+                .andExpect(status().isOk())
+                .andReturn();
+        Cookie refreshCookie = loginResult.getResponse().getCookie(AuthController.REFRESH_TOKEN_COOKIE_NAME);
+
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookie).header("Origin", "https://evil.example.com"))
+                .andExpect(status().isForbidden());
+
+        // the legitimate frontend origin still works with the same cookie
+        mockMvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookie).header("Origin", "http://localhost:5173"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void logoutWithDisallowedOriginIsRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout").header("Origin", "https://evil.example.com"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void logoutWithoutACookieIsStillNoContent() throws Exception {
         // logout is best-effort: no cookie (or an unrecognized token) doesn't error, per AuthService.logout
         mockMvc.perform(post("/api/v1/auth/logout"))

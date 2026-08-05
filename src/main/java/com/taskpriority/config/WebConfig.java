@@ -30,7 +30,13 @@ public class WebConfig {
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Content-Disposition"));
+        // Content-Disposition: attachment download filenames. X-Total-Count/X-Total-Pages/X-Page/
+        // X-Page-Size/X-Has-Next: pagination metadata for GET /api/v1/tasks and /tasks/archive
+        // (see TaskControllerV1) - browsers don't expose custom response headers to JS by default
+        // even same-origin-via-CORS, so these need to be listed explicitly or the frontend can't
+        // read them.
+        configuration.setExposedHeaders(List.of(
+                "Content-Disposition", "X-Total-Count", "X-Total-Pages", "X-Page", "X-Page-Size", "X-Has-Next"));
         configuration.setMaxAge(3600L);
         // Required for the browser to send/receive the HttpOnly refresh-token cookie cross-origin
         // (frontend and backend run on different ports even in local dev). Safe only because

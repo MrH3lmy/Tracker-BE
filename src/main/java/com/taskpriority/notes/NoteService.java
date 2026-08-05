@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.entitlement.EntitlementService;
+import com.taskpriority.model.AttachmentStorageProvider;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteAttachmentKind;
@@ -24,6 +25,9 @@ import com.taskpriority.notes.api.NoteAttachmentResponse;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.notes.api.UpdateNoteRequest;
 import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
+import com.taskpriority.notes.storage.AttachmentStorage;
+import com.taskpriority.notes.storage.AttachmentStorageException;
+import com.taskpriority.notes.storage.StoredObject;
 import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteBlockRepository;
@@ -45,6 +49,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -57,6 +62,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -80,6 +86,7 @@ public class NoteService {
     private final ObjectMapper objectMapper;
     private final CurrentUserService currentUserService;
     private final EntitlementService entitlementService;
+    private final Optional<AttachmentStorage> attachmentStorage;
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
@@ -91,6 +98,7 @@ public class NoteService {
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        CurrentUserService currentUserService, EntitlementService entitlementService,
+                       Optional<AttachmentStorage> attachmentStorage,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
@@ -104,6 +112,7 @@ public class NoteService {
         this.objectMapper = objectMapper;
         this.currentUserService = currentUserService;
         this.entitlementService = entitlementService;
+        this.attachmentStorage = attachmentStorage;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 
@@ -348,18 +357,49 @@ public class NoteService {
         attachment.setFileName(fileName);
         attachment.setContentType(file.getContentType());
         attachment.setSizeBytes(file.getSize());
-        attachment.setStorageKey(UUID.randomUUID().toString());
         attachment.setKind(NoteAttachmentKind.SCREENSHOT);
         attachment.setCaption(caption);
         attachment.setSource(source);
         attachment.setWidth(request.getWidth());
         attachment.setHeight(request.getHeight());
-        try {
-            attachment.setData(file.getBytes());
-        } catch (IOException ex) {
-            throw new IllegalArgumentException("Unable to read screenshot file", ex);
+
+        if (attachmentStorage.isEmpty()) {
+            attachment.setStorageProvider(AttachmentStorageProvider.DATABASE);
+            attachment.setStorageKey(UUID.randomUUID().toString());
+            try {
+                attachment.setData(file.getBytes());
+            } catch (IOException ex) {
+                throw new IllegalArgumentException("Unable to read screenshot file", ex);
+            }
+            return toAttachmentResponse(noteAttachmentRepository.save(attachment));
         }
-        return toAttachmentResponse(noteAttachmentRepository.save(attachment));
+
+        return toAttachmentResponse(uploadToObjectStorage(attachment, note, userId, file));
+    }
+
+    /**
+     * Streams straight to object storage instead of buffering the file into a byte[] first (issue
+     * #261) - the attachment row is persisted first (without bytes) purely to get its generated id
+     * for the object key. uploadScreenshot's @Transactional boundary is what actually guarantees a
+     * failed upload leaves no orphan row: throwing out of this method rolls back the earlier
+     * saveAndFlush insert along with everything else in the same transaction.
+     */
+    private NoteAttachment uploadToObjectStorage(NoteAttachment attachment, Note note, Long userId, MultipartFile file) {
+        attachment.setStorageProvider(AttachmentStorageProvider.S3);
+        // storage_key is NOT NULL/unique - placeholder until the row has a real id to build the
+        // real object key from below, exactly like the DATABASE path already does with a random,
+        // otherwise-unused UUID.
+        attachment.setStorageKey(UUID.randomUUID().toString());
+        NoteAttachment saved = noteAttachmentRepository.saveAndFlush(attachment);
+        String objectKey = "users/" + userId + "/notes/" + note.getId() + "/attachments/" + saved.getId() + "/" + UUID.randomUUID();
+        try (InputStream in = file.getInputStream()) {
+            StoredObject stored = attachmentStorage.get().put(objectKey, in, file.getSize(), file.getContentType());
+            saved.setStorageKey(stored.objectKey());
+            saved.setChecksumSha256(stored.checksumSha256());
+            return noteAttachmentRepository.save(saved);
+        } catch (IOException | AttachmentStorageException ex) {
+            throw new IllegalArgumentException("Unable to upload screenshot to object storage", ex);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -372,10 +412,31 @@ public class NoteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Screenshot attachment with id " + attachmentId + " not found for note " + noteId));
     }
 
+    /**
+     * Resolves an attachment's bytes regardless of where they live - {@code (user_id, attachment_id)}
+     * authorization already happened in {@link #getScreenshot}, which every caller must go through
+     * first.
+     */
+    public byte[] readScreenshotBytes(NoteAttachment attachment) {
+        if (attachment.getStorageProvider() == AttachmentStorageProvider.S3) {
+            try (InputStream in = attachmentStorage
+                    .orElseThrow(() -> new IllegalStateException("Attachment " + attachment.getId() + " is stored in S3 but app.storage.s3.enabled is not set"))
+                    .get(attachment.getStorageKey())) {
+                return in.readAllBytes();
+            } catch (IOException ex) {
+                throw new AttachmentStorageException("Failed to read attachment " + attachment.getId() + " from object storage", ex);
+            }
+        }
+        return attachment.getData();
+    }
+
     @Transactional
     public void deleteScreenshot(Long noteId, Long attachmentId) {
         NoteAttachment attachment = getScreenshot(noteId, attachmentId);
         noteAttachmentRepository.delete(attachment);
+        if (attachment.getStorageProvider() == AttachmentStorageProvider.S3) {
+            attachmentStorage.ifPresent(storage -> storage.delete(attachment.getStorageKey()));
+        }
     }
 
     @Transactional

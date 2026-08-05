@@ -98,4 +98,25 @@ class AuthServiceRefreshConcurrencyPostgresTest {
         assertTrue(activeSessions != null && activeSessions == 1,
                 "exactly one active session should remain after the race (the new one issued by the winner)");
     }
+
+    @Test
+    void replayingAnAlreadyRotatedTokenRevokesTheDescendantSession() {
+        String email = "replay-" + System.nanoTime() + "@example.com";
+        AuthResponse initial = authService.register(new RegisterRequest(email, "password123", "Victim", "device-1"));
+        String stolenOldToken = initial.refreshToken();
+
+        // Legitimate client rotates first, as a fully separate/already-committed transaction (not
+        // a race) - the descendant session below is the one a thief's later replay should reach
+        // through and revoke too, not just have their own request rejected.
+        authService.refresh(stolenOldToken);
+
+        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> authService.refresh(stolenOldToken));
+        assertEquals("Invalid or expired refresh token.", ex.getMessage());
+
+        Integer activeSessions = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_sessions WHERE revoked = false", Integer.class);
+        assertEquals(0, activeSessions,
+                "the legitimate descendant session must be revoked too once the stolen old token is replayed");
+    }
 }

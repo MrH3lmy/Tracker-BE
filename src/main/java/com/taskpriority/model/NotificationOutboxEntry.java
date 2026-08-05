@@ -52,7 +52,11 @@ public class NotificationOutboxEntry {
     @Column(name = "max_attempts", nullable = false)
     private int maxAttempts = 5;
 
-    @Column(name = "next_attempt_at")
+    // NOT NULL as of V41 (DB-side DEFAULT CURRENT_TIMESTAMP) - callers that construct a new entry
+    // must still set this explicitly (see ReminderService#activateDueReminders): Hibernate always
+    // includes every mapped column in its INSERT, so a Java-side null overrides the DB default
+    // instead of falling back to it.
+    @Column(name = "next_attempt_at", nullable = false)
     private LocalDateTime nextAttemptAt;
 
     @Column(name = "processing_started_at")
