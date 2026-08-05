@@ -7,15 +7,20 @@ import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
+import com.taskpriority.repository.TaskSpecifications;
 import com.taskpriority.task.application.RecurrenceService;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
 import com.taskpriority.task.api.DependencyRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -95,6 +100,37 @@ public class TaskService {
         List<Task> tasks = taskRepository.findByUserId(userId);
         computeDerivedFieldsBatch(tasks);
         return tasks;
+    }
+
+    /**
+     * DB-side paginated + filtered task listing (issue #260) - unlike {@link #findAll()}, this
+     * never loads more than one page of a user's task history into memory. {@code statuses} null
+     * or empty means "any status"; every other filter is applied only when non-null.
+     */
+    @Transactional(readOnly = true)
+    public Page<Task> findPage(
+            Collection<Status> statuses,
+            Long projectId,
+            Long boardColumnId,
+            Area area,
+            RiskLevel riskLevel,
+            LocalDate dueDateFrom,
+            LocalDate dueDateTo,
+            String search,
+            Pageable pageable
+    ) {
+        Long userId = currentUserService.requireUserId();
+        Specification<Task> spec = TaskSpecifications.matching(
+                userId, statuses, projectId, boardColumnId, area, riskLevel, dueDateFrom, dueDateTo, search);
+        Page<Task> page = taskRepository.findAll(spec, pageable);
+        computeDerivedFieldsBatch(page.getContent());
+        return page;
+    }
+
+    /** Same DB-side pagination as {@link #findPage}, scoped to archived (DONE/CANCELLED) tasks. */
+    @Transactional(readOnly = true)
+    public Page<Task> findArchivePage(Pageable pageable) {
+        return findPage(List.of(Status.DONE, Status.CANCELLED), null, null, null, null, null, null, null, pageable);
     }
 
     @Transactional(readOnly = true)

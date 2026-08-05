@@ -385,9 +385,16 @@ This project uses a **same-task reset** strategy for recurring tasks:
 
 ### Task APIs
 
+`GET /api/v1/tasks` and `GET /api/v1/tasks/archive` are paginated and filtered in PostgreSQL (see `TaskSpecifications`/`TaskService#findPage`), not loaded in full and filtered in Java. The JSON body stays a plain array for backward compatibility; page metadata is returned in response headers instead: `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `X-Has-Next`. Query params: `page` (default `0`), `size` (default `200`, server-capped at `500` regardless of what's requested), `status` (repeatable), `projectId`, `boardColumnId`, `area`, `riskLevel`, `dueDateFrom`/`dueDateTo` (`yyyy-MM-dd`), `search` (case-insensitive title substring). Sort order is always `position` then `id` ascending, matching every other position-ordered task query in this codebase, so ordering stays deterministic across pages.
+
+Known gaps, tracked as follow-up rather than blocking this pass: the matrix view (`GET /api/v1/matrix`) still groups by `priorityCategory`, which is computed at request time by `PriorityEngine` and isn't a database column, so it isn't paginated/DB-filtered here; the frontend still requests a single page (defaulting to the 200-row page size above) rather than offering incremental loading/page navigation - both are real, just out of scope for this change.
+
 ```bash
-# List tasks
+# List tasks (first page, default size)
 curl http://localhost:8080/api/v1/tasks
+
+# Filtered + paginated
+curl "http://localhost:8080/api/v1/tasks?status=NOT_STARTED&status=IN_PROGRESS&projectId=1&page=0&size=50"
 
 # Create task
 curl -X POST http://localhost:8080/api/v1/tasks \
