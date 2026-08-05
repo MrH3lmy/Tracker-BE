@@ -286,7 +286,76 @@ async function apiRequest<T>(method: HttpMethod, path: string, options?: ApiRequ
   }
 }
 
+const AUTO_PAGINATED_TASK_PATHS = new Set(['/api/v1/tasks', '/api/v1/tasks/archive']);
+const TASK_COMPATIBILITY_PAGE_SIZE = 500;
+
+function shouldFetchAllTaskPages(method: HttpMethod, path: string, body: unknown): boolean {
+  if (method !== 'GET' || body !== undefined) return false;
+  const questionMark = path.indexOf('?');
+  const pathname = questionMark >= 0 ? path.slice(0, questionMark) : path;
+  const normalizedPathname = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  if (!AUTO_PAGINATED_TASK_PATHS.has(normalizedPathname)) return false;
+
+  const params = new URLSearchParams(questionMark >= 0 ? path.slice(questionMark + 1) : '');
+  return !params.has('page') && !params.has('size');
+}
+
+function withTaskPage(path: string, page: number): string {
+  const questionMark = path.indexOf('?');
+  const pathname = questionMark >= 0 ? path.slice(0, questionMark) : path;
+  const params = new URLSearchParams(questionMark >= 0 ? path.slice(questionMark + 1) : '');
+  params.set('page', String(page));
+  params.set('size', String(TASK_COMPATIBILITY_PAGE_SIZE));
+  return `${pathname}?${params.toString()}`;
+}
+
+async function fetchAllTaskPages<T>(path: string, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ApiCallResult<T>> {
+  const combined: unknown[] = [];
+  let page = 0;
+  let totalLatencyMs = 0;
+  let lastResult: ApiCallResult<unknown[]> | null = null;
+
+  while (true) {
+    const result = await apiRequest<unknown[]>('GET', withTaskPage(path, page), {
+      contentType: 'application/json',
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+    });
+    totalLatencyMs += result.latencyMs;
+
+    // Preserve the normal error/refresh behavior. A non-array success is also returned unchanged
+    // so mocked/developer endpoints are not converted into an infinite pagination loop.
+    if (!result.ok || !Array.isArray(result.data)) {
+      return result as unknown as ApiCallResult<T>;
+    }
+
+    combined.push(...result.data);
+    lastResult = result;
+    if (result.data.length < TASK_COMPATIBILITY_PAGE_SIZE) break;
+    page += 1;
+  }
+
+  if (lastResult === null) {
+    throw new Error('Task pagination completed without a response.');
+  }
+
+  return {
+    ...lastResult,
+    latencyMs: totalLatencyMs,
+    data: combined as T,
+    rawBody: JSON.stringify(combined),
+  };
+}
+
 export async function apiJson<T>(method: HttpMethod, path: string, body?: unknown, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<ApiCallResult<T>> {
+  // The backend now pages the task-list endpoints. Existing React screens still consume those
+  // endpoints as complete arrays, so transparently aggregate every page when the caller did not
+  // explicitly request pagination. New clients (including Flutter) can opt into bounded pages by
+  // supplying page/size and receive the normal single-page response.
+  if (shouldFetchAllTaskPages(method, path, body)) {
+    return fetchAllTaskPages<T>(path, options);
+  }
+
   return apiRequest<T>(method, path, {
     body: body === undefined ? undefined : JSON.stringify(body),
     contentType: 'application/json',
