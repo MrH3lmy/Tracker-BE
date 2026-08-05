@@ -48,7 +48,7 @@ describe('apiClient task pagination compatibility', () => {
   });
 
   it('also preserves complete archive lists', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse([{ id: 1 }]));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => jsonResponse([{ id: 1 }]));
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await apiJson<Array<{ id: number }>>('GET', '/api/v1/tasks/archive');
