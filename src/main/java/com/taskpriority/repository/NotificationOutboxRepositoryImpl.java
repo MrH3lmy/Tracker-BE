@@ -19,7 +19,7 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
     // pattern - raw JDBC keeps the exact intended SQL unambiguous.
     private static final String CLAIM_BATCH_SQL = """
             UPDATE notification_outbox
-            SET status = 'PROCESSING', processing_started_at = ?, attempts = attempts + 1
+            SET status = 'PROCESSING', processing_started_at = ?, worker_id = ?, attempts = attempts + 1
             WHERE id IN (
                 SELECT id FROM notification_outbox
                 WHERE status = 'PENDING' AND next_attempt_at <= ?
@@ -28,7 +28,7 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
                 LIMIT ?
             )
             RETURNING id, user_id, reminder_id, channel, title, body, link, status, attempts,
-                      max_attempts, next_attempt_at, processing_started_at, processed_at,
+                      max_attempts, next_attempt_at, processing_started_at, worker_id, processed_at,
                       last_error_code, last_error_message, read, created_at
             """;
 
@@ -39,9 +39,9 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
     }
 
     @Override
-    public List<NotificationOutboxEntry> claimBatch(LocalDateTime now, int batchSize) {
+    public List<NotificationOutboxEntry> claimBatch(LocalDateTime now, int batchSize, String workerId) {
         Timestamp nowTimestamp = Timestamp.valueOf(now);
-        return jdbcTemplate.query(CLAIM_BATCH_SQL, ROW_MAPPER, nowTimestamp, nowTimestamp, batchSize);
+        return jdbcTemplate.query(CLAIM_BATCH_SQL, ROW_MAPPER, nowTimestamp, workerId, nowTimestamp, batchSize);
     }
 
     private static final RowMapper<NotificationOutboxEntry> ROW_MAPPER = (rs, rowNum) -> {
@@ -58,6 +58,7 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
         entry.setMaxAttempts(rs.getInt("max_attempts"));
         entry.setNextAttemptAt(toLocalDateTime(rs.getTimestamp("next_attempt_at")));
         entry.setProcessingStartedAt(toLocalDateTime(rs.getTimestamp("processing_started_at")));
+        entry.setWorkerId(rs.getString("worker_id"));
         entry.setProcessedAt(toLocalDateTime(rs.getTimestamp("processed_at")));
         entry.setLastErrorCode(rs.getString("last_error_code"));
         entry.setLastErrorMessage(rs.getString("last_error_message"));

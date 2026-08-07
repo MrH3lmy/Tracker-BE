@@ -19,6 +19,8 @@ import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.settings.SettingsService;
 import com.taskpriority.settings.TimeWindow;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -77,6 +79,8 @@ public class ReminderService {
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
     private final SchedulerLeaderLock leaderLock;
+    private final WorkerIdentity workerIdentity;
+    private final MeterRegistry meterRegistry;
     private final TransactionTemplate requiresNewTransaction;
     private final boolean schedulingEnabled;
     private final int dispatchBatchSize;
@@ -87,6 +91,7 @@ public class ReminderService {
                             UserRepository userRepository, TaskRepository taskRepository, HabitRepository habitRepository,
                             HabitCheckInRepository habitCheckInRepository, SettingsService settingsService,
                             CurrentUserService currentUserService, SchedulerLeaderLock leaderLock,
+                            WorkerIdentity workerIdentity, MeterRegistry meterRegistry,
                             PlatformTransactionManager transactionManager,
                             @Value("${app.reminders.scheduling-enabled:true}") boolean schedulingEnabled,
                             @Value("${app.notifications.dispatch-batch-size:50}") int dispatchBatchSize,
@@ -101,6 +106,8 @@ public class ReminderService {
         this.settingsService = settingsService;
         this.currentUserService = currentUserService;
         this.leaderLock = leaderLock;
+        this.workerIdentity = workerIdentity;
+        this.meterRegistry = meterRegistry;
         this.schedulingEnabled = schedulingEnabled;
         this.dispatchBatchSize = dispatchBatchSize;
         this.maxDispatchAttempts = maxDispatchAttempts;
@@ -157,10 +164,14 @@ public class ReminderService {
                 notificationOutboxRepository.recoverStuckProcessing(now.minus(processingLeaseTimeout), now));
         if (recovered != null && recovered > 0) {
             logger.warn("Recovered {} notification(s) stuck in PROCESSING past the {}-lease", recovered, processingLeaseTimeout);
+            meterRegistry.counter("notifications.outbox.recovered").increment(recovered);
         }
 
         List<NotificationOutboxEntry> claimed = requiresNewTransaction.execute(status ->
-                notificationOutboxRepository.claimBatch(now, dispatchBatchSize));
+                notificationOutboxRepository.claimBatch(now, dispatchBatchSize, workerIdentity.getWorkerId()));
+        if (claimed != null && !claimed.isEmpty()) {
+            meterRegistry.counter("notifications.outbox.claimed").increment(claimed.size());
+        }
         for (NotificationOutboxEntry entry : claimed == null ? List.<NotificationOutboxEntry>of() : claimed) {
             requiresNewTransaction.executeWithoutResult(status -> deliver(entry));
         }
@@ -176,6 +187,10 @@ public class ReminderService {
             entry.setStatus(NotificationStatus.SENT);
             entry.setProcessedAt(LocalDateTime.now());
             notificationOutboxRepository.save(entry);
+            Counter.builder("notifications.outbox.delivered")
+                    .tag("channel", entry.getChannel().name())
+                    .register(meterRegistry)
+                    .increment();
         } catch (RuntimeException ex) {
             handleDeliveryFailure(entry, ex);
         }
@@ -185,13 +200,18 @@ public class ReminderService {
         logger.error("Failed to dispatch notification {}", entry.getId(), ex);
         entry.setLastErrorCode(ex.getClass().getSimpleName());
         entry.setLastErrorMessage(truncate(ex.getMessage(), 500));
-        if (entry.getAttempts() >= entry.getMaxAttempts()) {
+        boolean exhausted = entry.getAttempts() >= entry.getMaxAttempts();
+        if (exhausted) {
             entry.setStatus(NotificationStatus.FAILED);
         } else {
             entry.setStatus(NotificationStatus.PENDING);
             entry.setNextAttemptAt(LocalDateTime.now().plus(backoff(entry.getAttempts())));
         }
         notificationOutboxRepository.save(entry);
+        Counter.builder(exhausted ? "notifications.outbox.failed" : "notifications.outbox.retried")
+                .tag("channel", entry.getChannel().name())
+                .register(meterRegistry)
+                .increment();
     }
 
     private Duration backoff(int attempts) {

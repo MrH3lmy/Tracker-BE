@@ -62,6 +62,11 @@ public class NotificationOutboxEntry {
     @Column(name = "processing_started_at")
     private LocalDateTime processingStartedAt;
 
+    // Which application instance claimed this entry (see WorkerIdentity) - lets a stuck/recovered
+    // entry or a duplicate-processing incident be traced back to a specific worker.
+    @Column(name = "worker_id", length = 100)
+    private String workerId;
+
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
 
@@ -103,6 +108,8 @@ public class NotificationOutboxEntry {
     public void setNextAttemptAt(LocalDateTime nextAttemptAt) { this.nextAttemptAt = nextAttemptAt; }
     public LocalDateTime getProcessingStartedAt() { return processingStartedAt; }
     public void setProcessingStartedAt(LocalDateTime processingStartedAt) { this.processingStartedAt = processingStartedAt; }
+    public String getWorkerId() { return workerId; }
+    public void setWorkerId(String workerId) { this.workerId = workerId; }
     public LocalDateTime getProcessedAt() { return processedAt; }
     public void setProcessedAt(LocalDateTime processedAt) { this.processedAt = processedAt; }
     public String getLastErrorCode() { return lastErrorCode; }
