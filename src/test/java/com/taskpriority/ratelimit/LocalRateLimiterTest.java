@@ -54,6 +54,20 @@ class LocalRateLimiterTest {
     }
 
     @Test
+    void refundRemovesOnlyOneConsumedAttempt() {
+        LocalRateLimiter limiter = new LocalRateLimiter();
+        RateLimitPolicy oneAttempt = new RateLimitPolicy(1, Duration.ofMinutes(1));
+        assertTrue(limiter.consume("key", oneAttempt).allowed());
+        assertFalse(limiter.consume("key", oneAttempt).allowed());
+
+        limiter.refund("key");
+
+        // One failure remains. A full reset would make this next request allowed; a one-attempt
+        // refund correctly takes the counter from two back to one, so the next consume is blocked.
+        assertFalse(limiter.consume("key", oneAttempt).allowed());
+    }
+
+    @Test
     void resetClearsTheTrackedWindow() {
         LocalRateLimiter limiter = new LocalRateLimiter();
         limiter.consume("key", policy);
@@ -73,13 +87,9 @@ class LocalRateLimiterTest {
         limiter.consume("existing-1", longWindow);
         limiter.consume("existing-2", longWindow);
 
-        // A third, brand-new key would push the tracked-key count past capacity with nothing
-        // expired to sweep - fails open (allows the request) rather than growing without bound.
         RateLimitDecision decision = limiter.consume("new-key", longWindow);
 
         assertTrue(decision.allowed());
-        // And since the new key was never actually tracked, it isn't throttled on a later
-        // request either - capacity pressure fails open consistently, not just once.
         assertTrue(limiter.consume("new-key", longWindow).allowed());
     }
 
@@ -93,8 +103,6 @@ class LocalRateLimiterTest {
 
         RateLimitPolicy longWindow = new RateLimitPolicy(1, Duration.ofMinutes(5));
         assertTrue(limiter.consume("new-key", longWindow).allowed());
-        // The new key was tracked this time (room was freed by the sweep), so a second attempt
-        // within the same window is correctly rejected instead of silently failing open again.
         assertFalse(limiter.consume("new-key", longWindow).allowed());
     }
 

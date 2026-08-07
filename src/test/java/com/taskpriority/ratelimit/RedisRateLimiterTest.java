@@ -29,8 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Exercises RedisRateLimiter against a real Redis, including two independently constructed
  * limiter instances sharing the same Redis - the multi-application-instance scenario issue #258
- * asks for, which an in-memory/mocked test can't prove (the guarantee comes from Redis's own
- * atomic Lua script execution serializing concurrent INCR/EXPIRE, not from anything in-process).
+ * asks for, which an in-memory/mocked test cannot prove.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class RedisRateLimiterTest {
@@ -89,6 +88,19 @@ class RedisRateLimiterTest {
     }
 
     @Test
+    void refundRemovesOnlyOneConsumedAttempt() {
+        RedisRateLimiter limiter = new RedisRateLimiter(redisTemplate);
+        RateLimitPolicy oneAttempt = new RateLimitPolicy(1, Duration.ofMinutes(1));
+        String key = uniqueKey();
+        assertTrue(limiter.consume(key, oneAttempt).allowed());
+        assertFalse(limiter.consume(key, oneAttempt).allowed());
+
+        limiter.refund(key);
+
+        assertFalse(limiter.consume(key, oneAttempt).allowed());
+    }
+
+    @Test
     void resetClearsTheCounter() {
         RedisRateLimiter limiter = new RedisRateLimiter(redisTemplate);
         RateLimitPolicy policy = new RateLimitPolicy(1, Duration.ofMinutes(1));
@@ -103,10 +115,21 @@ class RedisRateLimiterTest {
     }
 
     @Test
+    void repairsAKeyThatUnexpectedlyLostItsExpiry() {
+        RedisRateLimiter limiter = new RedisRateLimiter(redisTemplate);
+        RateLimitPolicy policy = new RateLimitPolicy(2, Duration.ofSeconds(30));
+        String key = uniqueKey();
+        String redisKey = "ratelimit:" + key;
+        redisTemplate.opsForValue().set(redisKey, "1");
+
+        assertTrue(limiter.consume(key, policy).allowed());
+
+        Long ttlMillis = redisTemplate.getExpire(redisKey, TimeUnit.MILLISECONDS);
+        assertTrue(ttlMillis != null && ttlMillis > 0 && ttlMillis <= policy.window().toMillis());
+    }
+
+    @Test
     void twoLimiterInstancesSharingRedisEnforceTheSameLimit() {
-        // Simulates two application instances: two independent RedisRateLimiter objects (and two
-        // independent connections), both backed by the same Redis - the scenario a single
-        // in-process limiter can never prove.
         RedisRateLimiter instanceA = new RedisRateLimiter(redisTemplate);
         RedisRateLimiter instanceB = new RedisRateLimiter(redisTemplate);
         RateLimitPolicy policy = new RateLimitPolicy(5, Duration.ofMinutes(1));

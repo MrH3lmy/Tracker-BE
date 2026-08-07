@@ -9,18 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Fail-fast checks for the {@code prod} profile that a bare {@code ${VAR}} placeholder can't
- * express on its own, or that turned out not to actually enforce presence reliably (issue #259).
- * Presence of the database connection and CORS origins is enforced by
- * {@code application-prod.properties} using no-default placeholders - Spring itself refuses to
- * start if one is missing. {@code spring.data.redis.host} looked like it would work the same way,
- * but {@code RedisProperties} binds it with a Java-level default ({@code "localhost"}) that
- * silently wins when the placeholder can't resolve instead of propagating a failure - proven by
- * this exact scenario failing to fail in {@code ProductionProfileStartupPostgresTest} against a
- * real Spring context, so it's re-checked here directly against the raw env var instead of trusting
- * the placeholder. Every failure message names the offending property, never its value - some of
- * these (CORS origins, Redis host) aren't secret, but treating every production-config error
- * message the same way avoids an easy mistake of adding a secret-revealing message here later.
+ * Fail-fast checks for the {@code prod} profile that a bare placeholder cannot express on its
+ * own (issue #259). Database and CORS presence are enforced by
+ * {@code application-prod.properties}; this validator handles semantic checks and verifies the
+ * effective {@code spring.data.redis.host} property. Inspecting the effective property allows
+ * deployments to supply it through {@code REDIS_HOST}, {@code SPRING_DATA_REDIS_HOST}, a command-
+ * line argument, or another higher-precedence Spring property source without coupling validation
+ * to one environment-variable alias.
  */
 @Component
 @Profile("prod")
@@ -33,7 +28,7 @@ public class ProductionConfigValidator {
 
     public ProductionConfigValidator(
             @Value("${app.cors.allowed-origins}") List<String> corsAllowedOrigins,
-            @Value("${REDIS_HOST:}") String redisHost,
+            @Value("${spring.data.redis.host:}") String redisHost,
             @Value("${app.notifications.dispatch-batch-size:50}") int notificationsDispatchBatchSize,
             @Value("${app.notifications.max-dispatch-attempts:5}") int notificationsMaxDispatchAttempts,
             @Value("${app.notifications.processing-lease-timeout-minutes:5}") int notificationsProcessingLeaseTimeoutMinutes
@@ -57,7 +52,7 @@ public class ProductionConfigValidator {
         }
 
         if (redisHost.isBlank()) {
-            errors.add("REDIS_HOST must be set explicitly (spring.data.redis.host must not silently fall back to its localhost default).");
+            errors.add("spring.data.redis.host (REDIS_HOST) must be set explicitly.");
         }
 
         if (notificationsDispatchBatchSize <= 0) {

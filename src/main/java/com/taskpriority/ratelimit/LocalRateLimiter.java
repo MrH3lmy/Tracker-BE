@@ -61,6 +61,16 @@ public class LocalRateLimiter implements RateLimiter {
     }
 
     @Override
+    public void refund(String key) {
+        windows.computeIfPresent(key, (ignored, existing) -> {
+            if (existing.isExpired()) {
+                return null;
+            }
+            return existing.attempts.decrementAndGet() <= 0 ? null : existing;
+        });
+    }
+
+    @Override
     public void reset(String key) {
         windows.remove(key);
     }
@@ -78,12 +88,12 @@ public class LocalRateLimiter implements RateLimiter {
         }
 
         boolean isExpired() {
-            return Instant.now().isAfter(expiresAt);
+            return !Instant.now().isBefore(expiresAt);
         }
 
         long remainingSeconds() {
-            long seconds = Duration.between(Instant.now(), expiresAt).toSeconds();
-            return Math.max(seconds, 0);
+            long remainingMillis = Math.max(Duration.between(Instant.now(), expiresAt).toMillis(), 0);
+            return Math.max(Math.ceilDiv(remainingMillis, 1000), 1);
         }
     }
 }

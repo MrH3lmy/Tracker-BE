@@ -69,17 +69,16 @@ class AuthRateLimitServiceTest {
                 .findFirst()
                 .orElseThrow();
 
-        // Untrimmed/differently-cased input must still hash to the same account key, or a
-        // successful login would fail to reset the failure bucket its own earlier attempts built up.
         assertEquals(accountKeyFromEnforce, accountKeyFromReset);
     }
 
     @Test
-    void loginSuccessResetsBothBuckets() {
+    void loginSuccessRefundsOnlyItsIpAttemptAndResetsTheAccountBucket() {
         service.recordLoginSuccess(request, "user@example.com");
 
-        verify(rateLimiter).reset("login:ip:203.0.113.5");
+        verify(rateLimiter).refund("login:ip:203.0.113.5");
         verify(rateLimiter).reset(startsWithAccountKey());
+        verify(rateLimiter, never()).reset("login:ip:203.0.113.5");
     }
 
     @Test
@@ -91,12 +90,13 @@ class AuthRateLimitServiceTest {
     }
 
     @Test
-    void refreshChecksTheIpBucketAndSuccessResetsIt() {
+    void refreshChecksTheIpBucketAndSuccessRefundsOnlyThatAttempt() {
         service.enforceRefresh(request);
         service.recordRefreshSuccess(request);
 
         verify(rateLimiter).consume(eq("refresh:ip:203.0.113.5"), any());
-        verify(rateLimiter).reset("refresh:ip:203.0.113.5");
+        verify(rateLimiter).refund("refresh:ip:203.0.113.5");
+        verify(rateLimiter, never()).reset("refresh:ip:203.0.113.5");
     }
 
     @Test
