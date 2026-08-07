@@ -16,6 +16,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JwtServiceTest {
@@ -25,6 +26,20 @@ class JwtServiceTest {
     void setUp() {
         jwtService = new JwtService("test-signing-secret-at-least-32-bytes-long!!", 15);
         jwtService.init();
+    }
+
+    @Test
+    void blankSecretFailsFastAtStartup() {
+        JwtService unset = new JwtService("", 15);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, unset::init);
+        assertTrue(ex.getMessage().contains("app.security.jwt.secret"));
+        assertTrue(ex.getMessage().contains("JWT_SECRET"));
+    }
+
+    @Test
+    void tooShortSecretFailsFastAtStartup() {
+        JwtService tooShort = new JwtService("short-secret", 15);
+        assertThrows(IllegalStateException.class, tooShort::init);
     }
 
     @Test

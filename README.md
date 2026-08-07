@@ -73,6 +73,27 @@ Flyway is enabled by default and runs migrations at startup from `classpath:db/m
 - CORS is credentialed (`Access-Control-Allow-Credentials: true`) but only ever for the explicit origin list in `app.cors.allowed-origins`, never `*` (see `WebConfig`).
 - **Native/desktop (Flutter) client contract**: not implemented in this repository yet - there is no native client to build it against. The intended shape (per issue #257 and roadmap issue #266) is a separate, explicitly registered native-client flow (never spoofable `User-Agent`/header detection) that returns the refresh token in the response body instead of a cookie, for storage in OS-backed secure storage (iOS Keychain / Android Keystore / platform equivalents on desktop). Design and implement this alongside the `TRACKER-FLUTTER` client, reusing the same `UserSession`/rotation/replay-family model documented above.
 
+### Authentication rate limiting
+
+`AuthRateLimitService` applies independent, fixed-window rate-limit policies to `/api/v1/auth/{register,login,refresh}` (see `com.taskpriority.ratelimit`). Each policy is `max-attempts` within `window-seconds`; defaults and env var overrides:
+
+| Policy | Property | Env var | Default |
+|---|---|---|---|
+| Login, per IP | `app.rate-limit.login.ip.max-attempts` / `.window-seconds` | `RATE_LIMIT_LOGIN_IP_MAX_ATTEMPTS` / `_WINDOW_SECONDS` | 20 / 900s |
+| Login, per account | `app.rate-limit.login.account.max-attempts` / `.window-seconds` | `RATE_LIMIT_LOGIN_ACCOUNT_MAX_ATTEMPTS` / `_WINDOW_SECONDS` | 5 / 900s |
+| Register, per IP | `app.rate-limit.register.ip.max-attempts` / `.window-seconds` | `RATE_LIMIT_REGISTER_IP_MAX_ATTEMPTS` / `_WINDOW_SECONDS` | 10 / 3600s |
+| Refresh, per IP | `app.rate-limit.refresh.ip.max-attempts` / `.window-seconds` | `RATE_LIMIT_REFRESH_IP_MAX_ATTEMPTS` / `_WINDOW_SECONDS` | 10 / 300s |
+
+Tuning guidance: the per-account login policy is intentionally tighter than per-IP (5 vs 20) since it's the more targeted brute-force signal (many failed logins against one account) - loosen per-IP first if you have legitimate shared-IP traffic (NAT/office networks), not per-account. A successful login/refresh resets that specific IP/account bucket without touching unrelated ones (see `AuthRateLimitService#recordLoginSuccess`/`recordRefreshSuccess`) - failed attempts that never succeed are the only thing that accumulates toward the limit.
+
+- **Storage**: Redis-backed by default (`app.rate-limit.redis-enabled=true`), so counters are shared across every application instance and survive individual instance restarts - see `RedisRateLimiter` (atomic Lua increment-and-expire, so concurrent requests across instances can't race past the limit). Configure the connection via `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD` (`spring.data.redis.*`). `docker-compose.yml`'s `redis` service is the local example.
+- **Redis failure behavior**: fails open. If Redis is unreachable, requests are allowed through (logged as a warning) rather than every login/registration/refresh going down with it - an availability outage in a supporting service shouldn't become an authentication outage. Monitor the `auth.ratelimit.requests` metric (below) and Redis's own health to catch this rather than relying on limiter behavior to surface it.
+- **Local/single-instance fallback**: set `RATE_LIMIT_REDIS_ENABLED=false` to use `LocalRateLimiter`, a bounded in-memory fixed-window map (no Redis dependency) - this is what the `local-test` Spring profile uses for the test suite. Not appropriate for a real multi-instance deployment (each instance tracks its own counters, and counters reset on restart).
+- **Trusted proxies**: `app.rate-limit.trusted-proxies` (`RATE_LIMIT_TRUSTED_PROXIES`) is a comma-separated CIDR list. Empty (the default) means `X-Forwarded-For` is never trusted and the direct TCP peer is always used as the client IP - correct with no reverse proxy in front of the app, wrong behind one (every request will appear to come from the proxy). Set this to your load balancer/reverse proxy's subnet in front of a real deployment; see `TrustedProxyResolver` for exactly how the direct-peer-must-be-trusted check works and why a spoofed header from an untrusted direct caller can't bypass it.
+- **Response**: a blocked request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and the standard `ApiErrorResponse` body - no internal counters or account-existence information is revealed.
+- **Monitoring**: `auth.ratelimit.requests` (Micrometer counter, tags `endpoint` ∈ {login,register,refresh}, `dimension` ∈ {ip,account}, `outcome` ∈ {allowed,blocked}) - exposed wherever the app's Micrometer registry is exported. No raw email/IP ever appears in a metric label, log line, or Redis key: account keys are SHA-256 hashed the same way `AuthService` hashes refresh tokens before persisting them (see `AuthRateLimitService#accountKey`), and Redis keys embed the IP directly (server-side infrastructure, not a public log/metric surface) rather than a hash, since correlating operational Redis state to a specific client during an incident is the point of that particular value.
+- **Emergency override**: there's no separate kill switch beyond raising the relevant `*_MAX_ATTEMPTS`/`*_WINDOW_SECONDS` env var (or `RATE_LIMIT_REDIS_ENABLED=false` to at least stop cross-instance amplification) and redeploying - a dedicated runtime-toggle endpoint wasn't built. `RateLimitPolicy` rejects a non-positive `maxAttempts`, so "disable" in practice means setting a very high attempt count rather than zero.
+
 ---
 
 ## One-click / easy start
@@ -545,10 +566,21 @@ trivy fs .
 
 ### Production configuration
 
-- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it.
-- Required environment variables (the app fails fast at startup if these are missing/invalid rather than starting in a broken state): `JWT_SECRET` (32+ random bytes - see `JwtService#init`), and the database connection (`DB_URL`/`DB_USERNAME`/`DB_PASSWORD`, which fail via the standard "connection refused"/auth-failure path if wrong rather than a custom check).
+- Set `SPRING_PROFILES_ACTIVE=prod` to activate `application-prod.properties` (disables Swagger UI/OpenAPI JSON, restricts Actuator to `/actuator/health` only). It layers on top of the base `application.properties`, it doesn't replace it - and the base file's convenient localhost/dev-credential defaults are exactly what `application-prod.properties` overrides with no-default placeholders (issue #259), so the two files together are what makes `prod` fail fast instead of silently starting against `localhost`.
+- **`dev`/local profiles are the only place with convenient defaults.** Only the `prod` and `local-test` (automated tests, H2) profiles have dedicated properties files; running without `SPRING_PROFILES_ACTIVE` set at all uses the base `application.properties` defaults directly - fine for `mvn spring-boot:run` against a local Postgres, not a supported production configuration. `prod` is the only profile intended for a real deployment.
+- **Required environment variables** in the `prod` profile - the app fails at startup (before accepting any traffic) if one is missing, naming the property without ever printing a value:
+
+  | Variable | Secret? | Enforced by |
+  |---|---|---|
+  | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | password is secret | no-default placeholder in `application-prod.properties` (Spring's own placeholder resolution) |
+  | `JWT_SECRET` (32+ random bytes) | secret | `JwtService#init` (`@PostConstruct`), checked everywhere, all profiles |
+  | `CORS_ALLOWED_ORIGINS` | not secret | no-default placeholder + `ProductionConfigValidator` (also rejects a wildcard origin) |
+  | `REDIS_HOST` (backs distributed auth rate limiting, see below) | not secret | no-default placeholder in `application-prod.properties` |
+
+  `ProductionConfigValidator` (`com.taskpriority.config`, `@Profile("prod")`) additionally sanity-checks that `app.notifications.dispatch-batch-size`/`max-dispatch-attempts`/`processing-lease-timeout-minutes` are positive. There are currently no external email/SMS notification providers in this API (`NotificationChannel` only has `IN_APP`), so there's nothing else in that category to require yet - add it here when one is introduced.
+- **Redis is deliberately not a hard runtime dependency.** `REDIS_HOST` must be set explicitly in `prod` (so a real deployment can't silently default to `localhost` and quietly lose cross-instance rate-limit sharing), but if Redis becomes unreachable *after* startup, `RedisRateLimiter` fails open rather than taking authentication down with it - see "Authentication rate limiting" above. `management.health.redis.enabled=false` keeps a Redis outage from flipping `/actuator/health` (and therefore the Docker `HEALTHCHECK`/orchestrator readiness probe) to `DOWN` for the same reason.
 - Every request gets a correlation/request ID (`X-Request-Id` - reused from the inbound header if the caller already set one, otherwise generated) attached to the response and to the logging MDC for the duration of that request; see `RequestIdFilter`.
-- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this.
+- In the `prod` profile, logs are structured JSON (one object per line, via `logstash-logback-encoder`) instead of the human-readable console format used everywhere else - see `logback-spring.xml`. Application code must not log full request/response bodies, tokens, or password hashes; `AuthService`/`JwtService` already avoid this, and `AuthRateLimitService`/`RedisRateLimiter` never put a raw email in a rate-limit key or log line either (see "Authentication rate limiting").
 - The Docker image runs as a dedicated non-root user (see the Dockerfile's `USER` directive) and defines a `HEALTHCHECK` against `/actuator/health`, which is reachable without authentication (see `SecurityConfig`) since orchestrator/container health probes never supply a JWT.
 
 ---
