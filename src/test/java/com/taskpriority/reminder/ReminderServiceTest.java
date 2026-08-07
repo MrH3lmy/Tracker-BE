@@ -116,6 +116,8 @@ class ReminderServiceTest {
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(any(), any())).thenReturn(List.of());
         when(notificationOutboxRepository.claimBatch(any(), anyInt(), any())).thenReturn(List.of());
         when(notificationOutboxRepository.recoverStuckProcessing(any(), any())).thenReturn(0);
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenReturn(true);
+        when(notificationOutboxRepository.markDeliveryOutcome(any(), any(), any(), any(), any(), any())).thenReturn(true);
         reminderService = buildService(true);
     }
 
@@ -322,15 +324,17 @@ class ReminderServiceTest {
         entry.setStatus(NotificationStatus.PROCESSING);
         entry.setAttempts(1);
         entry.setChannel(NotificationChannel.IN_APP);
+        entry.setProcessingStartedAt(LocalDateTime.now().minusSeconds(1));
         when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
 
         reminderService.dispatchNotifications();
 
         assertEquals(NotificationStatus.SENT, entry.getStatus());
         assertNotNull(entry.getProcessedAt());
-        verify(notificationOutboxRepository).save(entry);
+        verify(notificationOutboxRepository).markDelivered(eq(1L), any(), any());
         assertEquals(1.0, meterRegistry.counter("notifications.outbox.delivered", "channel", "IN_APP").count());
         assertEquals(1.0, meterRegistry.counter("notifications.outbox.claimed").count());
+        assertEquals(1L, meterRegistry.find("notifications.outbox.processing.duration").timer().count());
     }
 
     @Test
@@ -351,13 +355,14 @@ class ReminderServiceTest {
         entry.setMaxAttempts(5);
         entry.setChannel(NotificationChannel.IN_APP);
         when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
-        when(notificationOutboxRepository.save(entry)).thenThrow(new RuntimeException("boom")).thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenThrow(new RuntimeException("boom"));
 
         reminderService.dispatchNotifications();
 
         assertEquals(NotificationStatus.PENDING, entry.getStatus());
         assertNotNull(entry.getNextAttemptAt());
         assertEquals("RuntimeException", entry.getLastErrorCode());
+        verify(notificationOutboxRepository).markDeliveryOutcome(eq(1L), any(), eq(NotificationStatus.PENDING), eq("RuntimeException"), any(), any());
         assertEquals(1.0, meterRegistry.counter("notifications.outbox.retried", "channel", "IN_APP").count());
         assertEquals(0.0, meterRegistry.counter("notifications.outbox.failed", "channel", "IN_APP").count());
     }
@@ -371,13 +376,33 @@ class ReminderServiceTest {
         entry.setMaxAttempts(5);
         entry.setChannel(NotificationChannel.IN_APP);
         when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
-        when(notificationOutboxRepository.save(entry)).thenThrow(new RuntimeException("boom")).thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenThrow(new RuntimeException("boom"));
 
         reminderService.dispatchNotifications();
 
         assertEquals(NotificationStatus.FAILED, entry.getStatus());
+        verify(notificationOutboxRepository).markDeliveryOutcome(eq(1L), any(), eq(NotificationStatus.FAILED), eq("RuntimeException"), any(), any());
         assertEquals(1.0, meterRegistry.counter("notifications.outbox.failed", "channel", "IN_APP").count());
         assertEquals(0.0, meterRegistry.counter("notifications.outbox.retried", "channel", "IN_APP").count());
+    }
+
+    @Test
+    void dispatchDiscardsAStaleDeliveryWhenAnotherWorkerHasAlreadyReclaimedTheLease() {
+        NotificationOutboxEntry entry = new NotificationOutboxEntry();
+        entry.setId(1L);
+        entry.setStatus(NotificationStatus.PROCESSING);
+        entry.setAttempts(1);
+        entry.setChannel(NotificationChannel.IN_APP);
+        entry.setProcessingStartedAt(LocalDateTime.now().minusMinutes(10));
+        when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenReturn(false);
+
+        reminderService.dispatchNotifications();
+
+        assertEquals(NotificationStatus.PROCESSING, entry.getStatus(), "a stale worker must not overwrite the entry's real (unknown-to-it) outcome");
+        assertNull(entry.getProcessedAt());
+        assertEquals(0.0, meterRegistry.counter("notifications.outbox.delivered", "channel", "IN_APP").count());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.stale_claim_discarded").count());
     }
 
     @Test

@@ -44,6 +44,34 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
         return jdbcTemplate.query(CLAIM_BATCH_SQL, ROW_MAPPER, nowTimestamp, workerId, nowTimestamp, batchSize);
     }
 
+    private static final String MARK_DELIVERED_SQL = """
+            UPDATE notification_outbox SET status = 'SENT', processed_at = ?
+            WHERE id = ? AND processing_started_at = ?
+            """;
+
+    @Override
+    public boolean markDelivered(Long id, LocalDateTime expectedProcessingStartedAt, LocalDateTime processedAt) {
+        int updated = jdbcTemplate.update(MARK_DELIVERED_SQL,
+                Timestamp.valueOf(processedAt), id, Timestamp.valueOf(expectedProcessingStartedAt));
+        return updated == 1;
+    }
+
+    private static final String MARK_DELIVERY_OUTCOME_SQL = """
+            UPDATE notification_outbox
+            SET status = ?, last_error_code = ?, last_error_message = ?, next_attempt_at = ?
+            WHERE id = ? AND processing_started_at = ?
+            """;
+
+    @Override
+    public boolean markDeliveryOutcome(Long id, LocalDateTime expectedProcessingStartedAt, NotificationStatus newStatus,
+                                        String lastErrorCode, String lastErrorMessage, LocalDateTime nextAttemptAt) {
+        int updated = jdbcTemplate.update(MARK_DELIVERY_OUTCOME_SQL,
+                newStatus.name(), lastErrorCode, lastErrorMessage,
+                nextAttemptAt == null ? null : Timestamp.valueOf(nextAttemptAt),
+                id, Timestamp.valueOf(expectedProcessingStartedAt));
+        return updated == 1;
+    }
+
     private static final RowMapper<NotificationOutboxEntry> ROW_MAPPER = (rs, rowNum) -> {
         NotificationOutboxEntry entry = new NotificationOutboxEntry();
         entry.setId(rs.getLong("id"));

@@ -23,6 +23,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,21 +127,16 @@ class ReminderServiceMultiInstancePostgresTest {
     }
 
     /**
-     * Simulates a horizontally-scaled deployment: {@code WORKER_COUNT} distinct worker identities
+     * Simulates a horizontally-scaled deployment: {@code workerCount} distinct worker identities
      * (a single JVM's {@link WorkerIdentity} bean is one-per-process, so a fixed worker id per
      * thread stands in for "N separate application instances") race directly against
      * {@link NotificationOutboxRepository#claimBatch} - the same entry point every instance's
      * {@link ReminderService#dispatchNotifications()} calls - to claim a large batch of pending
-     * entries. This proves two acceptance criteria from issue #255 in one run: exactly-once
-     * delivery at scale (every entry claimed by precisely one worker, and stamped with that
-     * worker's id in the database) and reports achieved throughput as a benchmark figure.
+     * entries. Proves exactly-once claiming at scale (every entry claimed by precisely one worker,
+     * and stamped with that worker's id in the database) and returns the measured throughput so
+     * the caller can compare single- vs multi-worker performance.
      */
-    @Test
-    void manyConcurrentWorkersClaimEveryEntryExactlyOnceAndReportThroughput() throws Exception {
-        int entryCount = 2000;
-        int workerCount = 8;
-        int batchSize = 50;
-
+    private double claimAllEntriesConcurrentlyAndMeasureThroughput(int entryCount, int workerCount, int batchSize) throws Exception {
         Long reminderId = insertReminder(user.getId());
         List<Object[]> batchArgs = new ArrayList<>(entryCount);
         LocalDateTime dueAt = LocalDateTime.now().minusMinutes(1);
@@ -181,7 +178,9 @@ class ReminderServiceMultiInstancePostgresTest {
 
         Map<String, Long> claimsPerWorker = claimedIdToWorker.values().stream()
                 .collect(Collectors.groupingBy(w -> w, Collectors.counting()));
-        assertTrue(claimsPerWorker.size() > 1, "benchmark is only meaningful if more than one worker actually claimed rows");
+        if (workerCount > 1) {
+            assertTrue(claimsPerWorker.size() > 1, "benchmark is only meaningful if more than one worker actually claimed rows");
+        }
 
         Integer processingCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM notification_outbox WHERE status = 'PROCESSING'", Integer.class);
@@ -194,9 +193,106 @@ class ReminderServiceMultiInstancePostgresTest {
         }
 
         double throughputPerSecond = entryCount * 1000.0 / elapsedMillis;
-        logger.info("Throughput benchmark: {} entries claimed by {} workers in {} ms ({} entries/sec)",
+        logger.info("Throughput: {} entries claimed by {} worker(s) in {} ms ({} entries/sec)",
                 entryCount, workerCount, elapsedMillis, String.format("%.1f", throughputPerSecond));
+        return throughputPerSecond;
+    }
+
+    @Test
+    void manyConcurrentWorkersClaimEveryEntryExactlyOnceAndReportThroughput() throws Exception {
+        double throughputPerSecond = claimAllEntriesConcurrentlyAndMeasureThroughput(2000, 8, 50);
         assertTrue(throughputPerSecond > 50, "claim throughput regressed severely: only " + throughputPerSecond + " entries/sec");
+    }
+
+    /**
+     * The performance requirement from issue #255: throughput must actually increase as workers
+     * are added, not just stay flat (which would mean the removed leader lock wasn't the real
+     * bottleneck, or claiming has some other hidden serialization point). Uses a generous 1.3x
+     * margin rather than a tight ratio - this runs against a real Testcontainers Postgres on
+     * whatever CI hardware is available, where run-to-run variance is real, but 8 genuinely
+     * concurrent claimers should still clear a single claimer by a comfortable margin.
+     */
+    @Test
+    void throughputIncreasesWithMoreConcurrentWorkers() throws Exception {
+        double singleWorkerThroughput = claimAllEntriesConcurrentlyAndMeasureThroughput(1500, 1, 50);
+        cleanDatabase();
+        double eightWorkerThroughput = claimAllEntriesConcurrentlyAndMeasureThroughput(1500, 8, 50);
+
+        logger.info("Throughput comparison: 1 worker = {} entries/sec, 8 workers = {} entries/sec",
+                String.format("%.1f", singleWorkerThroughput), String.format("%.1f", eightWorkerThroughput));
+        assertTrue(eightWorkerThroughput > singleWorkerThroughput * 1.3,
+                "adding workers should meaningfully increase claim throughput: 1 worker=" + singleWorkerThroughput
+                        + "/sec, 8 workers=" + eightWorkerThroughput + "/sec");
+    }
+
+    /**
+     * Proves the acceptance criterion "a recovered row cannot be marked SENT by both the original
+     * and replacement worker without detection": worker A claims a row, its lease is force-expired
+     * (simulating A being stuck - e.g. a long GC pause or network partition, not actually dead) and
+     * recovered, worker B reclaims the same row, and then A - unaware it was ever reclaimed -
+     * finally tries to persist its own (stale) delivery outcome. That write must be detected and
+     * discarded rather than silently overwriting whatever B has since done with the row.
+     */
+    @Test
+    void aRecoveredAndReclaimedRowCannotBeOverwrittenByTheOriginalWorkersStaleOutcome() {
+        Long reminderId = insertReminder(user.getId());
+        insertPendingOutboxEntry(reminderId);
+
+        NotificationOutboxEntry claimedByA = notificationOutboxRepository.claimBatch(LocalDateTime.now(), 10, "worker-a").get(0);
+        LocalDateTime staleFencingToken = claimedByA.getProcessingStartedAt();
+
+        // Force the lease to look expired, as if worker A has been stuck for well past the timeout.
+        jdbcTemplate.update("UPDATE notification_outbox SET processing_started_at = ? WHERE id = ?",
+                LocalDateTime.now().minusHours(1), claimedByA.getId());
+        int recovered = notificationOutboxRepository.recoverStuckProcessing(LocalDateTime.now().minusMinutes(5), LocalDateTime.now());
+        assertEquals(1, recovered, "the lease-expired row must be recovered back to PENDING");
+
+        NotificationOutboxEntry claimedByB = notificationOutboxRepository.claimBatch(LocalDateTime.now(), 10, "worker-b").get(0);
+        assertEquals(claimedByA.getId(), claimedByB.getId());
+
+        // Worker A, unaware it was ever reclaimed, now tries to persist its own stale outcome using
+        // the processing_started_at it originally observed at claim time.
+        boolean staleWriteApplied = notificationOutboxRepository.markDelivered(claimedByA.getId(), staleFencingToken, LocalDateTime.now());
+        assertFalse(staleWriteApplied, "worker A's stale delivery outcome must be detected and rejected, not silently applied");
+
+        String statusAfterStaleWrite = jdbcTemplate.queryForObject(
+                "SELECT status FROM notification_outbox WHERE id = ?", String.class, claimedByA.getId());
+        assertEquals("PROCESSING", statusAfterStaleWrite, "worker B's claim must still stand - it hasn't reported an outcome yet");
+
+        // Worker B's own outcome, using the fencing token it actually observed, must succeed normally.
+        boolean bsWriteApplied = notificationOutboxRepository.markDelivered(claimedByB.getId(), claimedByB.getProcessingStartedAt(), LocalDateTime.now());
+        assertTrue(bsWriteApplied, "the replacement worker's own outcome must apply normally");
+    }
+
+    /**
+     * Documents/verifies the "confirm the (status, next_attempt_at) index is used" requirement
+     * from issue #255's performance-test section: with a realistic mix of statuses in the table,
+     * the dispatcher's claim query must not fall back to a full table scan.
+     */
+    @Test
+    void claimQueryUsesTheCompositeStatusNextAttemptIndexNotASequentialScan() {
+        Long reminderId = insertReminder(user.getId());
+        List<Object[]> batchArgs = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < 5000; i++) {
+            String status = i % 20 == 0 ? "PENDING" : "SENT";
+            batchArgs.add(new Object[] {user.getId(), reminderId, NotificationChannel.IN_APP.name(), "Row " + i, status, now.minusMinutes(1)});
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO notification_outbox (user_id, reminder_id, channel, title, status, attempts, max_attempts, next_attempt_at) " +
+                        "VALUES (?, ?, ?, ?, ?, 0, 5, ?)",
+                batchArgs);
+        jdbcTemplate.execute("ANALYZE notification_outbox");
+
+        List<String> plan = jdbcTemplate.queryForList(
+                "EXPLAIN SELECT id FROM notification_outbox WHERE status = 'PENDING' AND next_attempt_at <= ? "
+                        + "ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 50",
+                String.class, Timestamp.valueOf(now));
+        String planText = String.join("\n", plan);
+        logger.info("Claim query plan:\n{}", planText);
+
+        assertFalse(planText.contains("Seq Scan on notification_outbox"),
+                "the claim query must use the (status, next_attempt_at) index, not a full table scan:\n" + planText);
     }
 
     private void runConcurrently(Runnable first, Runnable second) throws Exception {
