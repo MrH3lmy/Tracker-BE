@@ -220,17 +220,16 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void logoutAllWithoutAuthenticationFailsServerSide() throws Exception {
-        // /api/v1/auth/** is permitAll() in SecurityConfig, so an unauthenticated request to
-        // logout-all reaches the controller rather than being stopped by Spring Security's
-        // authenticationEntryPoint. Authentication is enforced programmatically inside the
-        // controller via CurrentUserService.requireUserId(), which throws IllegalStateException
-        // when there is no authenticated principal - and GlobalExceptionHandler has no specific
-        // mapping for that, so it falls through to the generic 500 handler. This test documents
-        // that actual (if surprising) behavior rather than assuming a 401.
+    void logoutAllWithoutAuthenticationReturns401() throws Exception {
+        // Only register/login/refresh/logout are explicitly permitAll() in SecurityConfig (issue
+        // #257) - logout-all falls through to anyRequest().authenticated(), so an unauthenticated
+        // request is stopped by Spring Security's authenticationEntryPoint before it ever reaches
+        // the controller, rather than reaching CurrentUserService.requireUserId() and surfacing as
+        // an unmapped IllegalStateException (a 500) the way it used to.
         mockMvc.perform(post("/api/v1/auth/logout-all"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.status").value(500));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Authentication is required."));
     }
 
     private void assertCookieCleared(MockHttpServletResponse response) {

@@ -38,7 +38,21 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Only the credential-issuing/consuming endpoints are public - every one
+                        // of them authenticates off something presented in the request itself
+                        // (password, or an explicit refresh token/cookie), never off an ambient
+                        // bearer token. logout-all and the session-listing/revocation endpoints
+                        // below need to know *which* user is asking, so they fall through to
+                        // anyRequest().authenticated() like everything else in the API - listing
+                        // every public path explicitly here (rather than permitAll()-ing the
+                        // whole /api/v1/auth/** prefix) is what makes that the case instead of an
+                        // oversight to remember every time a new auth endpoint is added.
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/auth/register", "/api/v1/auth/login",
+                                "/api/v1/auth/refresh", "/api/v1/auth/logout",
+                                "/api/v1/auth/native/register", "/api/v1/auth/native/login",
+                                "/api/v1/auth/native/refresh", "/api/v1/auth/native/logout"
+                        ).permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Health checks come from infrastructure (Docker HEALTHCHECK, an
                         // orchestrator's liveness/readiness probe), which never supplies a JWT -
