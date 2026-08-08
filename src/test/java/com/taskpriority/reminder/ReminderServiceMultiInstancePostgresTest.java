@@ -1,14 +1,19 @@
 package com.taskpriority.reminder;
 
 import com.taskpriority.model.NotificationChannel;
+import com.taskpriority.model.NotificationOutboxEntry;
+import com.taskpriority.model.NotificationStatus;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.User;
+import com.taskpriority.repository.NotificationOutboxRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,16 +24,24 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Regression coverage for GitHub issue #225: with multiple application instances (simulated here
@@ -39,8 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
-@TestPropertySource(properties = "app.reminders.scheduling-enabled=false") // drive the jobs manually, not on a timer
+@TestPropertySource(properties = "app.reminders.scheduling-enabled=false")
 class ReminderServiceMultiInstancePostgresTest {
+
+    private static final Logger logger = LoggerFactory.getLogger(ReminderServiceMultiInstancePostgresTest.class);
 
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -67,6 +82,9 @@ class ReminderServiceMultiInstancePostgresTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private NotificationOutboxRepository notificationOutboxRepository;
 
     private User user;
 
@@ -109,6 +127,171 @@ class ReminderServiceMultiInstancePostgresTest {
         assertEquals(0, nonSentCount, "no entry should be left claimed-but-unprocessed or double-claimed");
     }
 
+    private double claimAllEntriesConcurrentlyAndMeasureThroughput(int entryCount, int workerCount, int batchSize) throws Exception {
+        List<Long> reminderIds = insertReminders(entryCount);
+        List<Object[]> batchArgs = new ArrayList<>(entryCount);
+        LocalDateTime dueAt = LocalDateTime.now().minusMinutes(1);
+        for (int i = 0; i < entryCount; i++) {
+            batchArgs.add(new Object[] {user.getId(), reminderIds.get(i), NotificationChannel.IN_APP.name(), "Benchmark notification " + i, dueAt});
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO notification_outbox (user_id, reminder_id, channel, title, status, attempts, max_attempts, next_attempt_at) " +
+                        "VALUES (?, ?, ?, ?, 'PENDING', 0, 5, ?)",
+                batchArgs);
+
+        ConcurrentHashMap<Long, String> claimedIdToWorker = new ConcurrentHashMap<>();
+        ExecutorService executor = Executors.newFixedThreadPool(workerCount);
+        long startNanos = System.nanoTime();
+        try {
+            List<Callable<Void>> tasks = new ArrayList<>(workerCount);
+            for (int w = 0; w < workerCount; w++) {
+                String workerId = "bench-worker-" + w;
+                tasks.add(() -> {
+                    List<NotificationOutboxEntry> batch;
+                    while (!(batch = notificationOutboxRepository.claimBatch(LocalDateTime.now(), batchSize, workerId)).isEmpty()) {
+                        for (NotificationOutboxEntry entry : batch) {
+                            String previousOwner = claimedIdToWorker.putIfAbsent(entry.getId(), workerId);
+                            assertNull(previousOwner, "entry " + entry.getId() + " was claimed by more than one worker");
+                        }
+                    }
+                    return null;
+                });
+            }
+            for (var future : executor.invokeAll(tasks, 60, TimeUnit.SECONDS)) {
+                future.get();
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        long elapsedMillis = Math.max(1, (System.nanoTime() - startNanos) / 1_000_000);
+
+        assertEquals(entryCount, claimedIdToWorker.size(), "every entry must be claimed exactly once across all workers");
+
+        Map<String, Long> claimsPerWorker = claimedIdToWorker.values().stream()
+                .collect(Collectors.groupingBy(w -> w, Collectors.counting()));
+        if (workerCount > 1) {
+            assertTrue(claimsPerWorker.size() > 1, "more than one worker must actually claim rows");
+        }
+
+        Integer processingCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM notification_outbox WHERE status = 'PROCESSING'", Integer.class);
+        assertEquals(entryCount, processingCount, "every claimed row must be flipped to PROCESSING");
+
+        for (Map.Entry<Long, String> claim : claimedIdToWorker.entrySet()) {
+            String storedWorkerId = jdbcTemplate.queryForObject(
+                    "SELECT worker_id FROM notification_outbox WHERE id = ?", String.class, claim.getKey());
+            assertEquals(claim.getValue(), storedWorkerId, "the worker_id column must record which worker actually claimed the row");
+        }
+
+        double throughputPerSecond = entryCount * 1000.0 / elapsedMillis;
+        logger.info("Throughput: {} entries claimed by {} worker(s) in {} ms ({} entries/sec)",
+                entryCount, workerCount, elapsedMillis, String.format("%.1f", throughputPerSecond));
+        return throughputPerSecond;
+    }
+
+    @Test
+    void manyConcurrentWorkersClaimEveryEntryExactlyOnceAndReportThroughput() throws Exception {
+        double throughputPerSecond = claimAllEntriesConcurrentlyAndMeasureThroughput(2000, 8, 50);
+        assertTrue(Double.isFinite(throughputPerSecond) && throughputPerSecond > 0,
+                "reported throughput must be a positive finite value");
+    }
+
+    /**
+     * Reports single- and multi-worker throughput as benchmark evidence without making shared CI
+     * hardware timing a correctness gate. The helper still asserts the production invariants:
+     * every row is claimed exactly once, multiple workers actually participate, and worker IDs are
+     * persisted correctly. Performance regression thresholds belong in controlled benchmarks,
+     * not a noisy hosted-runner wall-clock comparison.
+     */
+    @Test
+    void reportsSingleAndMultiWorkerThroughput() throws Exception {
+        double singleWorkerThroughput = claimAllEntriesConcurrentlyAndMeasureThroughput(1500, 1, 50);
+        cleanDatabase();
+        double eightWorkerThroughput = claimAllEntriesConcurrentlyAndMeasureThroughput(1500, 8, 50);
+
+        logger.info("Throughput comparison: 1 worker = {} entries/sec, 8 workers = {} entries/sec",
+                String.format("%.1f", singleWorkerThroughput), String.format("%.1f", eightWorkerThroughput));
+        assertTrue(Double.isFinite(singleWorkerThroughput) && singleWorkerThroughput > 0);
+        assertTrue(Double.isFinite(eightWorkerThroughput) && eightWorkerThroughput > 0);
+    }
+
+    @Test
+    void aRecoveredAndReclaimedRowCannotBeOverwrittenByTheOriginalWorkersStaleOutcome() {
+        Long reminderId = insertReminder(user.getId());
+        insertPendingOutboxEntry(reminderId);
+
+        NotificationOutboxEntry claimedByA = notificationOutboxRepository.claimBatch(LocalDateTime.now(), 10, "worker-a").get(0);
+        LocalDateTime staleFencingToken = claimedByA.getProcessingStartedAt();
+
+        jdbcTemplate.update("UPDATE notification_outbox SET processing_started_at = ? WHERE id = ?",
+                LocalDateTime.now().minusHours(1), claimedByA.getId());
+        int recovered = notificationOutboxRepository.recoverStuckProcessing(LocalDateTime.now().minusMinutes(5), LocalDateTime.now());
+        assertEquals(1, recovered, "the lease-expired row must be recovered back to PENDING");
+
+        NotificationOutboxEntry claimedByB = notificationOutboxRepository.claimBatch(LocalDateTime.now(), 10, "worker-b").get(0);
+        assertEquals(claimedByA.getId(), claimedByB.getId());
+
+        boolean staleWriteApplied = notificationOutboxRepository.markDelivered(claimedByA.getId(), staleFencingToken, LocalDateTime.now());
+        assertFalse(staleWriteApplied, "worker A's stale delivery outcome must be rejected");
+
+        String statusAfterStaleWrite = jdbcTemplate.queryForObject(
+                "SELECT status FROM notification_outbox WHERE id = ?", String.class, claimedByA.getId());
+        assertEquals("PROCESSING", statusAfterStaleWrite, "worker B's claim must still stand");
+
+        boolean bsWriteApplied = notificationOutboxRepository.markDelivered(
+                claimedByB.getId(), claimedByB.getProcessingStartedAt(), LocalDateTime.now());
+        assertTrue(bsWriteApplied, "the replacement worker's own outcome must apply normally");
+    }
+
+    @Test
+    void committedSentOutcomeCannotBeOverwrittenByAnAmbiguousFailurePath() {
+        Long reminderId = insertReminder(user.getId());
+        insertPendingOutboxEntry(reminderId);
+
+        NotificationOutboxEntry claimed = notificationOutboxRepository.claimBatch(
+                LocalDateTime.now(), 10, "worker-a").get(0);
+        LocalDateTime fencingToken = claimed.getProcessingStartedAt();
+
+        assertTrue(notificationOutboxRepository.markDelivered(claimed.getId(), fencingToken, LocalDateTime.now()));
+
+        boolean failureOverwriteApplied = notificationOutboxRepository.markDeliveryOutcome(
+                claimed.getId(), fencingToken, NotificationStatus.PENDING,
+                "AmbiguousClientException", "client did not observe the commit", LocalDateTime.now().plusSeconds(30));
+
+        assertFalse(failureOverwriteApplied,
+                "a committed SENT row must be terminal even if the client subsequently reports an exception");
+        String status = jdbcTemplate.queryForObject(
+                "SELECT status FROM notification_outbox WHERE id = ?", String.class, claimed.getId());
+        assertEquals("SENT", status);
+    }
+
+    @Test
+    void claimQueryUsesTheCompositeStatusNextAttemptIndexNotASequentialScan() {
+        int rowCount = 5000;
+        List<Long> reminderIds = insertReminders(rowCount);
+        List<Object[]> batchArgs = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < rowCount; i++) {
+            String status = i % 20 == 0 ? "PENDING" : "SENT";
+            batchArgs.add(new Object[] {user.getId(), reminderIds.get(i), NotificationChannel.IN_APP.name(), "Row " + i, status, now.minusMinutes(1)});
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO notification_outbox (user_id, reminder_id, channel, title, status, attempts, max_attempts, next_attempt_at) " +
+                        "VALUES (?, ?, ?, ?, ?, 0, 5, ?)",
+                batchArgs);
+        jdbcTemplate.execute("ANALYZE notification_outbox");
+
+        List<String> plan = jdbcTemplate.queryForList(
+                "EXPLAIN SELECT id FROM notification_outbox WHERE status = 'PENDING' AND next_attempt_at <= ? "
+                        + "ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 50",
+                String.class, Timestamp.valueOf(now));
+        String planText = String.join("\n", plan);
+        logger.info("Claim query plan:\n{}", planText);
+
+        assertFalse(planText.contains("Seq Scan on notification_outbox"),
+                "the claim query must use the (status, next_attempt_at) index, not a full table scan:\n" + planText);
+    }
+
     private void runConcurrently(Runnable first, Runnable second) throws Exception {
         CyclicBarrier barrier = new CyclicBarrier(2);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -129,6 +312,14 @@ class ReminderServiceMultiInstancePostgresTest {
                 "INSERT INTO reminders (user_id, kind, reference_id, scheduled_for, status, idempotency_key) " +
                         "VALUES (?, 'TASK_DUE', NULL, ?, 'PENDING', ?) RETURNING id",
                 Long.class, userId, LocalDateTime.now().minusMinutes(1), "test-" + java.util.UUID.randomUUID());
+    }
+
+    private List<Long> insertReminders(int count) {
+        List<Long> ids = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            ids.add(insertReminder(user.getId()));
+        }
+        return ids;
     }
 
     private void insertPendingOutboxEntry(Long reminderId) {

@@ -19,6 +19,9 @@ import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.settings.SettingsService;
 import com.taskpriority.settings.TimeWindow;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -77,6 +80,8 @@ public class ReminderService {
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
     private final SchedulerLeaderLock leaderLock;
+    private final WorkerIdentity workerIdentity;
+    private final MeterRegistry meterRegistry;
     private final TransactionTemplate requiresNewTransaction;
     private final boolean schedulingEnabled;
     private final int dispatchBatchSize;
@@ -87,6 +92,7 @@ public class ReminderService {
                             UserRepository userRepository, TaskRepository taskRepository, HabitRepository habitRepository,
                             HabitCheckInRepository habitCheckInRepository, SettingsService settingsService,
                             CurrentUserService currentUserService, SchedulerLeaderLock leaderLock,
+                            WorkerIdentity workerIdentity, MeterRegistry meterRegistry,
                             PlatformTransactionManager transactionManager,
                             @Value("${app.reminders.scheduling-enabled:true}") boolean schedulingEnabled,
                             @Value("${app.notifications.dispatch-batch-size:50}") int dispatchBatchSize,
@@ -101,6 +107,8 @@ public class ReminderService {
         this.settingsService = settingsService;
         this.currentUserService = currentUserService;
         this.leaderLock = leaderLock;
+        this.workerIdentity = workerIdentity;
+        this.meterRegistry = meterRegistry;
         this.schedulingEnabled = schedulingEnabled;
         this.dispatchBatchSize = dispatchBatchSize;
         this.maxDispatchAttempts = maxDispatchAttempts;
@@ -157,10 +165,14 @@ public class ReminderService {
                 notificationOutboxRepository.recoverStuckProcessing(now.minus(processingLeaseTimeout), now));
         if (recovered != null && recovered > 0) {
             logger.warn("Recovered {} notification(s) stuck in PROCESSING past the {}-lease", recovered, processingLeaseTimeout);
+            meterRegistry.counter("notifications.outbox.recovered").increment(recovered);
         }
 
         List<NotificationOutboxEntry> claimed = requiresNewTransaction.execute(status ->
-                notificationOutboxRepository.claimBatch(now, dispatchBatchSize));
+                notificationOutboxRepository.claimBatch(now, dispatchBatchSize, workerIdentity.getWorkerId()));
+        if (claimed != null && !claimed.isEmpty()) {
+            meterRegistry.counter("notifications.outbox.claimed").increment(claimed.size());
+        }
         for (NotificationOutboxEntry entry : claimed == null ? List.<NotificationOutboxEntry>of() : claimed) {
             requiresNewTransaction.executeWithoutResult(status -> deliver(entry));
         }
@@ -170,28 +182,67 @@ public class ReminderService {
      * "Delivery" for the only channel implemented today (IN_APP) just means becoming visible via
      * the notifications API, so this can't actually fail yet - the try/catch and backoff/DLQ path
      * exist for a future channel (e.g. browser push) that talks to a real provider.
+     * <p>
+     * Persists the outcome via a conditional update keyed on {@code processing_started_at} (see
+     * {@link NotificationOutboxRepositoryCustom#markDelivered}) rather than a blind save, so that
+     * if this worker's lease was recovered and reclaimed by another worker while it was still
+     * (slowly) processing this entry, its stale outcome is detected and discarded instead of
+     * silently overwriting the replacement worker's newer state.
      */
     private void deliver(NotificationOutboxEntry entry) {
+        LocalDateTime claimFencingToken = entry.getProcessingStartedAt();
+        LocalDateTime processedAt = LocalDateTime.now();
         try {
+            if (!notificationOutboxRepository.markDelivered(entry.getId(), claimFencingToken, processedAt)) {
+                recordStaleClaimDiscarded(entry);
+                return;
+            }
             entry.setStatus(NotificationStatus.SENT);
-            entry.setProcessedAt(LocalDateTime.now());
-            notificationOutboxRepository.save(entry);
+            entry.setProcessedAt(processedAt);
+            recordProcessingDuration(entry, processedAt);
+            Counter.builder("notifications.outbox.delivered")
+                    .tag("channel", entry.getChannel().name())
+                    .register(meterRegistry)
+                    .increment();
         } catch (RuntimeException ex) {
-            handleDeliveryFailure(entry, ex);
+            handleDeliveryFailure(entry, ex, claimFencingToken);
         }
     }
 
-    private void handleDeliveryFailure(NotificationOutboxEntry entry, RuntimeException ex) {
+    private void handleDeliveryFailure(NotificationOutboxEntry entry, RuntimeException ex, LocalDateTime claimFencingToken) {
         logger.error("Failed to dispatch notification {}", entry.getId(), ex);
         entry.setLastErrorCode(ex.getClass().getSimpleName());
         entry.setLastErrorMessage(truncate(ex.getMessage(), 500));
-        if (entry.getAttempts() >= entry.getMaxAttempts()) {
-            entry.setStatus(NotificationStatus.FAILED);
-        } else {
-            entry.setStatus(NotificationStatus.PENDING);
+        boolean exhausted = entry.getAttempts() >= entry.getMaxAttempts();
+        NotificationStatus newStatus = exhausted ? NotificationStatus.FAILED : NotificationStatus.PENDING;
+        if (!exhausted) {
             entry.setNextAttemptAt(LocalDateTime.now().plus(backoff(entry.getAttempts())));
         }
-        notificationOutboxRepository.save(entry);
+        boolean stillOwned = notificationOutboxRepository.markDeliveryOutcome(entry.getId(), claimFencingToken, newStatus,
+                entry.getLastErrorCode(), entry.getLastErrorMessage(), entry.getNextAttemptAt());
+        if (!stillOwned) {
+            recordStaleClaimDiscarded(entry);
+            return;
+        }
+        entry.setStatus(newStatus);
+        Counter.builder(exhausted ? "notifications.outbox.failed" : "notifications.outbox.retried")
+                .tag("channel", entry.getChannel().name())
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private void recordStaleClaimDiscarded(NotificationOutboxEntry entry) {
+        logger.warn("Discarding delivery outcome for notification {}: its lease was recovered and reclaimed by " +
+                "another worker while this worker ({}) was still processing it", entry.getId(), workerIdentity.getWorkerId());
+        meterRegistry.counter("notifications.outbox.stale_claim_discarded").increment();
+    }
+
+    private void recordProcessingDuration(NotificationOutboxEntry entry, LocalDateTime processedAt) {
+        if (entry.getProcessingStartedAt() == null) return;
+        Duration duration = Duration.between(entry.getProcessingStartedAt(), processedAt);
+        Timer.builder("notifications.outbox.processing.duration")
+                .register(meterRegistry)
+                .record(duration);
     }
 
     private Duration backoff(int attempts) {

@@ -51,6 +51,8 @@ class ReminderServiceTest {
     private SettingsService settingsService;
     private CurrentUserService currentUserService;
     private SchedulerLeaderLock leaderLock;
+    private WorkerIdentity workerIdentity;
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
     private PlatformTransactionManager transactionManager;
     private ReminderService reminderService;
 
@@ -80,7 +82,8 @@ class ReminderServiceTest {
 
     private ReminderService buildService(boolean schedulingEnabled) {
         return new ReminderService(reminderRepository, notificationOutboxRepository, userRepository, taskRepository,
-                habitRepository, habitCheckInRepository, settingsService, currentUserService, leaderLock, transactionManager,
+                habitRepository, habitCheckInRepository, settingsService, currentUserService, leaderLock,
+                workerIdentity, meterRegistry, transactionManager,
                 schedulingEnabled, 50, 5, 5);
     }
 
@@ -95,9 +98,12 @@ class ReminderServiceTest {
         settingsService = mock(SettingsService.class);
         currentUserService = mock(CurrentUserService.class);
         leaderLock = mock(SchedulerLeaderLock.class);
+        workerIdentity = mock(WorkerIdentity.class);
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         transactionManager = mock(PlatformTransactionManager.class);
         when(currentUserService.requireUserId()).thenReturn(USER_ID);
         when(leaderLock.tryAcquire(anyLong())).thenReturn(true);
+        when(workerIdentity.getWorkerId()).thenReturn("test-worker");
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(userRepository.findAllUserIds()).thenReturn(List.of(USER_ID));
         when(settingsService.getTimezoneForUser(USER_ID)).thenReturn(USER_ZONE);
@@ -108,8 +114,10 @@ class ReminderServiceTest {
         when(reminderRepository.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationOutboxRepository.save(any(NotificationOutboxEntry.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reminderRepository.findByStatusAndScheduledForLessThanEqual(any(), any())).thenReturn(List.of());
-        when(notificationOutboxRepository.claimBatch(any(), anyInt())).thenReturn(List.of());
+        when(notificationOutboxRepository.claimBatch(any(), anyInt(), any())).thenReturn(List.of());
         when(notificationOutboxRepository.recoverStuckProcessing(any(), any())).thenReturn(0);
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenReturn(true);
+        when(notificationOutboxRepository.markDeliveryOutcome(any(), any(), any(), any(), any(), any())).thenReturn(true);
         reminderService = buildService(true);
     }
 
@@ -268,7 +276,7 @@ class ReminderServiceTest {
 
         disabled.scheduledDispatchNotifications();
 
-        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt());
+        verify(notificationOutboxRepository, never()).claimBatch(any(), anyInt(), any());
         verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
@@ -287,7 +295,7 @@ class ReminderServiceTest {
 
         disabled.dispatchNotifications();
 
-        verify(notificationOutboxRepository).claimBatch(any(), anyInt());
+        verify(notificationOutboxRepository).claimBatch(any(), anyInt(), any());
     }
 
     @Test
@@ -305,7 +313,7 @@ class ReminderServiceTest {
 
         reminderService.dispatchNotifications();
 
-        verify(notificationOutboxRepository).claimBatch(any(), anyInt());
+        verify(notificationOutboxRepository).claimBatch(any(), anyInt(), any());
         verify(leaderLock, never()).tryAcquire(anyLong());
     }
 
@@ -315,13 +323,86 @@ class ReminderServiceTest {
         entry.setId(1L);
         entry.setStatus(NotificationStatus.PROCESSING);
         entry.setAttempts(1);
-        when(notificationOutboxRepository.claimBatch(any(), eq(50))).thenReturn(List.of(entry));
+        entry.setChannel(NotificationChannel.IN_APP);
+        entry.setProcessingStartedAt(LocalDateTime.now().minusSeconds(1));
+        when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
 
         reminderService.dispatchNotifications();
 
         assertEquals(NotificationStatus.SENT, entry.getStatus());
         assertNotNull(entry.getProcessedAt());
-        verify(notificationOutboxRepository).save(entry);
+        verify(notificationOutboxRepository).markDelivered(eq(1L), any(), any());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.delivered", "channel", "IN_APP").count());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.claimed").count());
+        assertEquals(1L, meterRegistry.find("notifications.outbox.processing.duration").timer().count());
+    }
+
+    @Test
+    void dispatchRecoveringStuckEntriesIncrementsTheRecoveredCounter() {
+        when(notificationOutboxRepository.recoverStuckProcessing(any(), any())).thenReturn(3);
+
+        reminderService.dispatchNotifications();
+
+        assertEquals(3.0, meterRegistry.counter("notifications.outbox.recovered").count());
+    }
+
+    @Test
+    void dispatchRetriesAFailedDeliveryAndIncrementsTheRetriedCounter() {
+        NotificationOutboxEntry entry = new NotificationOutboxEntry();
+        entry.setId(1L);
+        entry.setStatus(NotificationStatus.PROCESSING);
+        entry.setAttempts(1);
+        entry.setMaxAttempts(5);
+        entry.setChannel(NotificationChannel.IN_APP);
+        when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenThrow(new RuntimeException("boom"));
+
+        reminderService.dispatchNotifications();
+
+        assertEquals(NotificationStatus.PENDING, entry.getStatus());
+        assertNotNull(entry.getNextAttemptAt());
+        assertEquals("RuntimeException", entry.getLastErrorCode());
+        verify(notificationOutboxRepository).markDeliveryOutcome(eq(1L), any(), eq(NotificationStatus.PENDING), eq("RuntimeException"), any(), any());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.retried", "channel", "IN_APP").count());
+        assertEquals(0.0, meterRegistry.counter("notifications.outbox.failed", "channel", "IN_APP").count());
+    }
+
+    @Test
+    void dispatchMarksAnExhaustedDeliveryFailedAndIncrementsTheFailedCounter() {
+        NotificationOutboxEntry entry = new NotificationOutboxEntry();
+        entry.setId(1L);
+        entry.setStatus(NotificationStatus.PROCESSING);
+        entry.setAttempts(5);
+        entry.setMaxAttempts(5);
+        entry.setChannel(NotificationChannel.IN_APP);
+        when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenThrow(new RuntimeException("boom"));
+
+        reminderService.dispatchNotifications();
+
+        assertEquals(NotificationStatus.FAILED, entry.getStatus());
+        verify(notificationOutboxRepository).markDeliveryOutcome(eq(1L), any(), eq(NotificationStatus.FAILED), eq("RuntimeException"), any(), any());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.failed", "channel", "IN_APP").count());
+        assertEquals(0.0, meterRegistry.counter("notifications.outbox.retried", "channel", "IN_APP").count());
+    }
+
+    @Test
+    void dispatchDiscardsAStaleDeliveryWhenAnotherWorkerHasAlreadyReclaimedTheLease() {
+        NotificationOutboxEntry entry = new NotificationOutboxEntry();
+        entry.setId(1L);
+        entry.setStatus(NotificationStatus.PROCESSING);
+        entry.setAttempts(1);
+        entry.setChannel(NotificationChannel.IN_APP);
+        entry.setProcessingStartedAt(LocalDateTime.now().minusMinutes(10));
+        when(notificationOutboxRepository.claimBatch(any(), eq(50), any())).thenReturn(List.of(entry));
+        when(notificationOutboxRepository.markDelivered(any(), any(), any())).thenReturn(false);
+
+        reminderService.dispatchNotifications();
+
+        assertEquals(NotificationStatus.PROCESSING, entry.getStatus(), "a stale worker must not overwrite the entry's real (unknown-to-it) outcome");
+        assertNull(entry.getProcessedAt());
+        assertEquals(0.0, meterRegistry.counter("notifications.outbox.delivered", "channel", "IN_APP").count());
+        assertEquals(1.0, meterRegistry.counter("notifications.outbox.stale_claim_discarded").count());
     }
 
     @Test
@@ -329,7 +410,7 @@ class ReminderServiceTest {
         reminderService.dispatchNotifications();
 
         verify(notificationOutboxRepository).recoverStuckProcessing(any(), any());
-        verify(notificationOutboxRepository).claimBatch(any(), eq(50));
+        verify(notificationOutboxRepository).claimBatch(any(), eq(50), any());
     }
 
     @Test
