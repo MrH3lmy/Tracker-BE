@@ -2,6 +2,8 @@ package com.taskpriority.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -45,6 +47,11 @@ public class UserSession {
     @Column(name = "family_id", nullable = false)
     private UUID familyId;
 
+    // Which channel issued this session (browser cookie flow vs. a native route) - see Platform.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "platform", nullable = false, length = 16)
+    private Platform platform = Platform.WEB;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -63,6 +70,8 @@ public class UserSession {
     public void setRevoked(boolean revoked) { this.revoked = revoked; }
     public UUID getFamilyId() { return familyId; }
     public void setFamilyId(UUID familyId) { this.familyId = familyId; }
+    public Platform getPlatform() { return platform; }
+    public void setPlatform(Platform platform) { this.platform = platform; }
 
     @PrePersist
     public void onCreate() {

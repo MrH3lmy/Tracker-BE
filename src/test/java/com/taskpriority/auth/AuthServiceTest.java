@@ -1,7 +1,9 @@
 package com.taskpriority.auth;
 
 import com.taskpriority.board.BoardProvisioningService;
+import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.entitlement.EntitlementService;
+import com.taskpriority.model.Platform;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
 import com.taskpriority.model.User;
@@ -11,17 +13,21 @@ import com.taskpriority.repository.UserRepository;
 import com.taskpriority.repository.UserSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -190,6 +196,115 @@ class AuthServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> authService.refresh("racing-token"));
         verify(sessionRevocationService, org.mockito.Mockito.never()).revokeFamily(any());
+    }
+
+    @Test
+    void registerWithoutAnExplicitPlatformDefaultsToWeb() {
+        when(userRepository.existsByEmailIgnoreCase("new@example.com")).thenReturn(false);
+        RegisterRequest request = new RegisterRequest("new@example.com", "password123", "New User", null);
+
+        authService.register(request);
+
+        ArgumentCaptor<UserSession> captor = ArgumentCaptor.forClass(UserSession.class);
+        verify(userSessionRepository).save(captor.capture());
+        assertEquals(Platform.WEB, captor.getValue().getPlatform());
+    }
+
+    @Test
+    void registerWithAnExplicitPlatformRecordsItOnTheSession() {
+        when(userRepository.existsByEmailIgnoreCase("new@example.com")).thenReturn(false);
+        RegisterRequest request = new RegisterRequest("new@example.com", "password123", "New User", "phone");
+
+        authService.register(request, Platform.ANDROID);
+
+        ArgumentCaptor<UserSession> captor = ArgumentCaptor.forClass(UserSession.class);
+        verify(userSessionRepository).save(captor.capture());
+        assertEquals(Platform.ANDROID, captor.getValue().getPlatform());
+    }
+
+    @Test
+    void loginWithAnExplicitPlatformRecordsItOnTheSession() {
+        User user = existingUser("user@example.com", "correct-password");
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+
+        authService.login(new LoginRequest("user@example.com", "correct-password", null), Platform.IOS);
+
+        ArgumentCaptor<UserSession> captor = ArgumentCaptor.forClass(UserSession.class);
+        verify(userSessionRepository).save(captor.capture());
+        assertEquals(Platform.IOS, captor.getValue().getPlatform());
+    }
+
+    @Test
+    void refreshCarriesThePlatformOfTheRotatedSessionForward() {
+        User user = existingUser("user@example.com", "correct-password");
+        user.setId(7L);
+        UserSession session = new UserSession();
+        session.setId(99L);
+        session.setUserId(7L);
+        session.setExpiresAt(LocalDateTime.now().plusDays(1));
+        session.setRevoked(false);
+        session.setPlatform(Platform.WINDOWS);
+
+        when(userSessionRepository.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        when(userSessionRepository.consumeByTokenHash(anyString(), any())).thenReturn(1);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        authService.refresh("some-refresh-token");
+
+        ArgumentCaptor<UserSession> captor = ArgumentCaptor.forClass(UserSession.class);
+        verify(userSessionRepository).save(captor.capture());
+        assertEquals(Platform.WINDOWS, captor.getValue().getPlatform());
+    }
+
+    @Test
+    void listActiveSessionsMapsRepositoryResultsToSummaries() {
+        UserSession session = new UserSession();
+        session.setId(1L);
+        session.setUserId(7L);
+        session.setDeviceLabel("Pixel 8");
+        session.setPlatform(Platform.ANDROID);
+        session.setCreatedAt(LocalDateTime.now().minusDays(1));
+        session.setLastUsedAt(LocalDateTime.now());
+        session.setExpiresAt(LocalDateTime.now().plusDays(29));
+
+        when(userSessionRepository.findByUserIdAndRevokedFalseAndExpiresAtAfterOrderByLastUsedAtAsc(eq(7L), any()))
+                .thenReturn(List.of(session));
+
+        List<SessionSummaryResponse> summaries = authService.listActiveSessions(7L);
+
+        assertEquals(1, summaries.size());
+        assertEquals("Pixel 8", summaries.get(0).deviceLabel());
+        assertEquals(Platform.ANDROID, summaries.get(0).platform());
+    }
+
+    @Test
+    void revokeSessionRevokesWhenOwnedByTheCaller() {
+        UserSession session = new UserSession();
+        session.setId(5L);
+        session.setUserId(7L);
+        session.setRevoked(false);
+        when(userSessionRepository.findById(5L)).thenReturn(Optional.of(session));
+
+        authService.revokeSession(7L, 5L);
+
+        assertTrue(session.isRevoked());
+    }
+
+    @Test
+    void revokeSessionThrowsNotFoundWhenOwnedByAnotherUser() {
+        UserSession session = new UserSession();
+        session.setId(5L);
+        session.setUserId(999L);
+        when(userSessionRepository.findById(5L)).thenReturn(Optional.of(session));
+
+        assertThrows(ResourceNotFoundException.class, () -> authService.revokeSession(7L, 5L));
+    }
+
+    @Test
+    void revokeSessionThrowsNotFoundWhenSessionDoesNotExist() {
+        when(userSessionRepository.findById(5L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> authService.revokeSession(7L, 5L));
     }
 
     private User existingUser(String email, String rawPassword) {

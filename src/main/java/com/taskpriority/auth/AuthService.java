@@ -1,7 +1,9 @@
 package com.taskpriority.auth;
 
 import com.taskpriority.board.BoardProvisioningService;
+import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.entitlement.EntitlementService;
+import com.taskpriority.model.Platform;
 import com.taskpriority.model.Role;
 import com.taskpriority.model.Tier;
 import com.taskpriority.model.User;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -62,6 +65,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        return register(request, Platform.WEB);
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request, Platform platform) {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new IllegalArgumentException("An account with this email already exists.");
         }
@@ -74,17 +82,22 @@ public class AuthService {
         user = userRepository.save(user);
         noteTemplateService.seedDefaultTemplatesForUser(user.getId());
         boardProvisioningService.provisionDefaultBoardForUser(user.getId());
-        return issueSession(user, request.deviceLabel(), UUID.randomUUID());
+        return issueSession(user, request.deviceLabel(), UUID.randomUUID(), platform);
     }
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        return login(request, Platform.WEB);
+    }
+
+    @Transactional
+    public AuthResponse login(LoginRequest request, Platform platform) {
         User user = userRepository.findByEmailIgnoreCase(request.email())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password."));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new IllegalArgumentException("Invalid email or password.");
         }
-        return issueSession(user, request.deviceLabel(), UUID.randomUUID());
+        return issueSession(user, request.deviceLabel(), UUID.randomUUID(), platform);
     }
 
     @Transactional
@@ -117,7 +130,7 @@ public class AuthService {
         User user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token."));
 
-        return issueSession(user, session.getDeviceLabel(), session.getFamilyId());
+        return issueSession(user, session.getDeviceLabel(), session.getFamilyId(), session.getPlatform());
     }
 
     @Transactional
@@ -134,7 +147,37 @@ public class AuthService {
         userSessionRepository.findByUserIdAndRevokedFalse(userId).forEach(session -> session.setRevoked(true));
     }
 
-    private AuthResponse issueSession(User user, String deviceLabel, UUID familyId) {
+    /**
+     * Active (unrevoked, unexpired) sessions for the current user across every platform/device,
+     * oldest-activity first (same ordering {@link com.taskpriority.entitlement.EntitlementService#enforceSessionCap}
+     * already relies on to evict the least-recently-used session first) - see
+     * {@link SessionSummaryResponse}. Callers only ever see their own sessions; the query itself
+     * is scoped by {@code userId} rather than filtering afterward.
+     */
+    @Transactional(readOnly = true)
+    public List<SessionSummaryResponse> listActiveSessions(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        return userSessionRepository.findByUserIdAndRevokedFalseAndExpiresAtAfterOrderByLastUsedAtAsc(userId, now)
+                .stream()
+                .map(SessionSummaryResponse::from)
+                .toList();
+    }
+
+    /**
+     * Revokes one session by id on behalf of {@code userId} - e.g. "sign out that lost phone"
+     * without touching every other device. Ownership is enforced here (not just at the repository
+     * query level) so a session belonging to a different user surfaces as "not found" rather than
+     * leaking whether the id exists at all.
+     */
+    @Transactional
+    public void revokeSession(Long userId, Long sessionId) {
+        UserSession session = userSessionRepository.findById(sessionId)
+                .filter(candidate -> candidate.getUserId().equals(userId))
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found."));
+        session.setRevoked(true);
+    }
+
+    private AuthResponse issueSession(User user, String deviceLabel, UUID familyId, Platform platform) {
         entitlementService.enforceSessionCap(user.getId(), user.getTier());
 
         String rawRefreshToken = generateOpaqueToken();
@@ -143,6 +186,7 @@ public class AuthService {
         session.setTokenHash(sha256(rawRefreshToken));
         session.setDeviceLabel(deviceLabel);
         session.setFamilyId(familyId);
+        session.setPlatform(platform);
         session.setExpiresAt(LocalDateTime.now().plus(refreshTokenTtlDays, ChronoUnit.DAYS));
         userSessionRepository.save(session);
 
