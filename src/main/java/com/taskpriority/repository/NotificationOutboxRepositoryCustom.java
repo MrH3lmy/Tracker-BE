@@ -18,25 +18,22 @@ public interface NotificationOutboxRepositoryCustom {
     List<NotificationOutboxEntry> claimBatch(LocalDateTime now, int batchSize, String workerId);
 
     /**
-     * Persists a successful delivery, but only if this worker's claim is still the authoritative
-     * one for the row - enforced by requiring {@code processing_started_at} to still equal
-     * {@code expectedProcessingStartedAt}, the value this worker observed at claim time. If lease
-     * recovery reset and another worker reclaimed the row in the meantime (this worker was merely
-     * slow, not actually dead - a "zombie" write), {@code processing_started_at} will have moved
-     * on and this affects zero rows, letting the caller detect and discard its own stale outcome
-     * instead of silently overwriting the replacement worker's newer state.
+     * Persists a successful delivery, but only if this worker's claim is still authoritative and
+     * the row has not already reached a terminal outcome. The processing timestamp fences workers
+     * whose lease was recovered/reclaimed, while the status guard prevents an ambiguous client-side
+     * exception after a committed SENT update from being followed by a retry/failure overwrite.
      *
-     * @return true if this worker's claim was still current and the update applied, false if it
-     *         was detected stale
+     * @return true if this worker's outcome was accepted, false if the claim was stale or the row
+     *         had already reached a terminal state
      */
     boolean markDelivered(Long id, LocalDateTime expectedProcessingStartedAt, LocalDateTime processedAt);
 
     /**
-     * Persists a retry/failure outcome under the same lease-ownership guard as
+     * Persists a retry/failure outcome under the same lease and terminal-state guards as
      * {@link #markDelivered}.
      *
-     * @return true if this worker's claim was still current and the update applied, false if it
-     *         was detected stale
+     * @return true if this worker's outcome was accepted, false if the claim was stale or the row
+     *         had already reached a terminal state
      */
     boolean markDeliveryOutcome(Long id, LocalDateTime expectedProcessingStartedAt, NotificationStatus newStatus,
                                  String lastErrorCode, String lastErrorMessage, LocalDateTime nextAttemptAt);

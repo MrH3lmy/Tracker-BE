@@ -46,7 +46,7 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
 
     private static final String MARK_DELIVERED_SQL = """
             UPDATE notification_outbox SET status = 'SENT', processed_at = ?
-            WHERE id = ? AND processing_started_at = ?
+            WHERE id = ? AND processing_started_at = ? AND status IN ('PROCESSING', 'PENDING')
             """;
 
     @Override
@@ -59,7 +59,7 @@ public class NotificationOutboxRepositoryImpl implements NotificationOutboxRepos
     private static final String MARK_DELIVERY_OUTCOME_SQL = """
             UPDATE notification_outbox
             SET status = ?, last_error_code = ?, last_error_message = ?, next_attempt_at = ?
-            WHERE id = ? AND processing_started_at = ?
+            WHERE id = ? AND processing_started_at = ? AND status IN ('PROCESSING', 'PENDING')
             """;
 
     @Override
