@@ -13,5 +13,9 @@ public enum Platform {
     IOS,
     WINDOWS,
     MACOS,
-    LINUX
+    LINUX;
+
+    public boolean isNative() {
+        return this != WEB;
+    }
 }

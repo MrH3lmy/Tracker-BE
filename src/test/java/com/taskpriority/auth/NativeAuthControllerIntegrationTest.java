@@ -73,6 +73,17 @@ class NativeAuthControllerIntegrationTest {
     }
 
     @Test
+    void registerWithWebPlatformReturns400() throws Exception {
+        String body = """
+                {"email":"%s","password":"correct-horse","platform":"WEB"}
+                """.formatted(uniqueEmail());
+
+        mockMvc.perform(post("/api/v1/auth/native/register").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("native platform")));
+    }
+
+    @Test
     void loginWithWrongPasswordReturns400() throws Exception {
         String email = uniqueEmail();
         registerNativeUser(email, "correct-horse", "IOS");
@@ -84,6 +95,20 @@ class NativeAuthControllerIntegrationTest {
         mockMvc.perform(post("/api/v1/auth/native/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid email or password."));
+    }
+
+    @Test
+    void loginWithWebPlatformReturns400() throws Exception {
+        String email = uniqueEmail();
+        registerNativeUser(email, "correct-horse", "ANDROID");
+
+        String loginBody = """
+                {"email":"%s","password":"correct-horse","platform":"WEB"}
+                """.formatted(email);
+
+        mockMvc.perform(post("/api/v1/auth/native/login").contentType(MediaType.APPLICATION_JSON).content(loginBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("native platform")));
     }
 
     @Test
@@ -220,7 +245,7 @@ class NativeAuthControllerIntegrationTest {
                 .andReturn();
         Integer victimSessionId = JsonPath.read(victimSessions.getResponse().getContentAsString(), "$[0].id");
 
-        String attackerAccessToken = registerNativeUser(uniqueEmail(), "correct-horse", "WEB");
+        String attackerAccessToken = registerNativeUser(uniqueEmail(), "correct-horse", "ANDROID");
 
         mockMvc.perform(delete("/api/v1/auth/sessions/" + victimSessionId).header("Authorization", "Bearer " + attackerAccessToken))
                 .andExpect(status().isNotFound());

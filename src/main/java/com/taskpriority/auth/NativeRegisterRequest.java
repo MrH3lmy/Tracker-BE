@@ -1,6 +1,7 @@
 package com.taskpriority.auth;
 
 import com.taskpriority.model.Platform;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -29,6 +30,11 @@ public record NativeRegisterRequest(
         @NotNull(message = "platform is required")
         Platform platform
 ) {
+    @AssertTrue(message = "platform must be a native platform")
+    public boolean isNativePlatform() {
+        return platform == null || platform.isNative();
+    }
+
     RegisterRequest toRegisterRequest() {
         return new RegisterRequest(email, password, displayName, deviceLabel);
     }
