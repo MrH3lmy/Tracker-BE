@@ -94,7 +94,7 @@
             <artifactId>postgresql</artifactId>
             <!-- Boot 3.5.12 manages 42.7.10, which still misses the CVE-2026-54291 fix (42.7.12+) -
                  pin explicitly until the parent's managed version catches up. -->
-            <version>42.7.12</version>
+            <version>42.7.13</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
