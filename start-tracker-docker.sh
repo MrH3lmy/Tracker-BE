@@ -3,6 +3,7 @@ set -euo pipefail
 
 FRONTEND_URL="http://localhost:5173"
 BACKEND_URL="http://localhost:8080"
+BACKEND_HEALTH_URL="$BACKEND_URL/actuator/health"
 SWAGGER_URL="http://localhost:8080/swagger-ui/index.html"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -87,37 +88,41 @@ frontend_is_ready() {
   fi
 }
 
-# The frontend container just runs `npm run dev`, which is ready in a couple
-# of seconds. The app container has to run a full `mvn clean package` build
-# plus Flyway migrations before it binds port 8080, which routinely takes far
-# longer. Polling only the frontend meant this script opened the browser,
-# and users hit register/login, while the backend was still starting -
-# surfacing as ERR_CONNECTION_REFUSED. Poll the API docs endpoint (only
-# served once the Spring context is fully up) so we wait for both.
+# Use the same Actuator health endpoint as the image HEALTHCHECK. Swagger/OpenAPI generation is
+# application functionality, not a liveness/readiness signal, and can be slower than the app itself.
 backend_is_ready() {
   if command -v curl >/dev/null 2>&1; then
-    curl --fail --silent --show-error --max-time 2 "$BACKEND_URL/v3/api-docs" >/dev/null 2>&1
+    curl --fail --silent --show-error --max-time 2 "$BACKEND_HEALTH_URL" >/dev/null 2>&1
   elif command -v wget >/dev/null 2>&1; then
-    wget --quiet --spider --timeout=2 "$BACKEND_URL/v3/api-docs" >/dev/null 2>&1
+    wget --quiet --spider --timeout=2 "$BACKEND_HEALTH_URL" >/dev/null 2>&1
   else
     return 2
   fi
 }
 
-# The compose "app" service has no `restart` policy, so if the backend container exits (crashes
-# during Spring context startup, OOM, etc.) it just stays exited - `docker compose ps` reports
-# it, but nothing about that state changes the `backend_is_ready` HTTP poll below. Without this
-# check, a failed backend still burns the full ~5 minute timeout below before this script says
-# anything useful. Checking the container's actual state lets it fail fast with a log tail instead.
 backend_container_exited() {
   local status
   status="$(docker compose ps --status=exited --format '{{.Name}}' app 2>/dev/null || true)"
   [ -n "$status" ]
 }
 
-print_backend_crash_log() {
-  echo "Backend container exited during startup. Last 40 log lines from 'docker compose logs app':"
-  docker compose logs --no-color --tail=40 app 2>&1 || true
+backend_container_health_status() {
+  local container_id
+  container_id="$(docker compose ps -q app 2>/dev/null || true)"
+  if [ -z "$container_id" ]; then
+    printf '%s' "not-running"
+    return
+  fi
+
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || printf '%s' "unknown"
+}
+
+print_backend_diagnostics() {
+  echo "Backend diagnostics:"
+  docker compose ps app 2>/dev/null || true
+  echo
+  echo "Last 60 backend log lines:"
+  docker compose logs --no-color --tail=60 app 2>&1 || true
   echo
   echo "Run 'docker compose logs app' for the full log."
 }
@@ -143,6 +148,7 @@ open_frontend() {
 echo "Starting Tracker with Docker Compose..."
 echo "Frontend URL: $FRONTEND_URL"
 echo "Backend URL: $BACKEND_URL"
+echo "Backend health: $BACKEND_HEALTH_URL"
 echo "Swagger UI: $SWAGGER_URL"
 if [ -n "${MINIO_PORT:-}" ]; then
   echo "MinIO API host port: $MINIO_PORT (internal app endpoint remains minio:9000)"
@@ -169,29 +175,46 @@ frontend_ready=false
 for attempt in {1..150}; do
   if [ "$backend_ready" = false ] && backend_container_exited; then
     echo
-    print_backend_crash_log
+    echo "ERROR: Backend container exited during startup."
+    print_backend_diagnostics
     exit 1
   fi
+
   if [ "$backend_ready" = false ] && backend_is_ready; then
     backend_ready=true
     echo "Backend is ready at $BACKEND_URL."
   fi
+
   if [ "$frontend_ready" = false ] && frontend_is_ready; then
     frontend_ready=true
     echo "Frontend is ready at $FRONTEND_URL."
   fi
+
   if [ "$backend_ready" = true ] && [ "$frontend_ready" = true ]; then
     echo "Opening $FRONTEND_URL ..."
     open_frontend
     echo "Tracker is running. Use 'docker compose logs -f' to follow logs or 'docker compose down' to stop it."
     exit 0
   fi
+
+  if [ "$backend_ready" = false ] && [ $((attempt % 10)) -eq 0 ]; then
+    health_status="$(backend_container_health_status)"
+    echo "Still waiting for backend health at $BACKEND_HEALTH_URL (container health: $health_status)..."
+    if [ "$health_status" = "unhealthy" ]; then
+      echo
+      echo "ERROR: Backend container is unhealthy."
+      print_backend_diagnostics
+      exit 1
+    fi
+  fi
+
   sleep 2
 done
 
 echo "ERROR: Timed out waiting for the backend and/or frontend to become ready."
 if [ "$backend_ready" = false ]; then
-  echo "  - Backend never responded at $BACKEND_URL/v3/api-docs. Run 'docker compose logs app' to inspect backend startup logs."
+  echo "  - Backend never became healthy at $BACKEND_HEALTH_URL."
+  print_backend_diagnostics
 fi
 if [ "$frontend_ready" = false ]; then
   echo "  - Frontend never responded at $FRONTEND_URL. Run 'docker compose logs frontend' to inspect frontend startup logs."
