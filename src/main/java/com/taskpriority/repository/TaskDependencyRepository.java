@@ -34,18 +34,19 @@ public interface TaskDependencyRepository extends JpaRepository<TaskDependency, 
                                                           @Param("closedStatuses") Collection<Status> closedStatuses);
 
     /**
-     * True if {@code targetTaskId} is reachable from {@code startTaskId} by following the
-     * dependency chain (task -&gt; blocks_task, i.e. "depends on"). Used before inserting a new
-     * edge {@code task=targetTaskId depends on blocksTask=startTaskId}: if {@code startTaskId} can
-     * already (transitively) reach {@code targetTaskId}, the new edge would close a cycle back to
-     * {@code targetTaskId}. A bounded recursive CTE over indexed columns rather than recursive
-     * Java/entity traversal, so this stays a single query regardless of graph depth.
+     * True if {@code targetTaskId} is reachable from {@code startTaskId} by following required
+     * {@code BLOCKS} dependency edges (task -&gt; blocks_task, i.e. "depends on"). Informational
+     * {@code RELATED} edges are deliberately excluded from the prerequisite DAG. Used before
+     * inserting a new BLOCKS edge: if {@code startTaskId} can already transitively reach
+     * {@code targetTaskId}, the candidate edge would close a cycle. A recursive CTE over indexed
+     * columns keeps this a single query regardless of graph depth.
      */
     @Query(value = "WITH RECURSIVE reachable(task_id) AS (" +
-            "  SELECT blocks_task_id FROM task_dependencies WHERE user_id = :userId AND task_id = :startTaskId " +
+            "  SELECT blocks_task_id FROM task_dependencies " +
+            "  WHERE user_id = :userId AND task_id = :startTaskId AND dependency_type = 'BLOCKS' " +
             "  UNION " +
             "  SELECT td.blocks_task_id FROM task_dependencies td JOIN reachable r ON td.task_id = r.task_id " +
-            "  WHERE td.user_id = :userId" +
+            "  WHERE td.user_id = :userId AND td.dependency_type = 'BLOCKS'" +
             ") SELECT EXISTS (SELECT 1 FROM reachable WHERE task_id = :targetTaskId)", nativeQuery = true)
     boolean existsDependencyPath(@Param("userId") Long userId, @Param("startTaskId") Long startTaskId,
                                   @Param("targetTaskId") Long targetTaskId);
