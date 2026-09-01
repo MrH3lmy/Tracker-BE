@@ -41,6 +41,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot bucket provisioning, run once per `docker compose up` rather than on every app
+  # startup: `app` no longer needs to call S3 CreateBucket itself for local dev (S3AttachmentStorage
+  # still attempts it as a resilient, non-fatal fallback - see its ensureBucketExists() javadoc -
+  # but this makes that fallback a no-op on the happy path). Keeps bucket provisioning an
+  # infrastructure concern, same as in a real deployment where it's provisioned out of band.
+  minio-init:
+    image: minio/mc:latest
+    container_name: taskpriority-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        mc alias set local http://minio:9000 taskpriority-dev taskpriority-dev-secret &&
+        mc mb --ignore-existing local/tracker-attachments
+      "
+    restart: "no"
+
   redis:
     image: redis:7-alpine
     container_name: taskpriority-redis
@@ -66,6 +84,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     environment:

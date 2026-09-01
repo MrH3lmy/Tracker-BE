@@ -2,22 +2,28 @@ package com.taskpriority.notes.storage;
 
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,6 +75,57 @@ class S3AttachmentStorageTest {
         storage.delete("some-key");
 
         verify(s3Client).deleteObject(DeleteObjectRequest.builder().bucket("test-bucket").key("some-key").build());
+    }
+
+    @Test
+    void ensureBucketExistsSwallowsAnS3ExceptionLikeBucketAlreadyOwnedByYou() {
+        when(s3Client.createBucket(any(CreateBucketRequest.class)))
+                .thenThrow(S3Exception.builder().message("BucketAlreadyOwnedByYou").statusCode(409).build());
+
+        assertThatCode(storage::ensureBucketExists).doesNotThrowAnyException();
+    }
+
+    @Test
+    void ensureBucketExistsSwallowsAnSdkClientExceptionFromAnUnresolvableOrUnreachableEndpoint() {
+        // Reproduces the reported Docker/startup failure: MinIO's hostname doesn't resolve (or the
+        // endpoint is otherwise unreachable), which the AWS SDK surfaces as SdkClientException, not
+        // the narrower S3Exception subtype - this must be exactly as non-fatal so the bean creating
+        // this instance (see AttachmentStorageConfig#attachmentStorage) never fails Spring context
+        // startup over object storage being temporarily unavailable.
+        when(s3Client.createBucket(any(CreateBucketRequest.class)))
+                .thenThrow(SdkClientException.create("Received an UnknownHostException when attempting to interact with a service"));
+
+        assertThatCode(storage::ensureBucketExists).doesNotThrowAnyException();
+    }
+
+    @Test
+    void putWrapsASdkClientExceptionFromAnUnreachableEndpointInAttachmentStorageException() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenThrow(SdkClientException.create("Unable to execute HTTP request: minio"));
+
+        assertThatThrownBy(() -> storage.put("some-key", new ByteArrayInputStream(new byte[]{1}), 1, "image/png"))
+                .isInstanceOf(AttachmentStorageException.class)
+                .hasCauseInstanceOf(SdkClientException.class);
+    }
+
+    @Test
+    void getWrapsASdkClientExceptionFromAnUnreachableEndpointInAttachmentStorageException() {
+        when(s3Client.getObject(any(GetObjectRequest.class)))
+                .thenThrow(SdkClientException.create("Unable to execute HTTP request: minio"));
+
+        assertThatThrownBy(() -> storage.get("some-key"))
+                .isInstanceOf(AttachmentStorageException.class)
+                .hasCauseInstanceOf(SdkClientException.class);
+    }
+
+    @Test
+    void deleteWrapsASdkClientExceptionFromAnUnreachableEndpointInAttachmentStorageException() {
+        doThrow(SdkClientException.create("Unable to execute HTTP request: minio"))
+                .when(s3Client).deleteObject(any(DeleteObjectRequest.class));
+
+        assertThatThrownBy(() -> storage.delete("some-key"))
+                .isInstanceOf(AttachmentStorageException.class)
+                .hasCauseInstanceOf(SdkClientException.class);
     }
 
     private static String expectedSha256Hex(byte[] content) throws Exception {

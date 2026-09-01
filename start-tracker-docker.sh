@@ -54,6 +54,24 @@ backend_is_ready() {
   fi
 }
 
+# The compose "app" service has no `restart` policy, so if the backend container exits (crashes
+# during Spring context startup, OOM, etc.) it just stays exited - `docker compose ps` reports
+# it, but nothing about that state changes the `backend_is_ready` HTTP poll below. Without this
+# check, a failed backend still burns the full ~5 minute timeout below before this script says
+# anything useful. Checking the container's actual state lets it fail fast with a log tail instead.
+backend_container_exited() {
+  local status
+  status="$(docker compose ps --status=exited --format '{{.Name}}' app 2>/dev/null || true)"
+  [ -n "$status" ]
+}
+
+print_backend_crash_log() {
+  echo "Backend container exited during startup. Last 40 log lines from 'docker compose logs app':"
+  docker compose logs --no-color --tail=40 app 2>&1 || true
+  echo
+  echo "Run 'docker compose logs app' for the full log."
+}
+
 open_frontend() {
   case "$(uname -s)" in
     Darwin*)
@@ -93,6 +111,11 @@ fi
 backend_ready=false
 frontend_ready=false
 for attempt in {1..150}; do
+  if [ "$backend_ready" = false ] && backend_container_exited; then
+    echo
+    print_backend_crash_log
+    exit 1
+  fi
   if [ "$backend_ready" = false ] && backend_is_ready; then
     backend_ready=true
     echo "Backend is ready at $BACKEND_URL."
