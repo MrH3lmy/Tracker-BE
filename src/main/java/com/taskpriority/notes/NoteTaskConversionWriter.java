@@ -14,17 +14,14 @@ import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.service.TaskService;
 import com.taskpriority.task.api.TaskApiMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
 /**
  * The actual task+link write for note-to-task conversion (issue #287), split out of
- * {@link NoteTaskConversionService} so the action-item path can run in its own nested transaction
- * (see {@link #createActionItemTaskAndLink}) - a separate bean is required for
- * {@code @Transactional(REQUIRES_NEW)} to take effect, since Spring's transactional proxying
- * doesn't apply to a method called on {@code this} from within the same class.
+ * {@link NoteTaskConversionService} to keep entity construction and activity recording separate
+ * from the orchestration/locking logic in the caller.
  */
 @Service
 public class NoteTaskConversionWriter {
@@ -49,15 +46,14 @@ public class NoteTaskConversionWriter {
     }
 
     /**
-     * Runs in its own, independent transaction. Two concurrent requests can both pass
-     * {@code NoteTaskConversionService}'s existing-link pre-check and both reach here for the same
-     * (note, block); V53's partial unique index lets only one of the two {@code saveAndFlush} calls
-     * below succeed. Because this method is REQUIRES_NEW, the loser's constraint violation rolls
-     * back only *this* transaction (its task insert included) - never the caller's - so the caller
-     * can safely catch the exception and re-read the row the winner committed, instead of that
-     * violation surfacing to the client as an error.
+     * Joins the caller's transaction (default REQUIRED propagation) rather than opening a nested
+     * one - {@code NoteTaskConversionService.convertActionItem} already holds a row lock on the
+     * target block for the duration of that transaction, so no second, independently pooled
+     * connection is needed here to detect a lost race (a losing caller simply never reaches this
+     * method concurrently with the winner; it blocks on the lock first). V53's partial unique index
+     * still backs this as the final DB-level invariant.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public ConvertNoteToTaskResponse createActionItemTaskAndLink(Note note, NoteBlock block, ConvertNoteToTaskRequest request, String sourceText) {
         return createAndSave(note, block, request, sourceText, ACTION_ITEM_LINK_TYPE);
     }
@@ -93,9 +89,9 @@ public class NoteTaskConversionWriter {
         link.setTask(savedTask);
         link.setSelectedText(sourceText);
         link.setLinkType(linkType);
-        // Flushed immediately (not just save()) so a conflicting concurrent insert throws right
-        // here, inside this method's own transaction, rather than at some later, uncontrolled
-        // flush point - see the REQUIRES_NEW javadoc above for why that matters.
+        // Flushed immediately so any DB-level rejection (e.g. V53's unique index, if this method
+        // is ever reached without the caller's row lock in place) surfaces here rather than at
+        // some later, uncontrolled flush point.
         NoteTaskLink savedLink = linkRepository.saveAndFlush(link);
 
         // Distinct from the generic TASK_CREATED that TaskService.save() above already recorded

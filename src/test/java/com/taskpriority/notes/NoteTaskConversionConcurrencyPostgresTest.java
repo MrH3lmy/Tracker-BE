@@ -47,7 +47,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * a second task or link. This needs real Postgres (Testcontainers, Flyway migrations applied) -
  * the local-test H2 profile has no Flyway run at all, so V53's partial unique index (the actual
  * invariant under test) doesn't exist there; asserting against H2 would only prove the
- * REQUIRES_NEW/catch/re-read code path runs, not that it's backed by a real DB constraint.
+ * lock/check/create code path runs, not that it's backed by a real DB constraint.
+ *
+ * <p>The Hikari pool is deliberately sized smaller than {@link #CONCURRENCY}: each in-flight
+ * conversion now needs at most one DB connection for its entire duration (a row lock on the
+ * target block, held for the same transaction that creates the task/link - see
+ * {@code NoteTaskConversionService.convertActionItem}), so callers beyond the pool size simply
+ * queue for a connection and all still complete well within HikariCP's default 30s
+ * connection-acquisition timeout. An earlier implementation that used a REQUIRES_NEW nested
+ * transaction for the write needed up to two connections per in-flight request; at this pool
+ * size that combination would deadlock (every connection consumed by outer transactions, none
+ * left for any inner one) rather than merely queue - this test's ratio is chosen specifically to
+ * fail loudly under that older shape rather than pass by coincidence.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
@@ -66,6 +77,8 @@ class NoteTaskConversionConcurrencyPostgresTest {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.driver-class-name", postgres::getDriverClassName);
+        // Deliberately below CONCURRENCY - see the class Javadoc for why this ratio matters.
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "3");
     }
 
     @Autowired private MockMvc mockMvc;
@@ -76,11 +89,9 @@ class NoteTaskConversionConcurrencyPostgresTest {
     @Autowired private NoteTaskLinkRepository noteTaskLinkRepository;
     @Autowired private TaskRepository taskRepository;
 
-    // Each in-flight conversion request can hold up to two DB connections at once (the caller's
-    // suspended outer transaction plus the writer's REQUIRES_NEW one) - kept well under HikariCP's
-    // default max-pool-size of 10 so this test proves the race-handling logic, not connection
-    // exhaustion in its own harness.
-    private static final int CONCURRENCY = 4;
+    // More callers than pooled connections (maximum-pool-size=3 above) - proves the fix serializes
+    // via a DB row lock instead of needing one connection per in-flight request per hop.
+    private static final int CONCURRENCY = 8;
 
     @Test
     void concurrentActionItemConversionsResolveToOneCanonicalTaskAndLink() throws Exception {

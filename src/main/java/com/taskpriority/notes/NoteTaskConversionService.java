@@ -11,7 +11,6 @@ import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.task.api.TaskApiMapper;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,9 +49,7 @@ public class NoteTaskConversionService {
         Note note = requireNote(userId, noteId);
 
         if (request.noteBlockId() != null) {
-            NoteBlock block = noteBlockRepository.findByUserIdAndIdAndNoteId(userId, request.noteBlockId(), noteId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Block with id " + request.noteBlockId() + " not found for note " + noteId));
-            return convertActionItem(userId, note, block, request);
+            return convertActionItem(userId, note, request.noteBlockId(), request);
         }
 
         String sourceText = firstNonBlank(request.selectedText(), note.getBody(), note.getTitle());
@@ -60,29 +57,26 @@ public class NoteTaskConversionService {
     }
 
     /**
-     * Idempotent per (note, block): a fast-path pre-check returns the existing task/link when one
-     * is already visible. When it isn't (first request, or a concurrent request that hasn't
-     * committed yet), {@link NoteTaskConversionWriter#createActionItemTaskAndLink} attempts the
-     * insert in its own nested transaction; if a competing request wins the race, that insert
-     * fails against V53's partial unique index and rolls back on its own without touching this
-     * (outer) transaction, which is then free to re-read the canonical row the winner committed
-     * and hand the caller that instead of letting the error surface. Two concurrent callers
-     * therefore always resolve to the same task/link, never a duplicate and never a 4xx/5xx purely
-     * because they raced.
+     * Idempotent per (note, block). Takes a {@code SELECT ... FOR UPDATE} row lock on the target
+     * block (via {@link NoteBlockRepository#findByUserIdAndIdAndNoteIdForUpdate}) before checking
+     * for an existing link, all within this single transaction/connection - a second concurrent
+     * caller for the same block blocks on that lock until the first caller's transaction commits,
+     * then re-runs the same check-then-create and finds the row the first caller just committed.
+     * Two concurrent callers therefore always resolve to the same task/link, never a duplicate and
+     * never a 4xx/5xx purely because they raced, without ever needing a second, independently
+     * pooled connection per in-flight request (see {@link NoteTaskConversionWriter}). V53's partial
+     * unique index remains as the final DB-level invariant if this lock is ever bypassed.
      */
-    private ConvertNoteToTaskResponse convertActionItem(Long userId, Note note, NoteBlock block, ConvertNoteToTaskRequest request) {
+    private ConvertNoteToTaskResponse convertActionItem(Long userId, Note note, Long blockId, ConvertNoteToTaskRequest request) {
+        NoteBlock block = noteBlockRepository.findByUserIdAndIdAndNoteIdForUpdate(userId, blockId, note.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Block with id " + blockId + " not found for note " + note.getId()));
+
         var existing = linkRepository.findByUserIdAndNoteIdAndNoteBlockIdAndLinkType(userId, note.getId(), block.getId(), ACTION_ITEM_LINK_TYPE);
         if (existing.isPresent()) {
             return toResponse(existing.get());
         }
         String sourceText = firstNonBlank(request.selectedText(), block.getContent(), note.getBody(), note.getTitle());
-        try {
-            return writer.createActionItemTaskAndLink(note, block, request, sourceText);
-        } catch (DataIntegrityViolationException lostTheRace) {
-            NoteTaskLink canonical = linkRepository.findByUserIdAndNoteIdAndNoteBlockIdAndLinkType(userId, note.getId(), block.getId(), ACTION_ITEM_LINK_TYPE)
-                    .orElseThrow(() -> lostTheRace);
-            return toResponse(canonical);
-        }
+        return writer.createActionItemTaskAndLink(note, block, request, sourceText);
     }
 
     private ConvertNoteToTaskResponse toResponse(NoteTaskLink link) {
