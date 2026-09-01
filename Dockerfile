@@ -17,6 +17,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
+# The base image ships /usr/bin/pebble (Canonical's Go-based init/service manager) even in this
+# non-chiseled variant, but it isn't dpkg-registered and nothing in the image's own entrypoint
+# chain (/__cacert_entrypoint.sh, itself replaced by our own ENTRYPOINT below) invokes it - it's
+# unused dead weight here. Removing it drops the Go-stdlib CVEs Trivy's image scan flags against
+# its statically-linked Go runtime (Trivy has no way to know it's unreachable code for us).
+RUN rm -f /usr/bin/pebble
+
 # Run as a dedicated non-root user rather than the image's default root, so a container escape or
 # arbitrary-file-write vulnerability in the app/JVM doesn't hand an attacker root inside the
 # container. IDs are auto-assigned (not pinned to e.g. 1000) - nothing here depends on the exact
