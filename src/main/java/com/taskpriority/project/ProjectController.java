@@ -4,6 +4,8 @@ import com.taskpriority.common.exception.ApiErrorResponse;
 import com.taskpriority.model.Project;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.TaskResponse;
+import com.taskpriority.task.api.TodayResponse;
+import com.taskpriority.task.application.TodayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,11 +26,13 @@ public class ProjectController {
     private final ProjectService projectService;
     private final ProjectApiMapper mapper;
     private final TaskApiMapper taskApiMapper;
+    private final TodayService todayService;
 
-    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper) {
+    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper, TodayService todayService) {
         this.projectService = projectService;
         this.mapper = mapper;
         this.taskApiMapper = taskApiMapper;
+        this.todayService = todayService;
     }
 
     @Operation(summary = "List all projects")
@@ -56,6 +60,13 @@ public class ProjectController {
     @GetMapping("/{id}/tasks")
     public List<TaskResponse> tasks(@PathVariable Long id) {
         return projectService.findTasks(id).stream().map(taskApiMapper::toResponse).toList();
+    }
+
+    @Operation(summary = "Get today's actionable tasks for this project", description = "Same semantics as GET /api/v1/tasks/today, restricted to this project's tasks.")
+    @ApiResponse(responseCode = "404", description = "Project not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GetMapping("/{id}/today")
+    public TodayResponse today(@PathVariable Long id) {
+        return todayService.getProjectToday(id);
     }
 
     @Operation(summary = "Create a project")
