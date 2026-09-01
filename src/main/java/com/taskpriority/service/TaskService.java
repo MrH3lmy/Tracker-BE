@@ -6,14 +6,14 @@ import com.taskpriority.model.*;
 import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.ProjectRepository;
-import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
+import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskSpecifications;
 import com.taskpriority.repository.UserRepository;
-import com.taskpriority.task.application.RecurrenceService;
+import com.taskpriority.task.api.DependencyRequest;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
-import com.taskpriority.task.api.DependencyRequest;
+import com.taskpriority.task.application.RecurrenceService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -202,6 +202,13 @@ public class TaskService {
         }
     }
 
+    /**
+     * Adds a dependency edge while enforcing ownership, project boundaries and the BLOCKS DAG.
+     * Endpoint task rows are locked in ascending id order to stabilize their state. The cycle
+     * invariant itself is protected by a graph-scope lock: project row for project tasks, user row
+     * for project-less tasks. This covers concurrent cycle-closing writes even when their endpoints
+     * are disjoint. RELATED edges are informational and excluded from DAG reachability.
+     */
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
         Long userId = currentUserService.requireUserId();
