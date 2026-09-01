@@ -16,6 +16,7 @@ import com.taskpriority.task.api.TodayTaskResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -38,10 +39,11 @@ public class TodayService {
     private final ProjectRepository projectRepository;
     private final SettingsService settingsService;
     private final CurrentUserService currentUserService;
+    private final Clock clock;
 
     public TodayService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository,
                          TaskService taskService, TaskApiMapper taskApiMapper, ProjectRepository projectRepository,
-                         SettingsService settingsService, CurrentUserService currentUserService) {
+                         SettingsService settingsService, CurrentUserService currentUserService, Clock clock) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.taskService = taskService;
@@ -49,6 +51,7 @@ public class TodayService {
         this.projectRepository = projectRepository;
         this.settingsService = settingsService;
         this.currentUserService = currentUserService;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +72,9 @@ public class TodayService {
         Long userId = currentUserService.requireUserId();
         // Per-user timezone (issue #286): LocalDate.now() with no zone would silently use the
         // JVM/server default, so "today" could roll over at the wrong instant for the caller.
-        LocalDate today = LocalDate.now(settingsService.getTimezoneForUser(userId));
+        // Reads the instant from the injected Clock (real wall clock in production, fixed in
+        // tests - see ClockConfig) rather than calling Instant.now()/LocalDate.now() directly.
+        LocalDate today = LocalDate.now(clock.withZone(settingsService.getTimezoneForUser(userId)));
 
         List<Task> overdue = taskRepository.findOverdueForToday(userId, projectId, today, CLOSED_STATUSES);
         List<Task> dueToday = taskRepository.findDueTodayForToday(userId, projectId, today, CLOSED_STATUSES);

@@ -1,18 +1,14 @@
 package com.taskpriority.task.api;
 
-import com.taskpriority.model.AppSetting;
-import com.taskpriority.model.AppSettingId;
 import com.taskpriority.model.Project;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.TaskDependency;
 import com.taskpriority.model.User;
-import com.taskpriority.repository.AppSettingRepository;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
-import com.taskpriority.settings.SettingsService;
 import com.taskpriority.support.TestAuthSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,7 +42,6 @@ class TodayIntegrationTest {
     @Autowired TaskRepository taskRepository;
     @Autowired ProjectRepository projectRepository;
     @Autowired TaskDependencyRepository taskDependencyRepository;
-    @Autowired AppSettingRepository appSettingRepository;
 
     private User alice;
 
@@ -266,27 +260,7 @@ class TodayIntegrationTest {
                 .andExpect(jsonPath("$.tasks[0].blocked").value(false));
     }
 
-    @Test
-    void dateBoundaryUsesTheAccountsConfiguredTimezoneNotTheServerDefault() throws Exception {
-        // Pick a zone whose "today" is very likely to differ from the JVM/server default zone,
-        // then confirm a task due on THAT zone's today shows up as due-today, proving the
-        // classification isn't accidentally keyed off LocalDate.now() with no zone.
-        ZoneId zone = ZoneId.of("Pacific/Kiritimati");
-        LocalDate zoneToday = LocalDate.now(zone);
-
-        AppSetting setting = new AppSetting();
-        setting.setUserId(alice.getId());
-        setting.setKey(SettingsService.TIMEZONE_KEY);
-        setting.setValue(zone.getId());
-        appSettingRepository.save(setting);
-
-        Task task = saveTask("Due per account timezone", Status.NOT_STARTED, zoneToday, null, null);
-
-        mockMvc.perform(get("/api/v1/tasks/today"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.date").value(zoneToday.toString()))
-                .andExpect(jsonPath("$.tasks.length()").value(1))
-                .andExpect(jsonPath("$.tasks[0].task.id").value(task.getId()))
-                .andExpect(jsonPath("$.tasks[0].todayReason").value("DUE_TODAY"));
-    }
+    // Deterministic, Clock-injected coverage for the account-timezone date boundary lives in
+    // TodayTimezoneClockIntegrationTest (its own test class - it needs to override the Clock
+    // bean, which would otherwise affect every LocalDate.now()-based assertion in this file).
 }
