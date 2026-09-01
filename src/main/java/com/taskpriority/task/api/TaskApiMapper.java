@@ -61,6 +61,11 @@ public class TaskApiMapper {
                 task.getPosition(),
                 task.getDependencyIds(),
                 task.getBlockingTaskIds(),
+                task.isBlocked(),
+                task.isReady(),
+                task.getBlockers().stream()
+                        .map(blocker -> new TaskResponse.BlockerRef(blocker.id(), blocker.title(), blocker.status()))
+                        .toList(),
                 task.getSubtaskIds(),
                 task.getSubtaskCount(),
                 task.getCompletedSubtaskCount(),

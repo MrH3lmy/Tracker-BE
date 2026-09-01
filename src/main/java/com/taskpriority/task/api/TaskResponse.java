@@ -49,6 +49,9 @@ public record TaskResponse(
         int position,
         List<Long> dependencyIds,
         List<Long> blockingTaskIds,
+        boolean blocked,
+        boolean ready,
+        List<BlockerRef> blockers,
         List<Long> subtaskIds,
         int subtaskCount,
         int completedSubtaskCount,
@@ -56,6 +59,12 @@ public record TaskResponse(
         RecurrenceRuleResponse recurrence,
         Long sourceNoteId
 ) {
+    /**
+     * One unfinished required prerequisite (issue #282) - enough to answer "why is this task
+     * blocked?" without the client fetching every dependency id individually.
+     */
+    public record BlockerRef(Long id, String title, Status status) {}
+
     public record RecurrenceRuleResponse(
             RecurrenceRule.Frequency frequency,
             int interval,
@@ -95,6 +104,6 @@ public record TaskResponse(
         this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, null, createdDate,
                 createdDate, completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
-                List.of(), List.of(), List.of(), 0, 0, 0, null, null);
+                List.of(), List.of(), false, false, List.of(), List.of(), 0, 0, 0, null, null);
     }
 }

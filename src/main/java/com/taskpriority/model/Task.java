@@ -156,6 +156,20 @@ public class Task {
     @Transient
     private List<Long> blockingTaskIds = new ArrayList<>();
 
+    /**
+     * Dependency readiness (issue #282), computed by {@code TaskReadinessService} - never
+     * persisted, always derived fresh from current task/dependency state. See that class for the
+     * exact blocked/ready rules.
+     */
+    @Transient
+    private boolean blocked;
+
+    @Transient
+    private boolean ready;
+
+    @Transient
+    private List<TaskBlockerSummary> blockers = new ArrayList<>();
+
     @Transient
     private List<Long> subtaskIds = new ArrayList<>();
 
@@ -244,6 +258,12 @@ public class Task {
     public void setDependencyIds(List<Long> dependencyIds) { this.dependencyIds = dependencyIds == null ? new ArrayList<>() : dependencyIds; }
     public List<Long> getBlockingTaskIds() { return blockingTaskIds; }
     public void setBlockingTaskIds(List<Long> blockingTaskIds) { this.blockingTaskIds = blockingTaskIds == null ? new ArrayList<>() : blockingTaskIds; }
+    public boolean isBlocked() { return blocked; }
+    public void setBlocked(boolean blocked) { this.blocked = blocked; }
+    public boolean isReady() { return ready; }
+    public void setReady(boolean ready) { this.ready = ready; }
+    public List<TaskBlockerSummary> getBlockers() { return blockers; }
+    public void setBlockers(List<TaskBlockerSummary> blockers) { this.blockers = blockers == null ? new ArrayList<>() : blockers; }
     public List<Long> getSubtaskIds() { return subtaskIds; }
     public void setSubtaskIds(List<Long> subtaskIds) { this.subtaskIds = subtaskIds == null ? new ArrayList<>() : subtaskIds; }
     public int getSubtaskCount() { return subtaskCount; }

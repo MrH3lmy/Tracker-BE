@@ -214,10 +214,10 @@ public class TaskControllerV1 {
     @GetMapping("/blockers")
     public BlockerAnalysisService.BlockerAnalysis blockers(){ return blockerAnalysisService.analyze(); }
 
-    @Operation(summary = "Add a dependency to a task", description = "Marks the given task as blocked by another task.")
+    @Operation(summary = "Add a dependency to a task", description = "Marks the given task as blocked by another task until that task is done/cancelled. Rejects self-dependencies, cross-project dependencies, and dependencies that would create a cycle (direct or transitive); creating the same dependency twice is idempotent, not an error.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Dependency added"),
-            @ApiResponse(responseCode = "400", description = "Validation error, e.g. a cyclic dependency", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Dependency added (or already existed)"),
+            @ApiResponse(responseCode = "400", description = "Validation error, e.g. a self/cross-project dependency or one that would create a cyclic dependency", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Task not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     @PostMapping("/{id}/dependencies")

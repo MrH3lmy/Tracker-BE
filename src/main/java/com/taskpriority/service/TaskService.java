@@ -6,13 +6,14 @@ import com.taskpriority.model.*;
 import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.ProjectRepository;
-import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
+import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskSpecifications;
-import com.taskpriority.task.application.RecurrenceService;
+import com.taskpriority.repository.UserRepository;
+import com.taskpriority.task.api.DependencyRequest;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
-import com.taskpriority.task.api.DependencyRequest;
+import com.taskpriority.task.application.RecurrenceService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -36,22 +37,26 @@ public class TaskService {
     private final TaskDependencyRepository taskDependencyRepository;
     private final BoardColumnRepository boardColumnRepository;
     private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
     private final CurrentUserService currentUserService;
     private final ProjectActivityService activityService;
+    private final TaskReadinessService taskReadinessService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, UserRepository userRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService, TaskReadinessService taskReadinessService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.projectRepository = projectRepository;
+        this.userRepository = userRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
         this.taskApiMapper = taskApiMapper;
         this.currentUserService = currentUserService;
         this.activityService = activityService;
+        this.taskReadinessService = taskReadinessService;
     }
 
     /**
@@ -67,12 +72,6 @@ public class TaskService {
     @Transactional
     public Task save(Task task) {
         Long userId = currentUserService.requireUserId();
-        // Captured before taskRepository.save() assigns an id, so this is the one choke point
-        // every creation path (direct create, subtask create, note-conversion create) goes
-        // through exactly once - see markComplete/updateTask below for the other two Today/
-        // activity-relevant events, which are intentionally NOT hooked here to avoid firing a
-        // generic TASK_UPDATED alongside every more specific mutation (move, project change,
-        // due-date change, ...) that also happens to call save().
         boolean isCreate = task.getId() == null;
         if (isCreate) {
             task.setUserId(userId);
@@ -120,11 +119,6 @@ public class TaskService {
         return tasks;
     }
 
-    /**
-     * DB-side paginated + filtered task listing (issue #260) - unlike {@link #findAll()}, this
-     * never loads more than one page of a user's task history into memory. {@code statuses} null
-     * or empty means "any status"; every other filter is applied only when non-null.
-     */
     @Transactional(readOnly = true)
     public Page<Task> findPage(
             Collection<Status> statuses,
@@ -145,7 +139,6 @@ public class TaskService {
         return page;
     }
 
-    /** Same DB-side pagination as {@link #findPage}, scoped to archived (DONE/CANCELLED) tasks. */
     @Transactional(readOnly = true)
     public Page<Task> findArchivePage(Pageable pageable) {
         return findPage(List.of(Status.DONE, Status.CANCELLED), null, null, null, null, null, null, null, pageable);
@@ -209,25 +202,72 @@ public class TaskService {
         }
     }
 
+    /**
+     * Adds a dependency edge while enforcing ownership, project boundaries and the BLOCKS DAG.
+     * Endpoint task rows are locked in ascending id order to stabilize their state. The cycle
+     * invariant itself is protected by a graph-scope lock: project row for project tasks, user row
+     * for project-less tasks. This covers concurrent cycle-closing writes even when their endpoints
+     * are disjoint. RELATED edges are informational and excluded from DAG reachability.
+     */
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
         Long userId = currentUserService.requireUserId();
-        Task task = requireOwnedTask(id);
-        Task blocksTask = taskRepository.findByUserIdAndId(userId, request.blocksTaskId())
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + request.blocksTaskId() + " not found"));
-        if (task.getId().equals(blocksTask.getId())) {
+        requireOwnedTask(id);
+        Long blocksTaskId = request.blocksTaskId();
+        if (id.equals(blocksTaskId)) {
             throw new IllegalArgumentException("A task cannot depend on itself");
         }
-        if (!taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
-            TaskDependency dependency = new TaskDependency();
-            dependency.setUserId(userId);
-            dependency.setTask(task);
-            dependency.setBlocksTask(blocksTask);
-            dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
-            taskDependencyRepository.save(dependency);
+        if (!taskRepository.existsByUserIdAndId(userId, blocksTaskId)) {
+            throw new ResourceNotFoundException("Task with id " + blocksTaskId + " not found");
         }
+
+        Long lowerId = Math.min(id, blocksTaskId);
+        Long higherId = Math.max(id, blocksTaskId);
+        Task lower = taskRepository.findByUserIdAndIdForUpdate(userId, lowerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + lowerId + " not found"));
+        Task higher = taskRepository.findByUserIdAndIdForUpdate(userId, higherId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + higherId + " not found"));
+        Task task = id.equals(lowerId) ? lower : higher;
+        Task blocksTask = blocksTaskId.equals(lowerId) ? lower : higher;
+
+        if (!Objects.equals(task.getProjectId(), blocksTask.getProjectId())) {
+            throw new IllegalArgumentException("A task cannot depend on a task from a different project");
+        }
+
+        lockDependencyGraphScope(userId, task.getProjectId());
+
+        if (taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
+            computeDerivedFields(task);
+            return task;
+        }
+
+        TaskDependencyType dependencyType = request.dependencyType() == null
+                ? TaskDependencyType.BLOCKS
+                : request.dependencyType();
+        if (dependencyType == TaskDependencyType.BLOCKS
+                && taskDependencyRepository.existsDependencyPath(userId, blocksTask.getId(), task.getId())) {
+            throw new IllegalArgumentException("This dependency would create a cycle");
+        }
+
+        TaskDependency dependency = new TaskDependency();
+        dependency.setUserId(userId);
+        dependency.setTask(task);
+        dependency.setBlocksTask(blocksTask);
+        dependency.setDependencyType(dependencyType);
+        taskDependencyRepository.save(dependency);
+
         computeDerivedFields(task);
         return task;
+    }
+
+    private void lockDependencyGraphScope(Long userId, Long projectId) {
+        if (projectId == null) {
+            userRepository.findByIdForUpdate(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            return;
+        }
+        projectRepository.findByUserIdAndIdForUpdate(userId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project with id " + projectId + " not found"));
     }
 
     @Transactional
@@ -260,9 +300,6 @@ public class TaskService {
         LocalDateTime completionTimestamp = LocalDateTime.now();
         t.setStatus(Status.DONE);
         t.setCompletedDate(completionTimestamp);
-        // For a recurring task this resets the row back to NOT_STARTED for its next occurrence
-        // (see RecurrenceService), so toStatus below is the literal completion outcome at this
-        // moment, not whatever t.getStatus() happens to be after this call returns.
         recurrenceService.completeRecurringTask(t, completionTimestamp.toLocalDate());
         Task saved = save(t);
         if (saved.getProjectId() != null) {
@@ -423,6 +460,7 @@ public class TaskService {
             task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
             task.setSubtaskCount(subtasks.size());
             task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
+            applyReadiness(task, taskReadinessService.computeForTask(userId, task));
         }
         applyPriority(task);
     }
@@ -442,6 +480,7 @@ public class TaskService {
                         Collectors.mapping(dependency -> dependency.getTask().getId(), Collectors.toList())));
         Map<Long, List<Task>> subtasksByParent = taskRepository.findByUserIdAndParentTaskIdInOrderByPositionAscIdAsc(userId, ids).stream()
                 .collect(Collectors.groupingBy(Task::getParentTaskId));
+        Map<Long, TaskReadinessService.Readiness> readinessByTask = taskReadinessService.computeBatch(userId, tasks);
 
         for (Task task : tasks) {
             if (task.getId() != null) {
@@ -451,9 +490,22 @@ public class TaskService {
                 task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
                 task.setSubtaskCount(subtasks.size());
                 task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
+                applyReadiness(task, readinessByTask.get(task.getId()));
             }
             applyPriority(task);
         }
+    }
+
+    private void applyReadiness(Task task, TaskReadinessService.Readiness readiness) {
+        if (readiness == null) {
+            task.setBlocked(false);
+            task.setReady(false);
+            task.setBlockers(List.of());
+            return;
+        }
+        task.setBlocked(readiness.blocked());
+        task.setReady(readiness.ready());
+        task.setBlockers(readiness.blockers());
     }
 
     private void applyPriority(Task task) {
