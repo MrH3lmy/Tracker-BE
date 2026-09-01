@@ -83,6 +83,7 @@ class TaskDependencyCycleConcurrencyPostgresTest {
     private Long saveProject(Long userId, String name) {
         Project project = new Project(name);
         project.setUserId(userId);
+        project.setOwnerUserId(userId);
         return projectRepository.save(project).getId();
     }
 
@@ -151,11 +152,8 @@ class TaskDependencyCycleConcurrencyPostgresTest {
         Task b = saveTask(alice.getId(), "B");
         Task c = saveTask(alice.getId(), "C");
 
-        // Pre-existing edge B -> C (B depends on C), committed before the race starts.
         assertThat(postDependency(authentication, b.getId(), c.getId()).getResponse().getStatus()).isEqualTo(200);
 
-        // Concurrently: A -> B, and C -> A. These share A, so endpoint locking alone happens to
-        // serialize this case; it remains useful as a transitive-cycle regression.
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch go = new CountDownLatch(1);
@@ -202,13 +200,9 @@ class TaskDependencyCycleConcurrencyPostgresTest {
         Task c = saveTask(alice.getId(), "C", projectId);
         Task d = saveTask(alice.getId(), "D", projectId);
 
-        // Existing safe graph: B -> C and D -> A.
         assertThat(postDependency(authentication, b.getId(), c.getId()).getResponse().getStatus()).isEqualTo(200);
         assertThat(postDependency(authentication, d.getId(), a.getId()).getResponse().getStatus()).isEqualTo(200);
 
-        // These two new edges have DISJOINT endpoints. Each looks safe against the pre-race graph,
-        // but together they would create A -> B -> C -> D -> A. This is the case endpoint-only
-        // SELECT FOR UPDATE cannot serialize; the common project-row graph lock must do it.
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch go = new CountDownLatch(1);
