@@ -72,12 +72,6 @@ public class TaskService {
     @Transactional
     public Task save(Task task) {
         Long userId = currentUserService.requireUserId();
-        // Captured before taskRepository.save() assigns an id, so this is the one choke point
-        // every creation path (direct create, subtask create, note-conversion create) goes
-        // through exactly once - see markComplete/updateTask below for the other two Today/
-        // activity-relevant events, which are intentionally NOT hooked here to avoid firing a
-        // generic TASK_UPDATED alongside every more specific mutation (move, project change,
-        // due-date change, ...) that also happens to call save().
         boolean isCreate = task.getId() == null;
         if (isCreate) {
             task.setUserId(userId);
@@ -125,11 +119,6 @@ public class TaskService {
         return tasks;
     }
 
-    /**
-     * DB-side paginated + filtered task listing (issue #260) - unlike {@link #findAll()}, this
-     * never loads more than one page of a user's task history into memory. {@code statuses} null
-     * or empty means "any status"; every other filter is applied only when non-null.
-     */
     @Transactional(readOnly = true)
     public Page<Task> findPage(
             Collection<Status> statuses,
@@ -150,7 +139,6 @@ public class TaskService {
         return page;
     }
 
-    /** Same DB-side pagination as {@link #findPage}, scoped to archived (DONE/CANCELLED) tasks. */
     @Transactional(readOnly = true)
     public Page<Task> findArchivePage(Pageable pageable) {
         return findPage(List.of(Status.DONE, Status.CANCELLED), null, null, null, null, null, null, null, pageable);
@@ -214,19 +202,6 @@ public class TaskService {
         }
     }
 
-    /**
-     * Adds a dependency edge while enforcing ownership, project boundaries and the BLOCKS DAG.
-     * Informational RELATED edges do not participate in cycle detection, but they use the same
-     * graph-scope serialization so duplicate/type races remain deterministic.
-     *
-     * <p><b>Concurrency:</b> locking only the two endpoint task rows is insufficient: two concurrent
-     * writes with disjoint endpoints can still jointly close a longer cycle through already-existing
-     * edges. Endpoint rows are therefore locked first (ascending id) to stabilize ownership/project
-     * state, then every dependency mutation serializes on one stable graph-scope row: the owning
-     * project row for project-scoped tasks, or the user row for project-less tasks. The recursive
-     * cycle check and insert both execute while that scope lock is held until transaction commit.
-     * Unrelated projects remain independent.</p>
-     */
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
         Long userId = currentUserService.requireUserId();
@@ -252,8 +227,6 @@ public class TaskService {
             throw new IllegalArgumentException("A task cannot depend on a task from a different project");
         }
 
-        // The graph-scope lock closes the race that endpoint-only locking cannot: concurrent
-        // disjoint-endpoint writes in the same graph must not both validate against a stale graph.
         lockDependencyGraphScope(userId, task.getProjectId());
 
         if (taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
@@ -320,9 +293,6 @@ public class TaskService {
         LocalDateTime completionTimestamp = LocalDateTime.now();
         t.setStatus(Status.DONE);
         t.setCompletedDate(completionTimestamp);
-        // For a recurring task this resets the row back to NOT_STARTED for its next occurrence
-        // (see RecurrenceService), so toStatus below is the literal completion outcome at this
-        // moment, not whatever t.getStatus() happens to be after this call returns.
         recurrenceService.completeRecurringTask(t, completionTimestamp.toLocalDate());
         Task saved = save(t);
         if (saved.getProjectId() != null) {
