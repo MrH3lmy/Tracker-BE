@@ -1,4 +1,4 @@
-import type { NoteContentType, NoteRecord } from "./noteTypes";
+import type { NoteContentType, NoteRecord, NoteType } from "./noteTypes";
 
 export const NOTE_CONTENT_TYPES: NoteContentType[] = [
   "PLAIN_TEXT",
@@ -16,6 +16,8 @@ export interface NoteFormState {
   contentType: NoteContentType;
   taskId: string;
   collectionId: string;
+  projectId: string;
+  noteType: NoteType;
   tags: string;
   body: string;
 }
@@ -25,6 +27,8 @@ export const EMPTY_FORM: NoteFormState = {
   contentType: "PLAIN_TEXT",
   taskId: "",
   collectionId: "",
+  projectId: "",
+  noteType: "GENERAL",
   tags: "",
   body: "",
 };
@@ -80,6 +84,8 @@ export function noteToForm(note: NoteRecord): NoteFormState {
     contentType: note.contentType,
     taskId: note.taskId == null ? "" : String(note.taskId),
     collectionId: note.collectionId == null ? "" : String(note.collectionId),
+    projectId: note.projectId == null ? "" : String(note.projectId),
+    noteType: note.noteType ?? "GENERAL",
     tags: note.tags?.join(", ") ?? "",
     body: note.body,
   };
@@ -88,11 +94,14 @@ export function noteToForm(note: NoteRecord): NoteFormState {
 export function buildNotePayload(form: NoteFormState) {
   const trimmedTaskId = form.taskId.trim();
   const trimmedCollectionId = form.collectionId.trim();
+  const trimmedProjectId = form.projectId.trim();
   return {
     title: form.title.trim(),
     contentType: form.contentType,
     taskId: trimmedTaskId ? Number(trimmedTaskId) : null,
     collectionId: trimmedCollectionId ? Number(trimmedCollectionId) : null,
+    projectId: trimmedProjectId ? Number(trimmedProjectId) : null,
+    noteType: form.noteType,
     tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
     body: form.body,
   };

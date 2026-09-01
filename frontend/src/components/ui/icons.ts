@@ -32,6 +32,7 @@ export {
   Inbox,
   LayoutDashboard,
   Link2,
+  ListChecks,
   ListTodo,
   Loader2,
   Menu as MenuIcon,
@@ -52,6 +53,7 @@ export {
   Trash2,
   TrendingDown,
   Upload,
+  Users,
   Wrench,
   X,
 } from 'lucide-react';

@@ -21,7 +21,9 @@ import type {
   NoteContentType,
   NoteRecord,
   NoteTemplateRecord,
+  NoteType,
 } from "../components/notes/noteTypes";
+import type { ProjectRecord } from "../components/projects/projectTypes";
 import {
   buildNotePayload,
   EMPTY_FORM,
@@ -42,6 +44,7 @@ import {
   useNoteTemplatesQuery,
   useNoteSavedViewsQuery,
   useNotesQuery,
+  useProjectsQuery,
   useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
@@ -88,6 +91,8 @@ interface ConvertTaskModalState {
   area: string;
   effort: string;
   parentTaskId: string;
+  /** Set only when converting a persisted structured action item (issue #296) - see openConvertBlockModal. */
+  noteBlockId?: number;
 }
 
 function emptyFormForTask(taskId: string): NoteFormState {
@@ -113,6 +118,8 @@ export function NotesPage() {
   >("all");
   const [tagFilter, setTagFilter] = useState(() => searchParams.get("tag")?.trim() ?? "");
   const [collectionFilter, setCollectionFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState(() => searchParams.get("projectId")?.trim() ?? "");
+  const [noteTypeFilter, setNoteTypeFilter] = useState<NoteType | "all">("all");
   const [hasAttachmentsFilter, setHasAttachmentsFilter] = useState<"" | "true" | "false">("");
   const [linkedTaskFilter, setLinkedTaskFilter] = useState<"" | "true" | "false">("");
   const [untaggedFilter, setUntaggedFilter] = useState<"" | "true" | "false">("");
@@ -148,6 +155,8 @@ export function NotesPage() {
     contentType: contentTypeFilter,
     taskId: linkedTaskId,
     collectionId: collectionFilter,
+    projectId: projectFilter,
+    noteType: noteTypeFilter,
     tags: tagFilter,
     hasAttachments: hasAttachmentsFilter === "" ? "" : hasAttachmentsFilter === "true",
     linkedTask: linkedTaskFilter === "" ? "" : linkedTaskFilter === "true",
@@ -162,6 +171,7 @@ export function NotesPage() {
     size: notesPageSize,
   });
   const tasksQuery = useTasksQuery("active");
+  const projectsQuery = useProjectsQuery();
   const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView } =
     useNoteMutations();
   const latestMutationResult = latestResult(
@@ -181,6 +191,14 @@ export function NotesPage() {
   const taskTitleById = useMemo(
     () => new Map(availableTasks.map((task) => [task.id, task.title])),
     [availableTasks],
+  );
+  const projects = useMemo<ProjectRecord[]>(
+    () => (Array.isArray(projectsQuery.data?.data) ? projectsQuery.data.data : []),
+    [projectsQuery.data],
+  );
+  const projectTitleById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.name])),
+    [projects],
   );
   const collections = Array.isArray(collectionsQuery.data?.data)
     ? collectionsQuery.data.data
@@ -359,6 +377,16 @@ export function NotesPage() {
     setConvertTaskModal({ noteId: editingNoteId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
   };
 
+  /**
+   * Converts a persisted structured action item (a real `NoteBlock` row, not the draft block
+   * editor's client-only reconstruction) - passes `noteBlockId` so the backend's idempotent
+   * (note, block) conversion applies (issue #296/#287). Free-text conversion above never sets it.
+   */
+  const openConvertBlockModal = (note: NoteRecord, block: { id: number; content?: string | null }) => {
+    const trimmed = (block.content ?? "").trim();
+    setConvertTaskModal({ noteId: note.id, sourceText: trimmed, title: trimmed.slice(0, 255) || note.title, dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "", noteBlockId: block.id });
+  };
+
   const submitConvertTask = () => {
     if (!convertTaskModal) return;
     convertNoteToTask.mutate({
@@ -371,6 +399,7 @@ export function NotesPage() {
         area: convertTaskModal.area || null,
         effort: convertTaskModal.effort || null,
         parentTaskId: convertTaskModal.parentTaskId ? Number(convertTaskModal.parentTaskId) : null,
+        noteBlockId: convertTaskModal.noteBlockId ?? null,
       },
     }, { onSuccess: (result) => { if (result.ok) setConvertTaskModal(null); } });
   };
@@ -407,7 +436,7 @@ export function NotesPage() {
   }, []);
 
   const resetForm = () => {
-    setForm(emptyFormForTask(linkedTaskId));
+    setForm({ ...emptyFormForTask(linkedTaskId), projectId: projectFilter });
     setDraftBlocks(blocksFromBody(""));
     setShowRawBody(false);
     setEditingNoteId(null);
@@ -426,6 +455,8 @@ export function NotesPage() {
     setContentTypeFilter("all");
     setTagFilter("");
     setCollectionFilter("");
+    setProjectFilter("");
+    setNoteTypeFilter("all");
     setHasAttachmentsFilter("");
     setLinkedTaskFilter("");
     setUntaggedFilter("");
@@ -605,6 +636,11 @@ export function NotesPage() {
           collectionFilter={collectionFilter}
           setCollectionFilter={setCollectionFilter}
           collections={collections}
+          projectFilter={projectFilter}
+          setProjectFilter={setProjectFilter}
+          projects={projects}
+          noteTypeFilter={noteTypeFilter}
+          setNoteTypeFilter={setNoteTypeFilter}
           contentTypeFilter={contentTypeFilter}
           setContentTypeFilter={setContentTypeFilter}
           hasAttachmentsFilter={hasAttachmentsFilter}
@@ -680,6 +716,8 @@ export function NotesPage() {
                 key={note.id}
                 note={note}
                 layout="tile"
+                onConvertBlock={openConvertBlockModal}
+                projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
                 eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Sticky note #{getStickyNoteNumber(note)}</p>}
                 subtitle={<p className="text-xs text-fg-muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>}
                 actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
@@ -695,6 +733,8 @@ export function NotesPage() {
                 key={note.id}
                 note={note}
                 layout="row"
+                onConvertBlock={openConvertBlockModal}
+                projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
                 subtitle={<p className="text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>}
                 actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
               />
@@ -733,6 +773,8 @@ export function NotesPage() {
                       key={note.id}
                       note={note}
                       layout="row"
+                      onConvertBlock={openConvertBlockModal}
+                      projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
                       eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p>}
                       subtitle={<p className="text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>}
                       actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
@@ -802,6 +844,7 @@ export function NotesPage() {
         noteBodyRef={noteBodyRef}
         handleBodyPaste={handleBodyPaste}
         notes={notes}
+        projects={projects}
         deleteTaskLink={deleteTaskLink}
         clipboardImageMessage={clipboardImageMessage}
         pendingClipboardImages={pendingClipboardImages}
@@ -822,6 +865,9 @@ export function NotesPage() {
       >
         {convertTaskModal ? (
           <div className="flex flex-col gap-3">
+            {convertTaskModal.noteBlockId ? (
+              <p className="text-sm text-fg-muted">Converting this action item — it can only become one task, even if you convert it again.</p>
+            ) : null}
             <Field label="Title" htmlFor="convertTaskTitle">
               <Input id="convertTaskTitle" value={convertTaskModal.title} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, title: event.target.value } : current)} />
             </Field>

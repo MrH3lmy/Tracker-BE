@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { ActiveFilterChips, type ActiveFilterChip } from "./ActiveFilterChips";
-import type { NoteContentType } from "./noteTypes";
+import type { NoteContentType, NoteType } from "./noteTypes";
+import { NOTE_TYPE_VALUES } from "./noteTypes";
 import { humanizeContentType, NOTE_CONTENT_TYPES, type NoteSortBy, type NotesViewMode } from "./notesPageHelpers";
+import { formatEnumLabel } from "../../lib/enumLabels";
 import { Badge, Button, Field, Input, Popover, PopoverContent, PopoverTrigger, SegmentedControl, Select } from "../ui";
 import { Filter, Search } from "../ui/icons";
 
@@ -10,6 +12,9 @@ interface NotesToolbarProps {
   tagFilter: string; setTagFilter: (value: string) => void;
   collectionFilter: string; setCollectionFilter: (value: string) => void;
   collections: Array<{ id: number; name: string }>;
+  projectFilter: string; setProjectFilter: (value: string) => void;
+  projects: Array<{ id: number; name: string }>;
+  noteTypeFilter: NoteType | "all"; setNoteTypeFilter: (value: NoteType | "all") => void;
   contentTypeFilter: NoteContentType | "all"; setContentTypeFilter: (value: NoteContentType | "all") => void;
   hasAttachmentsFilter: "" | "true" | "false"; setHasAttachmentsFilter: (value: "" | "true" | "false") => void;
   linkedTaskFilter: "" | "true" | "false"; setLinkedTaskFilter: (value: "" | "true" | "false") => void;
@@ -35,6 +40,8 @@ export function NotesToolbar(props: NotesToolbarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const advancedFilterCount = [
     props.collectionFilter,
+    props.projectFilter,
+    props.noteTypeFilter !== "all" ? props.noteTypeFilter : "",
     props.contentTypeFilter !== "all" ? props.contentTypeFilter : "",
     props.tagFilter.trim(),
     props.hasAttachmentsFilter,
@@ -47,8 +54,11 @@ export function NotesToolbar(props: NotesToolbarProps) {
   ].filter(Boolean).length;
 
   const selectedCollectionName = props.collections.find((collection) => String(collection.id) === props.collectionFilter)?.name;
+  const selectedProjectName = props.projects.find((project) => String(project.id) === props.projectFilter)?.name;
   const filterChips: ActiveFilterChip[] = [
     selectedCollectionName ? { key: "collection", label: `Collection: ${selectedCollectionName}`, onClear: () => props.setCollectionFilter("") } : null,
+    selectedProjectName ? { key: "project", label: `Project: ${selectedProjectName}`, onClear: () => props.setProjectFilter("") } : null,
+    props.noteTypeFilter !== "all" ? { key: "noteType", label: `Note type: ${formatEnumLabel(props.noteTypeFilter)}`, onClear: () => props.setNoteTypeFilter("all") } : null,
     props.contentTypeFilter !== "all" ? { key: "contentType", label: `Type: ${humanizeContentType(props.contentTypeFilter)}`, onClear: () => props.setContentTypeFilter("all") } : null,
     props.tagFilter.trim() ? { key: "tag", label: `Tag: ${props.tagFilter.trim()}`, onClear: () => props.setTagFilter("") } : null,
     props.hasAttachmentsFilter ? { key: "attachments", label: props.hasAttachmentsFilter === "true" ? "Has attachments" : "No attachments", onClear: () => props.setHasAttachmentsFilter("") } : null,
@@ -88,6 +98,18 @@ export function NotesToolbar(props: NotesToolbarProps) {
                 <Select id="noteContentTypeFilter" value={props.contentTypeFilter} onChange={(event) => props.setContentTypeFilter(event.target.value as NoteContentType | "all")}>
                   <option value="all">All types</option>
                   {NOTE_CONTENT_TYPES.map((type) => <option key={type} value={type}>{humanizeContentType(type)}</option>)}
+                </Select>
+              </Field>
+              <Field label="Project" htmlFor="noteProjectFilter">
+                <Select id="noteProjectFilter" value={props.projectFilter} onChange={(event) => props.setProjectFilter(event.target.value)}>
+                  <option value="">All projects</option>
+                  {props.projects.map((project) => <option key={project.id} value={String(project.id)}>{project.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Note type" htmlFor="noteTypeFilter">
+                <Select id="noteTypeFilter" value={props.noteTypeFilter} onChange={(event) => props.setNoteTypeFilter(event.target.value as NoteType | "all")}>
+                  <option value="all">All note types</option>
+                  {NOTE_TYPE_VALUES.map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
                 </Select>
               </Field>
               <Field label="Sort by" htmlFor="noteSortBy">

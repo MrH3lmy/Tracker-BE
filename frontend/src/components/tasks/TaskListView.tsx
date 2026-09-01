@@ -4,6 +4,8 @@ import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import type { TaskTreeNode } from './taskTypes';
 import { riskVariantByLevel, taskStatusVariant } from './taskStyleUtils';
 import { formatDate, formatValue, isOverdue } from './taskUtils';
+import { BlockerDisclosure } from './BlockerDisclosure';
+import { ReadinessBadge } from './ReadinessBadge';
 import { Badge, Button, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, cn } from '../ui';
 import { Check, MoreHorizontal, StickyNote, Timer } from '../ui/icons';
 
@@ -163,7 +165,10 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
             </span>
           ) : null}
         </div>
-        <div role="cell" data-label="Status"><Badge variant={taskStatusVariant(task.status)}>{task.status ?? 'No status'}</Badge></div>
+        <div className="flex flex-wrap items-center gap-1.5" role="cell" data-label="Status">
+          <Badge variant={taskStatusVariant(task.status)}>{task.status ?? 'No status'}</Badge>
+          <ReadinessBadge blocked={task.blocked} />
+        </div>
         <div className="flex flex-wrap items-center gap-1.5" role="cell" data-label="Due date">
           <span className={cn('text-sm', overdue ? 'font-medium text-critical' : 'text-fg-muted')}>{formatDate(task.dueDate)}</span>
           {overdue ? <Badge variant="critical">Overdue</Badge> : null}
@@ -257,6 +262,9 @@ function TaskListItem({ task, busy, onComplete, onStartSubtask, onChangeStatus, 
               title="Dependencies"
               action={<Button size="sm" variant="ghost" onClick={() => onManageDependencies(task)} disabled={busy}>Manage dependencies</Button>}
             >
+              {task.blocked && task.blockers && task.blockers.length > 0 && (
+                <BlockerDisclosure blockers={task.blockers} defaultOpen />
+              )}
               <dl className="flex flex-col gap-1 text-sm">
                 <div className="flex gap-2"><dt className="w-24 shrink-0 text-fg-muted">Blocked by</dt><dd className="text-fg">{task.dependencyIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>
                 <div className="flex gap-2"><dt className="w-24 shrink-0 text-fg-muted">Blocks</dt><dd className="text-fg">{task.blockingTaskIds?.map((id) => `#${id}`).join(', ') || '—'}</dd></div>

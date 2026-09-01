@@ -3,7 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { useAnnouncement } from '../announcementContext';
 import { QueryState } from '../components/QueryState';
+import { BlockerDisclosure } from '../components/tasks/BlockerDisclosure';
 import { ManageDependenciesDrawer } from '../components/tasks/ManageDependenciesDrawer';
+import { ReadinessBadge } from '../components/tasks/ReadinessBadge';
 import { TaskCreateForm } from '../components/tasks/TaskCreateForm';
 import { buildTaskUpdateBody } from '../components/tasks/buildTaskUpdateBody';
 import type { CreateTaskPayload, TaskRecord } from '../components/tasks/taskTypes';
@@ -128,9 +130,12 @@ export function TaskDetailPage() {
 
           <Card>
             <CardHeader
-              title="Dependencies"
+              title={<span className="flex items-center gap-2">Dependencies <ReadinessBadge blocked={task.blocked} ready={task.ready} showReady /></span>}
               actions={<Button size="sm" variant="ghost" onClick={openDependencyManager} disabled={busy}>Manage dependencies</Button>}
             />
+            {task.blocked && task.blockers && task.blockers.length > 0 && (
+              <BlockerDisclosure blockers={task.blockers} defaultOpen className="mb-3" />
+            )}
             <dl className="flex flex-col gap-1 text-sm">
               <div className="flex gap-2"><dt className="w-24 shrink-0 text-fg-muted">Blocked by</dt><dd className="text-fg">{task.dependencyIds?.map((depId) => `#${depId}`).join(', ') || '—'}</dd></div>
               <div className="flex gap-2"><dt className="w-24 shrink-0 text-fg-muted">Blocks</dt><dd className="text-fg">{task.blockingTaskIds?.map((depId) => `#${depId}`).join(', ') || '—'}</dd></div>

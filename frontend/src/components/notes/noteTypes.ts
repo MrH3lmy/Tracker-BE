@@ -1,5 +1,16 @@
 export type NoteContentType = 'PLAIN_TEXT' | 'MARKDOWN' | 'SHELL_COMMANDS' | 'XML' | 'JSON';
 
+export const NOTE_TYPE_VALUES = [
+  'GENERAL',
+  'MEETING',
+  'RESEARCH',
+  'TECHNICAL',
+  'REQUIREMENTS',
+  'DECISION',
+  'RETROSPECTIVE',
+] as const;
+export type NoteType = (typeof NOTE_TYPE_VALUES)[number];
+
 export interface NoteAttachmentRecord {
   id: number;
   fileName: string;
@@ -32,6 +43,8 @@ export interface NoteRecord {
   taskId?: number | null;
   collectionId?: number | null;
   collectionName?: string | null;
+  projectId?: number | null;
+  noteType?: NoteType;
   displayOrder?: number | null;
   positionX?: number | null;
   positionY?: number | null;
@@ -44,6 +57,13 @@ export interface NoteRecord {
   createdAt?: string;
   updatedAt?: string;
   taskLinks?: NoteTaskLinkRecord[];
+  /**
+   * Persisted structured blocks (issue #296) - only populated for notes created from a template
+   * or restored from a version snapshot; a note edited only through the free-text/draft block
+   * editor has none. Cross-reference `taskLinks[].blockId` against `blocks[].id` to tell whether a
+   * given action item already has a task.
+   */
+  blocks?: NoteBlockRecord[];
 }
 
 

@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isQueryError } from '../apiClient';
 import { useAuth } from '../authContext';
-import { useHabitMutations, useHomeTodayQuery, useWeeklyReviewsQuery } from '../hooks/useApiQueries';
+import { useHabitMutations, useHomeTodayQuery, useTodayTasksQuery, useWeeklyReviewsQuery } from '../hooks/useApiQueries';
 import { formatEnumLabel } from '../lib/enumLabels';
+import { TodaySections } from '../components/tasks/TodaySections';
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader } from '../components/ui';
 import {
   AlertTriangle,
@@ -283,6 +284,7 @@ function HabitsTodayCard({ habits }: { habits: HabitPreview[] }) {
 export function TodayPage() {
   const { user } = useAuth();
   const query = useHomeTodayQuery(true);
+  const todayTasksQuery = useTodayTasksQuery();
   const today = useMemo(() => asHomeToday(query.data?.data), [query.data]);
   const isLoading = query.isLoading;
   const hasError = isQueryError(query.data);
@@ -337,6 +339,20 @@ export function TodayPage() {
 
       {!isLoading && !hasError && !isNewAccount && (
         <>
+          <Card aria-labelledby="today-sections-title">
+            <CardHeader
+              title={<span id="today-sections-title">What to work on</span>}
+              description="Ready tasks first, then what's blocked and why."
+            />
+            <TodaySections
+              data={todayTasksQuery.data?.data ?? undefined}
+              isLoading={todayTasksQuery.isLoading}
+              isError={isQueryError(todayTasksQuery.data)}
+              onRetry={() => todayTasksQuery.refetch()}
+              isRetrying={todayTasksQuery.isFetching}
+            />
+          </Card>
+
           <WeeklyReviewPrompt />
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
