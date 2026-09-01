@@ -21,7 +21,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -33,11 +32,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (Task.sourceNoteId), project inheritance from the note, idempotent duplicate protection for a
  * specific action-item block, and cross-user rejection. The existing free-text/no-block
  * conversion path is also covered to prove it's unchanged (still creates a new task per call).
+ *
+ * Deliberately NOT @Transactional at the class level: the action-item path runs part of its work
+ * in a REQUIRES_NEW transaction (see NoteTaskConversionWriter), which opens a genuinely separate
+ * DB connection - it would never see this test's own note/block fixtures if they were sitting
+ * uncommitted in an outer test-managed transaction. Each test creates its own user via
+ * TestAuthSupport.loginAsNewUser and scopes every assertion to the ids it created, so leftover
+ * (committed, not rolled back) rows from other tests in this class never interfere.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local-test")
-@Transactional
 class NoteTaskConversionIntegrationTest {
 
     @Autowired MockMvc mockMvc;
