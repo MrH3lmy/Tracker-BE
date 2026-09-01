@@ -65,7 +65,8 @@ public class TaskApiMapper {
                 task.getSubtaskCount(),
                 task.getCompletedSubtaskCount(),
                 task.getSubtaskProgressPercent(),
-                toRecurrenceResponse(task.getRecurrenceRule())
+                toRecurrenceResponse(task.getRecurrenceRule()),
+                task.getSourceNoteId()
         );
     }
 

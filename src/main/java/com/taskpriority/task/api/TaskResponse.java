@@ -53,7 +53,8 @@ public record TaskResponse(
         int subtaskCount,
         int completedSubtaskCount,
         int subtaskProgressPercent,
-        RecurrenceRuleResponse recurrence
+        RecurrenceRuleResponse recurrence,
+        Long sourceNoteId
 ) {
     public record RecurrenceRuleResponse(
             RecurrenceRule.Frequency frequency,
@@ -94,6 +95,6 @@ public record TaskResponse(
         this(id, title, description, dueDate, null, null, null, RiskLevel.LOW, null, null, null, null, null, createdDate,
                 createdDate, completedDate, important, status, area, effort, blockedReason, waitingOn, followUpDate, daysLeft,
                 overdue, urgent, priorityScore, priorityCategory, ageFlag, priorityReason, boardColumnId, position,
-                List.of(), List.of(), List.of(), 0, 0, 0, null);
+                List.of(), List.of(), List.of(), 0, 0, 0, null, null);
     }
 }

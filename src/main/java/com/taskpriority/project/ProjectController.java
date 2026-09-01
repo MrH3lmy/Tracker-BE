@@ -1,7 +1,10 @@
 package com.taskpriority.project;
 
 import com.taskpriority.common.exception.ApiErrorResponse;
+import com.taskpriority.model.NoteType;
 import com.taskpriority.model.Project;
+import com.taskpriority.notes.NoteService;
+import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.TaskResponse;
 import com.taskpriority.task.api.TodayResponse;
@@ -27,12 +30,14 @@ public class ProjectController {
     private final ProjectApiMapper mapper;
     private final TaskApiMapper taskApiMapper;
     private final TodayService todayService;
+    private final NoteService noteService;
 
-    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper, TodayService todayService) {
+    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper, TodayService todayService, NoteService noteService) {
         this.projectService = projectService;
         this.mapper = mapper;
         this.taskApiMapper = taskApiMapper;
         this.todayService = todayService;
+        this.noteService = noteService;
     }
 
     @Operation(summary = "List all projects")
@@ -60,6 +65,14 @@ public class ProjectController {
     @GetMapping("/{id}/tasks")
     public List<TaskResponse> tasks(@PathVariable Long id) {
         return projectService.findTasks(id).stream().map(taskApiMapper::toResponse).toList();
+    }
+
+    @Operation(summary = "List a project's notes", description = "Optionally filter by note type. 404s if the project isn't owned by the authenticated user.")
+    @ApiResponse(responseCode = "404", description = "Project not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GetMapping("/{id}/notes")
+    public List<NoteResponse> notes(@PathVariable Long id, @RequestParam(required = false) NoteType type) {
+        return noteService.findAll(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, id, type);
     }
 
     @Operation(summary = "Get today's actionable tasks for this project", description = "Same semantics as GET /api/v1/tasks/today, restricted to this project's tasks.")

@@ -35,7 +35,7 @@ public interface NoteRepository extends JpaRepository<Note, Long>, JpaSpecificat
 
     default List<Note> findAllMatching(Long userId, Long taskId, String query, NoteContentType contentType) {
         List<Long> noteIds = findIds(NoteSpecifications.matching(userId, taskId, null, query, contentType, null, null,
-                null, null, null, null, null, List.of(), null), Pageable.unpaged());
+                null, null, null, null, null, List.of(), null, null, null), Pageable.unpaged());
         if (noteIds.isEmpty()) {
             return List.of();
         }

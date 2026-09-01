@@ -4,6 +4,7 @@ import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.NoteTaskLink;
+import com.taskpriority.model.NoteType;
 import com.taskpriority.model.Tag;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -36,7 +37,9 @@ public final class NoteSpecifications {
             LocalDateTime updatedTo,
             Boolean untagged,
             List<String> tags,
-            String tagMode
+            String tagMode,
+            Long projectId,
+            NoteType noteType
     ) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is required to build a Note specification");
@@ -55,6 +58,12 @@ public final class NoteSpecifications {
             }
             if (collectionId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("collection").get("id"), collectionId));
+            }
+            if (projectId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("projectId"), projectId));
+            }
+            if (noteType != null) {
+                predicates.add(criteriaBuilder.equal(root.get("noteType"), noteType));
             }
             if (contentType != null) {
                 predicates.add(criteriaBuilder.equal(root.get("contentType"), contentType));

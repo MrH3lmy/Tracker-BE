@@ -27,7 +27,8 @@ import java.util.List;
         @Index(name = "idx_tasks_track", columnList = "track"),
         @Index(name = "idx_tasks_phase", columnList = "phase"),
         @Index(name = "idx_tasks_parent_task_id", columnList = "parent_task_id"),
-        @Index(name = "idx_tasks_project_id", columnList = "project_id")
+        @Index(name = "idx_tasks_project_id", columnList = "project_id"),
+        @Index(name = "idx_tasks_source_note_id", columnList = "source_note_id")
 })
 public class Task {
 
@@ -75,6 +76,12 @@ public class Task {
 
     @Column(name = "project_id")
     private Long projectId;
+
+    // Traceability back to the note this task was converted from (issue #287), when it was
+    // created via NoteTaskConversionService rather than directly. Plain scalar FK, matching the
+    // projectId/parentTaskId convention above.
+    @Column(name = "source_note_id")
+    private Long sourceNoteId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdDate = LocalDateTime.now();
@@ -189,6 +196,8 @@ public class Task {
     public void setParentTaskId(Long parentTaskId) { this.parentTaskId = parentTaskId; }
     public Long getProjectId() { return projectId; }
     public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public Long getSourceNoteId() { return sourceNoteId; }
+    public void setSourceNoteId(Long sourceNoteId) { this.sourceNoteId = sourceNoteId; }
     public LocalDateTime getCreatedDate() { return createdDate; }
     public void setCreatedDate(LocalDateTime createdDate) { this.createdDate = createdDate; }
     public LocalDateTime getUpdatedDate() { return updatedDate; }

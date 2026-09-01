@@ -30,7 +30,9 @@ import java.util.Set;
         @Index(name = "idx_notes_task_id", columnList = "task_id"),
         @Index(name = "idx_notes_content_type", columnList = "content_type"),
         @Index(name = "idx_notes_created_at", columnList = "created_at"),
-        @Index(name = "idx_notes_collection_id", columnList = "collection_id")
+        @Index(name = "idx_notes_collection_id", columnList = "collection_id"),
+        @Index(name = "idx_notes_project_id", columnList = "project_id"),
+        @Index(name = "idx_notes_note_type", columnList = "note_type")
 })
 public class Note {
 
@@ -90,6 +92,17 @@ public class Note {
     @OnDelete(action = OnDeleteAction.SET_NULL)
     private NoteCollection collection;
 
+    // Plain scalar FK, not a JPA relation - mirrors Task.projectId (the established pattern for
+    // optional cross-aggregate references in this codebase), not the @ManyToOne style used above
+    // for task/collection.
+    @Column(name = "project_id")
+    private Long projectId;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "note_type", nullable = false)
+    private NoteType noteType = NoteType.GENERAL;
+
     @ManyToMany
     @JoinTable(
             name = "note_tags",
@@ -136,6 +149,10 @@ public class Note {
     public void setZIndex(Integer zIndex) { this.zIndex = zIndex; }
     public NoteCollection getCollection() { return collection; }
     public void setCollection(NoteCollection collection) { this.collection = collection; }
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public NoteType getNoteType() { return noteType; }
+    public void setNoteType(NoteType noteType) { this.noteType = noteType == null ? NoteType.GENERAL : noteType; }
     public Set<Tag> getTags() { return tags; }
     public void setTags(Set<Tag> tags) { this.tags = tags; }
 
