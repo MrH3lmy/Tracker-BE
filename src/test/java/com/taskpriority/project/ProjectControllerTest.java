@@ -2,7 +2,9 @@ package com.taskpriority.project;
 
 import com.taskpriority.model.Project;
 import com.taskpriority.model.ProjectStatus;
+import com.taskpriority.notes.NoteService;
 import com.taskpriority.task.api.TaskApiMapper;
+import com.taskpriority.task.application.TodayService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,6 +38,15 @@ class ProjectControllerTest {
 
     @MockBean
     private TaskApiMapper taskApiMapper;
+
+    @MockBean
+    private TodayService todayService;
+
+    @MockBean
+    private NoteService noteService;
+
+    @MockBean
+    private ProjectActivityService activityService;
 
     private Project project() {
         Project project = new Project("Website relaunch");

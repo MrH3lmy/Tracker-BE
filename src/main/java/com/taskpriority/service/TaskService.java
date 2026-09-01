@@ -3,6 +3,7 @@ package com.taskpriority.service;
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
+import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.repository.BoardColumnRepository;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
@@ -39,8 +40,9 @@ public class TaskService {
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
     private final CurrentUserService currentUserService;
+    private final ProjectActivityService activityService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
@@ -49,6 +51,7 @@ public class TaskService {
         this.recurrenceService = recurrenceService;
         this.taskApiMapper = taskApiMapper;
         this.currentUserService = currentUserService;
+        this.activityService = activityService;
     }
 
     /**
@@ -64,7 +67,14 @@ public class TaskService {
     @Transactional
     public Task save(Task task) {
         Long userId = currentUserService.requireUserId();
-        if (task.getId() == null) {
+        // Captured before taskRepository.save() assigns an id, so this is the one choke point
+        // every creation path (direct create, subtask create, note-conversion create) goes
+        // through exactly once - see markComplete/updateTask below for the other two Today/
+        // activity-relevant events, which are intentionally NOT hooked here to avoid firing a
+        // generic TASK_UPDATED alongside every more specific mutation (move, project change,
+        // due-date change, ...) that also happens to call save().
+        boolean isCreate = task.getId() == null;
+        if (isCreate) {
             task.setUserId(userId);
         }
         validateParentTask(task);
@@ -79,6 +89,10 @@ public class TaskService {
         computeDerivedFields(task);
         Task saved = taskRepository.save(task);
         computeDerivedFields(saved);
+        if (isCreate && saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.TASK_CREATED, ActivityEntityType.TASK,
+                    saved.getId(), "Created task: " + saved.getTitle(), null);
+        }
         return saved;
     }
 
@@ -90,6 +104,10 @@ public class TaskService {
         if (request.dependencyIds() != null) {
             replaceDependencies(saved.getId(), request.dependencyIds());
             computeDerivedFields(saved);
+        }
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.TASK_UPDATED, ActivityEntityType.TASK,
+                    saved.getId(), "Updated task: " + saved.getTitle(), null);
         }
         return saved;
     }
@@ -238,11 +256,21 @@ public class TaskService {
     @Transactional
     public Task markComplete(Long id) {
         Task t = findById(id);
+        Status fromStatus = t.getStatus();
         LocalDateTime completionTimestamp = LocalDateTime.now();
         t.setStatus(Status.DONE);
         t.setCompletedDate(completionTimestamp);
+        // For a recurring task this resets the row back to NOT_STARTED for its next occurrence
+        // (see RecurrenceService), so toStatus below is the literal completion outcome at this
+        // moment, not whatever t.getStatus() happens to be after this call returns.
         recurrenceService.completeRecurringTask(t, completionTimestamp.toLocalDate());
-        return save(t);
+        Task saved = save(t);
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.TASK_COMPLETED, ActivityEntityType.TASK,
+                    saved.getId(), "Completed task: " + saved.getTitle(),
+                    Map.of("fromStatus", fromStatus.name(), "toStatus", Status.DONE.name()));
+        }
+        return saved;
     }
 
     @Transactional

@@ -2,6 +2,8 @@ package com.taskpriority.project;
 
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
+import com.taskpriority.model.ActivityEntityType;
+import com.taskpriority.model.ActivityEventType;
 import com.taskpriority.model.Milestone;
 import com.taskpriority.model.MilestoneStatus;
 import com.taskpriority.model.Project;
@@ -28,14 +30,17 @@ public class ProjectService {
     private final TaskRepository taskRepository;
     private final ProjectApiMapper mapper;
     private final CurrentUserService currentUserService;
+    private final ProjectActivityService activityService;
 
     public ProjectService(ProjectRepository projectRepository, MilestoneRepository milestoneRepository,
-                           TaskRepository taskRepository, ProjectApiMapper mapper, CurrentUserService currentUserService) {
+                           TaskRepository taskRepository, ProjectApiMapper mapper, CurrentUserService currentUserService,
+                           ProjectActivityService activityService) {
         this.projectRepository = projectRepository;
         this.milestoneRepository = milestoneRepository;
         this.taskRepository = taskRepository;
         this.mapper = mapper;
         this.currentUserService = currentUserService;
+        this.activityService = activityService;
     }
 
     @Transactional(readOnly = true)
@@ -56,14 +61,20 @@ public class ProjectService {
         Project project = mapper.fromCreateRequest(request);
         project.setUserId(userId);
         project.setOwnerUserId(userId);
-        return projectRepository.save(project);
+        Project saved = projectRepository.save(project);
+        activityService.record(saved.getId(), ActivityEventType.PROJECT_CREATED, ActivityEntityType.PROJECT,
+                saved.getId(), "Created project: " + saved.getName(), null);
+        return saved;
     }
 
     @Transactional
     public Project update(Long id, UpdateProjectRequest request) {
         Project project = findById(id);
         mapper.applyUpdateRequest(project, request);
-        return projectRepository.save(project);
+        Project saved = projectRepository.save(project);
+        activityService.record(saved.getId(), ActivityEventType.PROJECT_UPDATED, ActivityEntityType.PROJECT,
+                saved.getId(), "Updated project: " + saved.getName(), null);
+        return saved;
     }
 
     @Transactional

@@ -6,6 +6,7 @@ import com.taskpriority.notes.NoteService;
 import com.taskpriority.service.TaskService;
 import com.taskpriority.service.BlockerAnalysisService;
 import com.taskpriority.task.application.DuplicateDetectionService;
+import com.taskpriority.task.application.TodayService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -42,6 +43,9 @@ class TaskControllerV1ValidationTest {
 
     @MockBean
     private NoteService noteService;
+
+    @MockBean
+    private TodayService todayService;
 
     @Test
     void createReturnsBadRequestWithStandardizedErrorWhenTitleMissing() throws Exception {

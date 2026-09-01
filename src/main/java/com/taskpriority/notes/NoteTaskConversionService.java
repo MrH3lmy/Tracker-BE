@@ -5,6 +5,7 @@ import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.model.*;
 import com.taskpriority.notes.api.ConvertNoteToTaskRequest;
 import com.taskpriority.notes.api.ConvertNoteToTaskResponse;
+import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.repository.NoteBlockRepository;
 import com.taskpriority.repository.NoteRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
@@ -12,6 +13,8 @@ import com.taskpriority.service.TaskService;
 import com.taskpriority.task.api.TaskApiMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 @Service
 public class NoteTaskConversionService {
@@ -26,8 +29,9 @@ public class NoteTaskConversionService {
     private final TaskApiMapper taskApiMapper;
     private final NoteTaskLinkMapper linkMapper;
     private final CurrentUserService currentUserService;
+    private final ProjectActivityService activityService;
 
-    public NoteTaskConversionService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository linkRepository, TaskService taskService, TaskApiMapper taskApiMapper, NoteTaskLinkMapper linkMapper, CurrentUserService currentUserService) {
+    public NoteTaskConversionService(NoteRepository noteRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository linkRepository, TaskService taskService, TaskApiMapper taskApiMapper, NoteTaskLinkMapper linkMapper, CurrentUserService currentUserService, ProjectActivityService activityService) {
         this.noteRepository = noteRepository;
         this.noteBlockRepository = noteBlockRepository;
         this.linkRepository = linkRepository;
@@ -35,6 +39,7 @@ public class NoteTaskConversionService {
         this.taskApiMapper = taskApiMapper;
         this.linkMapper = linkMapper;
         this.currentUserService = currentUserService;
+        this.activityService = activityService;
     }
 
     /**
@@ -91,6 +96,14 @@ public class NoteTaskConversionService {
         link.setSelectedText(sourceText);
         link.setLinkType(linkType);
         NoteTaskLink savedLink = linkRepository.save(link);
+        // Distinct from the generic TASK_CREATED that TaskService.save() above already recorded
+        // (issue #288's minimum event list wants both): this one specifically marks "a task was
+        // produced from a note", which TASK_CREATED alone doesn't convey.
+        if (note.getProjectId() != null) {
+            activityService.record(note.getProjectId(), ActivityEventType.NOTE_TASK_CREATED, ActivityEntityType.TASK,
+                    savedTask.getId(), "Created task \"" + savedTask.getTitle() + "\" from note \"" + note.getTitle() + "\"",
+                    Map.of("noteId", note.getId()));
+        }
         return new ConvertNoteToTaskResponse(
                 taskApiMapper.toResponse(savedTask),
                 linkMapper.toResponse(savedLink)

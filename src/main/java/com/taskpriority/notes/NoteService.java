@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.entitlement.EntitlementService;
+import com.taskpriority.model.ActivityEntityType;
+import com.taskpriority.model.ActivityEventType;
 import com.taskpriority.model.AttachmentStorageProvider;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
@@ -29,6 +31,7 @@ import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
 import com.taskpriority.notes.storage.AttachmentStorage;
 import com.taskpriority.notes.storage.AttachmentStorageException;
 import com.taskpriority.notes.storage.StoredObject;
+import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteBlockRepository;
@@ -90,6 +93,7 @@ public class NoteService {
     private final CurrentUserService currentUserService;
     private final EntitlementService entitlementService;
     private final Optional<AttachmentStorage> attachmentStorage;
+    private final ProjectActivityService activityService;
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
@@ -101,7 +105,7 @@ public class NoteService {
     public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, ProjectRepository projectRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        CurrentUserService currentUserService, EntitlementService entitlementService,
-                       Optional<AttachmentStorage> attachmentStorage,
+                       Optional<AttachmentStorage> attachmentStorage, ProjectActivityService activityService,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
@@ -117,6 +121,7 @@ public class NoteService {
         this.currentUserService = currentUserService;
         this.entitlementService = entitlementService;
         this.attachmentStorage = attachmentStorage;
+        this.activityService = activityService;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 
@@ -269,7 +274,12 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(userId, request.tags()));
-        return toResponse(noteRepository.save(note));
+        Note saved = noteRepository.save(note);
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.NOTE_CREATED, ActivityEntityType.NOTE,
+                    saved.getId(), "Created note: " + saved.getTitle(), null);
+        }
+        return toResponse(saved);
     }
 
     @Transactional
@@ -296,7 +306,12 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(userId, request.tags()));
-        return toResponse(noteRepository.save(note));
+        Note saved = noteRepository.save(note);
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.NOTE_UPDATED, ActivityEntityType.NOTE,
+                    saved.getId(), "Updated note: " + saved.getTitle(), null);
+        }
+        return toResponse(saved);
     }
 
 
