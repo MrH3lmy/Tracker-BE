@@ -96,9 +96,10 @@ class NoteProjectAndTypeMigrationPostgresTest {
         Long otherUserId = jdbcTemplate.queryForObject(
                 "INSERT INTO users (email, password_hash) VALUES (?, ?) RETURNING id",
                 Long.class, "other-user@example.com", "irrelevant-hash");
+        // owner_user_id has been NOT NULL since V44 (enforce_focus_pause_and_project_owner_isolation).
         Long otherUsersProjectId = jdbcTemplate.queryForObject(
-                "INSERT INTO projects (user_id, name) VALUES (?, ?) RETURNING id",
-                Long.class, otherUserId, "Other user's project");
+                "INSERT INTO projects (user_id, owner_user_id, name) VALUES (?, ?, ?) RETURNING id",
+                Long.class, otherUserId, otherUserId, "Other user's project");
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 org.springframework.dao.DataIntegrityViolationException.class,
