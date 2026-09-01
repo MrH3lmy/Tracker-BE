@@ -24,9 +24,9 @@ public interface TaskRepository extends JpaRepository<Task, Long>, JpaSpecificat
 
     /**
      * Same lookup as {@link #findByUserIdAndId}, but takes a {@code SELECT ... FOR UPDATE} row
-     * lock on the task - used by {@code TaskService#addDependency} to serialize concurrent
-     * dependency-graph mutations that touch this task (see its Javadoc for why this is needed to
-     * keep the dependency graph acyclic under concurrent writes).
+     * lock on one endpoint task. Dependency writes lock both endpoints in ascending id order to
+     * stabilize ownership/project state. The actual acyclic-graph serialization is broader and is
+     * handled by the owning project/user graph-scope lock in {@code TaskService#addDependency}.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Task t where t.userId = :userId and t.id = :id")
