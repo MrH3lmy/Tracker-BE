@@ -8,7 +8,6 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
@@ -27,20 +26,16 @@ public class AttachmentStorageConfig {
     @Bean
     @ConditionalOnProperty(prefix = "app.storage.s3", name = "enabled", havingValue = "true")
     public S3Client s3Client(AttachmentStorageProperties properties) {
+        // Deliberately left at the SDK's default retry strategy - getObject/deleteObject/
+        // headBucket/createBucket all benefit from the SDK's normal transient-failure retries, and
+        // there is no reason to weaken that for the whole client. put()'s own one-shot upload
+        // stream used to make retries actively harmful (see S3AttachmentStorage#put), but that's
+        // now fixed by spooling the upload to a replayable file-backed RequestBody instead -
+        // solving it there, not by disabling retries here.
         S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(properties.getRegion()))
                 .credentialsProvider(credentialsProvider(properties))
-                .forcePathStyle(properties.isPathStyleAccess())
-                // put() streams the request body through a SHA-256 DigestInputStream that can only
-                // be read once - the SDK's default retry strategy re-reads the body via
-                // RequestBody's stream provider on every retry attempt, which fails with an
-                // unrelated IllegalStateException ("does not support mark/reset") instead of the
-                // network exception that triggered the retry in the first place, masking real
-                // failures behind a confusing one. Disabling retries here means a single failed
-                // attempt (DNS/connect/timeout, or a real S3 error) surfaces immediately and
-                // accurately as an SdkException - which S3AttachmentStorage already handles
-                // explicitly for both bucket auto-create at startup and real put/get/delete calls.
-                .overrideConfiguration(o -> o.retryStrategy(AwsRetryStrategy.doNotRetry()));
+                .forcePathStyle(properties.isPathStyleAccess());
         if (properties.getEndpoint() != null && !properties.getEndpoint().isBlank()) {
             builder.endpointOverride(URI.create(properties.getEndpoint()));
         }
