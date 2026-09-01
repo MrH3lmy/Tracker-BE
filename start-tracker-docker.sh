@@ -23,6 +23,56 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+port_is_in_use() {
+  local port="$1"
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1
+    return $?
+  fi
+
+  if command -v nc >/dev/null 2>&1; then
+    nc -z 127.0.0.1 "$port" >/dev/null 2>&1
+    return $?
+  fi
+
+  docker ps --format '{{.Ports}}' 2>/dev/null | grep -Eq "(^|, )(0\\.0\\.0\\.0|\\[::\\]):${port}->"
+}
+
+find_free_port() {
+  local candidate="$1"
+  while port_is_in_use "$candidate"; do
+    candidate=$((candidate + 1))
+  done
+  printf '%s' "$candidate"
+}
+
+compose_service_is_running() {
+  docker compose ps --status=running --services 2>/dev/null | grep -qx "$1"
+}
+
+# docker-compose.yml intentionally keeps the traditional MinIO host ports as defaults so direct
+# `docker compose up` remains predictable. The convenience launcher is more forgiving: when the
+# defaults are already owned by another local process, select free high ports automatically. This
+# only changes host publishing; app -> MinIO traffic remains http://minio:9000 on the Compose network.
+# Explicit shell overrides always win.
+if ! compose_service_is_running minio; then
+  if [ -z "${MINIO_PORT+x}" ] && port_is_in_use 9000; then
+    MINIO_PORT="$(find_free_port 19000)"
+    export MINIO_PORT
+    echo "Host port 9000 is already in use; using MINIO_PORT=$MINIO_PORT for this run."
+  fi
+
+  if [ -z "${MINIO_CONSOLE_PORT+x}" ] && port_is_in_use 9001; then
+    MINIO_CONSOLE_PORT="$(find_free_port 19001)"
+    if [ "${MINIO_PORT:-}" = "$MINIO_CONSOLE_PORT" ]; then
+      MINIO_CONSOLE_PORT="$(find_free_port $((MINIO_CONSOLE_PORT + 1)))"
+    fi
+    export MINIO_CONSOLE_PORT
+    echo "Host port 9001 is already in use; using MINIO_CONSOLE_PORT=$MINIO_CONSOLE_PORT for this run."
+  fi
+fi
+
 can_poll_frontend() {
   command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1
 }
@@ -94,6 +144,12 @@ echo "Starting Tracker with Docker Compose..."
 echo "Frontend URL: $FRONTEND_URL"
 echo "Backend URL: $BACKEND_URL"
 echo "Swagger UI: $SWAGGER_URL"
+if [ -n "${MINIO_PORT:-}" ]; then
+  echo "MinIO API host port: $MINIO_PORT (internal app endpoint remains minio:9000)"
+fi
+if [ -n "${MINIO_CONSOLE_PORT:-}" ]; then
+  echo "MinIO console host port: $MINIO_CONSOLE_PORT"
+fi
 echo
 
 docker compose up --build -d
