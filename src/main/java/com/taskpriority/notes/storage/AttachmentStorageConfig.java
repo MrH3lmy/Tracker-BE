@@ -26,6 +26,12 @@ public class AttachmentStorageConfig {
     @Bean
     @ConditionalOnProperty(prefix = "app.storage.s3", name = "enabled", havingValue = "true")
     public S3Client s3Client(AttachmentStorageProperties properties) {
+        // Deliberately left at the SDK's default retry strategy - getObject/deleteObject/
+        // headBucket/createBucket all benefit from the SDK's normal transient-failure retries, and
+        // there is no reason to weaken that for the whole client. put()'s own one-shot upload
+        // stream used to make retries actively harmful (see S3AttachmentStorage#put), but that's
+        // now fixed by spooling the upload to a replayable file-backed RequestBody instead -
+        // solving it there, not by disabling retries here.
         S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(properties.getRegion()))
                 .credentialsProvider(credentialsProvider(properties))
@@ -43,7 +49,10 @@ public class AttachmentStorageConfig {
         // The S3 implementation is wrapped rather than registered as the returned bean, so Spring
         // cannot invoke its @PostConstruct callback automatically. Initialize it explicitly before
         // exposing the transaction-aware decorator; this keeps Docker Compose/MinIO first-run
-        // behavior identical to the unwrapped implementation.
+        // behavior identical to the unwrapped implementation. ensureBucketExists() swallows every
+        // SdkException (bucket-already-exists/access-denied *and* DNS/connect/timeout failures
+        // alike - see its javadoc), so a temporarily unreachable object store can never fail this
+        // bean, and therefore can never fail Spring context startup for the whole application.
         s3Storage.ensureBucketExists();
         return new TransactionAwareAttachmentStorage(s3Storage);
     }
