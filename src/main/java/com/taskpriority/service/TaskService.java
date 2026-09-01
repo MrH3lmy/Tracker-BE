@@ -9,6 +9,7 @@ import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.repository.TaskSpecifications;
+import com.taskpriority.repository.UserRepository;
 import com.taskpriority.task.application.RecurrenceService;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.UpdateTaskRequest;
@@ -36,6 +37,7 @@ public class TaskService {
     private final TaskDependencyRepository taskDependencyRepository;
     private final BoardColumnRepository boardColumnRepository;
     private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
     private final PriorityEngine priorityEngine;
     private final RecurrenceService recurrenceService;
     private final TaskApiMapper taskApiMapper;
@@ -43,11 +45,12 @@ public class TaskService {
     private final ProjectActivityService activityService;
     private final TaskReadinessService taskReadinessService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService, TaskReadinessService taskReadinessService) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, UserRepository userRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService, TaskReadinessService taskReadinessService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
         this.projectRepository = projectRepository;
+        this.userRepository = userRepository;
         this.priorityEngine = priorityEngine;
         this.recurrenceService = recurrenceService;
         this.taskApiMapper = taskApiMapper;
@@ -212,31 +215,17 @@ public class TaskService {
     }
 
     /**
-     * Adds a "task depends on blocksTaskId" edge, enforcing (issue #282):
-     * <ul>
-     *   <li>same-user ownership of both tasks (404 otherwise, via {@link #requireOwnedTask});</li>
-     *   <li>no self-dependency;</li>
-     *   <li>no cross-project dependency - both tasks must share the same {@code projectId}
-     *       (including both being project-less, i.e. both null);</li>
-     *   <li>no cycle, direct or transitive, via {@link TaskDependencyRepository#existsDependencyPath};</li>
-     *   <li>idempotent duplicates - creating the same edge twice is a no-op, not an error.</li>
-     * </ul>
+     * Adds a dependency edge while enforcing ownership, project boundaries and the BLOCKS DAG.
+     * Informational RELATED edges do not participate in cycle detection, but they use the same
+     * graph-scope serialization so duplicate/type races remain deterministic.
      *
-     * <p><b>Concurrency:</b> two concurrent requests validating opposite edges (e.g. A depends on B,
-     * and B depends on A) against the graph as it stood before either committed could otherwise both
-     * see "no cycle" and both insert, leaving a cyclic graph that neither transaction observed. To
-     * prevent that, this method takes a {@code SELECT ... FOR UPDATE} row lock (see
-     * {@link TaskRepository#findByUserIdAndIdForUpdate}) on <em>both</em> endpoint tasks, always in
-     * ascending-id order (so two transactions locking the same pair can never deadlock against each
-     * other), before validating and mutating. Any two dependency mutations that could conflict to
-     * form a cycle necessarily share at least one endpoint task id - a 2-cycle (A-&gt;B, B-&gt;A)
-     * shares both endpoints, and a longer cycle closes through a chain of transactions that each
-     * share one endpoint with the next. Because every mutation locks all of its own endpoints, the
-     * first transaction to reach a shared task id blocks every other transaction that also needs it
-     * until it commits (or rolls back); the next transaction to acquire that lock then re-reads the
-     * dependency graph under READ COMMITTED and sees the first transaction's committed edge, so its
-     * own cycle check is evaluated against up-to-date data rather than a stale pre-lock snapshot.
-     * This serializes only mutations that actually touch a common task, never the whole table/user.
+     * <p><b>Concurrency:</b> locking only the two endpoint task rows is insufficient: two concurrent
+     * writes with disjoint endpoints can still jointly close a longer cycle through already-existing
+     * edges. Endpoint rows are therefore locked first (ascending id) to stabilize ownership/project
+     * state, then every dependency mutation serializes on one stable graph-scope row: the owning
+     * project row for project-scoped tasks, or the user row for project-less tasks. The recursive
+     * cycle check and insert both execute while that scope lock is held until transaction commit.
+     * Unrelated projects remain independent.</p>
      */
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
@@ -263,14 +252,20 @@ public class TaskService {
             throw new IllegalArgumentException("A task cannot depend on a task from a different project");
         }
 
+        // The graph-scope lock closes the race that endpoint-only locking cannot: concurrent
+        // disjoint-endpoint writes in the same graph must not both validate against a stale graph.
+        lockDependencyGraphScope(userId, task.getProjectId());
+
         if (taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
             computeDerivedFields(task);
             return task;
         }
 
-        // Would inserting task->blocksTask close a loop? Only if blocksTask can already
-        // (transitively) reach task by following existing task->blocksTask edges.
-        if (taskDependencyRepository.existsDependencyPath(userId, blocksTask.getId(), task.getId())) {
+        TaskDependencyType dependencyType = request.dependencyType() == null
+                ? TaskDependencyType.BLOCKS
+                : request.dependencyType();
+        if (dependencyType == TaskDependencyType.BLOCKS
+                && taskDependencyRepository.existsDependencyPath(userId, blocksTask.getId(), task.getId())) {
             throw new IllegalArgumentException("This dependency would create a cycle");
         }
 
@@ -278,11 +273,21 @@ public class TaskService {
         dependency.setUserId(userId);
         dependency.setTask(task);
         dependency.setBlocksTask(blocksTask);
-        dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
+        dependency.setDependencyType(dependencyType);
         taskDependencyRepository.save(dependency);
 
         computeDerivedFields(task);
         return task;
+    }
+
+    private void lockDependencyGraphScope(Long userId, Long projectId) {
+        if (projectId == null) {
+            userRepository.findByIdForUpdate(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+            return;
+        }
+        projectRepository.findByUserIdAndIdForUpdate(userId, projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project with id " + projectId + " not found"));
     }
 
     @Transactional
