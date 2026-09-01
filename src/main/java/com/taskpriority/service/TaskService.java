@@ -41,8 +41,9 @@ public class TaskService {
     private final TaskApiMapper taskApiMapper;
     private final CurrentUserService currentUserService;
     private final ProjectActivityService activityService;
+    private final TaskReadinessService taskReadinessService;
 
-    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService) {
+    public TaskService(TaskRepository taskRepository, TaskDependencyRepository taskDependencyRepository, BoardColumnRepository boardColumnRepository, ProjectRepository projectRepository, PriorityEngine priorityEngine, RecurrenceService recurrenceService, TaskApiMapper taskApiMapper, CurrentUserService currentUserService, ProjectActivityService activityService, TaskReadinessService taskReadinessService) {
         this.taskRepository = taskRepository;
         this.taskDependencyRepository = taskDependencyRepository;
         this.boardColumnRepository = boardColumnRepository;
@@ -52,6 +53,7 @@ public class TaskService {
         this.taskApiMapper = taskApiMapper;
         this.currentUserService = currentUserService;
         this.activityService = activityService;
+        this.taskReadinessService = taskReadinessService;
     }
 
     /**
@@ -209,23 +211,76 @@ public class TaskService {
         }
     }
 
+    /**
+     * Adds a "task depends on blocksTaskId" edge, enforcing (issue #282):
+     * <ul>
+     *   <li>same-user ownership of both tasks (404 otherwise, via {@link #requireOwnedTask});</li>
+     *   <li>no self-dependency;</li>
+     *   <li>no cross-project dependency - both tasks must share the same {@code projectId}
+     *       (including both being project-less, i.e. both null);</li>
+     *   <li>no cycle, direct or transitive, via {@link TaskDependencyRepository#existsDependencyPath};</li>
+     *   <li>idempotent duplicates - creating the same edge twice is a no-op, not an error.</li>
+     * </ul>
+     *
+     * <p><b>Concurrency:</b> two concurrent requests validating opposite edges (e.g. A depends on B,
+     * and B depends on A) against the graph as it stood before either committed could otherwise both
+     * see "no cycle" and both insert, leaving a cyclic graph that neither transaction observed. To
+     * prevent that, this method takes a {@code SELECT ... FOR UPDATE} row lock (see
+     * {@link TaskRepository#findByUserIdAndIdForUpdate}) on <em>both</em> endpoint tasks, always in
+     * ascending-id order (so two transactions locking the same pair can never deadlock against each
+     * other), before validating and mutating. Any two dependency mutations that could conflict to
+     * form a cycle necessarily share at least one endpoint task id - a 2-cycle (A-&gt;B, B-&gt;A)
+     * shares both endpoints, and a longer cycle closes through a chain of transactions that each
+     * share one endpoint with the next. Because every mutation locks all of its own endpoints, the
+     * first transaction to reach a shared task id blocks every other transaction that also needs it
+     * until it commits (or rolls back); the next transaction to acquire that lock then re-reads the
+     * dependency graph under READ COMMITTED and sees the first transaction's committed edge, so its
+     * own cycle check is evaluated against up-to-date data rather than a stale pre-lock snapshot.
+     * This serializes only mutations that actually touch a common task, never the whole table/user.
+     */
     @Transactional
     public Task addDependency(Long id, DependencyRequest request) {
         Long userId = currentUserService.requireUserId();
-        Task task = requireOwnedTask(id);
-        Task blocksTask = taskRepository.findByUserIdAndId(userId, request.blocksTaskId())
-                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + request.blocksTaskId() + " not found"));
-        if (task.getId().equals(blocksTask.getId())) {
+        requireOwnedTask(id);
+        Long blocksTaskId = request.blocksTaskId();
+        if (id.equals(blocksTaskId)) {
             throw new IllegalArgumentException("A task cannot depend on itself");
         }
-        if (!taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
-            TaskDependency dependency = new TaskDependency();
-            dependency.setUserId(userId);
-            dependency.setTask(task);
-            dependency.setBlocksTask(blocksTask);
-            dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
-            taskDependencyRepository.save(dependency);
+        if (!taskRepository.existsByUserIdAndId(userId, blocksTaskId)) {
+            throw new ResourceNotFoundException("Task with id " + blocksTaskId + " not found");
         }
+
+        Long lowerId = Math.min(id, blocksTaskId);
+        Long higherId = Math.max(id, blocksTaskId);
+        Task lower = taskRepository.findByUserIdAndIdForUpdate(userId, lowerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + lowerId + " not found"));
+        Task higher = taskRepository.findByUserIdAndIdForUpdate(userId, higherId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task with id " + higherId + " not found"));
+        Task task = id.equals(lowerId) ? lower : higher;
+        Task blocksTask = blocksTaskId.equals(lowerId) ? lower : higher;
+
+        if (!Objects.equals(task.getProjectId(), blocksTask.getProjectId())) {
+            throw new IllegalArgumentException("A task cannot depend on a task from a different project");
+        }
+
+        if (taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(userId, task.getId(), blocksTask.getId())) {
+            computeDerivedFields(task);
+            return task;
+        }
+
+        // Would inserting task->blocksTask close a loop? Only if blocksTask can already
+        // (transitively) reach task by following existing task->blocksTask edges.
+        if (taskDependencyRepository.existsDependencyPath(userId, blocksTask.getId(), task.getId())) {
+            throw new IllegalArgumentException("This dependency would create a cycle");
+        }
+
+        TaskDependency dependency = new TaskDependency();
+        dependency.setUserId(userId);
+        dependency.setTask(task);
+        dependency.setBlocksTask(blocksTask);
+        dependency.setDependencyType(request.dependencyType() == null ? TaskDependencyType.BLOCKS : request.dependencyType());
+        taskDependencyRepository.save(dependency);
+
         computeDerivedFields(task);
         return task;
     }
@@ -423,6 +478,7 @@ public class TaskService {
             task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
             task.setSubtaskCount(subtasks.size());
             task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
+            applyReadiness(task, taskReadinessService.computeForTask(userId, task));
         }
         applyPriority(task);
     }
@@ -442,6 +498,7 @@ public class TaskService {
                         Collectors.mapping(dependency -> dependency.getTask().getId(), Collectors.toList())));
         Map<Long, List<Task>> subtasksByParent = taskRepository.findByUserIdAndParentTaskIdInOrderByPositionAscIdAsc(userId, ids).stream()
                 .collect(Collectors.groupingBy(Task::getParentTaskId));
+        Map<Long, TaskReadinessService.Readiness> readinessByTask = taskReadinessService.computeBatch(userId, tasks);
 
         for (Task task : tasks) {
             if (task.getId() != null) {
@@ -451,9 +508,22 @@ public class TaskService {
                 task.setSubtaskIds(subtasks.stream().map(Task::getId).toList());
                 task.setSubtaskCount(subtasks.size());
                 task.setCompletedSubtaskCount((int) subtasks.stream().filter(subtask -> subtask.getStatus() == Status.DONE || subtask.getStatus() == Status.CANCELLED).count());
+                applyReadiness(task, readinessByTask.get(task.getId()));
             }
             applyPriority(task);
         }
+    }
+
+    private void applyReadiness(Task task, TaskReadinessService.Readiness readiness) {
+        if (readiness == null) {
+            task.setBlocked(false);
+            task.setReady(false);
+            task.setBlockers(List.of());
+            return;
+        }
+        task.setBlocked(readiness.blocked());
+        task.setReady(readiness.ready());
+        task.setBlockers(readiness.blockers());
     }
 
     private void applyPriority(Task task) {

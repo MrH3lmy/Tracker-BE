@@ -2,8 +2,10 @@ package com.taskpriority.repository;
 
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -19,6 +21,16 @@ public interface TaskRepository extends JpaRepository<Task, Long>, JpaSpecificat
     Optional<Task> findByUserIdAndId(Long userId, Long id);
 
     boolean existsByUserIdAndId(Long userId, Long id);
+
+    /**
+     * Same lookup as {@link #findByUserIdAndId}, but takes a {@code SELECT ... FOR UPDATE} row
+     * lock on the task - used by {@code TaskService#addDependency} to serialize concurrent
+     * dependency-graph mutations that touch this task (see its Javadoc for why this is needed to
+     * keep the dependency graph acyclic under concurrent writes).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Task t where t.userId = :userId and t.id = :id")
+    Optional<Task> findByUserIdAndIdForUpdate(@Param("userId") Long userId, @Param("id") Long id);
 
     long deleteByUserIdAndId(Long userId, Long id);
 
