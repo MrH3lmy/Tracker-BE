@@ -1,8 +1,10 @@
 package com.taskpriority.task.api;
 
+import com.taskpriority.model.Project;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.User;
+import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
@@ -35,14 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Real concurrency coverage for issue #282's cycle-prevention requirement: two genuinely
- * simultaneous requests that each independently look safe against the pre-race graph (A depends
- * on B, B depends on A; or a longer transitive loop) must never both succeed - the dependency
- * graph must stay acyclic even when neither request could see the other's write coming. This
- * needs real Postgres (Testcontainers, Flyway migrations applied) because the invariant under
- * test is the {@code SELECT ... FOR UPDATE} row-lock serialization in
- * {@code TaskService#addDependency} plus the {@code uk_task_dependencies_pair} unique constraint -
- * H2's locking semantics don't reliably exercise the same contention path.
+ * Real-Postgres concurrency coverage for issue #282's cycle-prevention invariant. Dependency
+ * writes serialize on the owning project row (or user row for project-less tasks) before the
+ * recursive cycle check and insert. The disjoint-endpoint test is the important regression case:
+ * endpoint-only locks cannot protect a cycle completed by two writes that share no endpoint.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
@@ -65,15 +63,27 @@ class TaskDependencyCycleConcurrencyPostgresTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private UserRepository userRepository;
+    @Autowired private ProjectRepository projectRepository;
     @Autowired private TaskRepository taskRepository;
     @Autowired private TaskDependencyRepository taskDependencyRepository;
 
     private Task saveTask(Long userId, String title) {
+        return saveTask(userId, title, null);
+    }
+
+    private Task saveTask(Long userId, String title, Long projectId) {
         Task task = new Task(title);
         task.setUserId(userId);
         task.setStatus(Status.NOT_STARTED);
         task.setPosition(1000);
+        task.setProjectId(projectId);
         return taskRepository.save(task);
+    }
+
+    private Long saveProject(Long userId, String name) {
+        Project project = new Project(name);
+        project.setUserId(userId);
+        return projectRepository.save(project).getId();
     }
 
     private MvcResult postDependency(Authentication authentication, Long taskId, Long blocksTaskId) throws Exception {
@@ -144,8 +154,8 @@ class TaskDependencyCycleConcurrencyPostgresTest {
         // Pre-existing edge B -> C (B depends on C), committed before the race starts.
         assertThat(postDependency(authentication, b.getId(), c.getId()).getResponse().getStatus()).isEqualTo(200);
 
-        // Concurrently: A -> B, and C -> A. Neither, checked alone against {B->C}, looks cyclic;
-        // together with B->C they would close A->B->C->A.
+        // Concurrently: A -> B, and C -> A. These share A, so endpoint locking alone happens to
+        // serialize this case; it remains useful as a transitive-cycle regression.
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch go = new CountDownLatch(1);
@@ -171,16 +181,70 @@ class TaskDependencyCycleConcurrencyPostgresTest {
             MvcResult r2 = f2.get(30, TimeUnit.SECONDS);
 
             List<Integer> statuses = new ArrayList<>(List.of(r1.getResponse().getStatus(), r2.getResponse().getStatus()));
-            // Both requests may legitimately succeed only if they don't end up forming a cycle
-            // together - assert on the actual invariant (acyclic graph) rather than which
-            // specific requests won, since either interleaving is a valid, safe outcome.
             assertThat(statuses).allMatch(status -> status == 200 || status == 400);
 
             boolean aToB = taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(alice.getId(), a.getId(), b.getId());
             boolean cToA = taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(alice.getId(), c.getId(), a.getId());
-            // The graph must never end up containing all three edges A->B, B->C, C->A at once -
-            // that would be a live 3-cycle.
             assertThat(aToB && cToA).as("A->B, B->C and C->A never all persist together (never cyclic)").isFalse();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentDisjointEndpointEdgesCannotJointlyCloseLongerCycle() throws Exception {
+        User alice = TestAuthSupport.loginAsNewUser(userRepository);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long projectId = saveProject(alice.getId(), "Concurrent DAG");
+
+        Task a = saveTask(alice.getId(), "A", projectId);
+        Task b = saveTask(alice.getId(), "B", projectId);
+        Task c = saveTask(alice.getId(), "C", projectId);
+        Task d = saveTask(alice.getId(), "D", projectId);
+
+        // Existing safe graph: B -> C and D -> A.
+        assertThat(postDependency(authentication, b.getId(), c.getId()).getResponse().getStatus()).isEqualTo(200);
+        assertThat(postDependency(authentication, d.getId(), a.getId()).getResponse().getStatus()).isEqualTo(200);
+
+        // These two new edges have DISJOINT endpoints. Each looks safe against the pre-race graph,
+        // but together they would create A -> B -> C -> D -> A. This is the case endpoint-only
+        // SELECT FOR UPDATE cannot serialize; the common project-row graph lock must do it.
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            Callable<MvcResult> createAToB = () -> {
+                ready.countDown();
+                go.await();
+                return postDependency(authentication, a.getId(), b.getId());
+            };
+            Callable<MvcResult> createCToD = () -> {
+                ready.countDown();
+                go.await();
+                return postDependency(authentication, c.getId(), d.getId());
+            };
+
+            Future<MvcResult> f1 = executor.submit(createAToB);
+            Future<MvcResult> f2 = executor.submit(createCToD);
+
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("both disjoint-endpoint workers reached the starting line").isTrue();
+            go.countDown();
+
+            MvcResult r1 = f1.get(30, TimeUnit.SECONDS);
+            MvcResult r2 = f2.get(30, TimeUnit.SECONDS);
+
+            List<Integer> statuses = List.of(r1.getResponse().getStatus(), r2.getResponse().getStatus());
+            assertThat(statuses).as("graph-scope serialization allows one edge and rejects the cycle-closing edge")
+                    .containsExactlyInAnyOrder(200, 400);
+
+            boolean aToB = taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(alice.getId(), a.getId(), b.getId());
+            boolean cToD = taskDependencyRepository.existsByUserIdAndTaskIdAndBlocksTaskId(alice.getId(), c.getId(), d.getId());
+            assertThat(aToB && cToD)
+                    .as("A->B, B->C, C->D and D->A must never all persist")
+                    .isFalse();
+            assertThat(taskDependencyRepository.findByUserId(alice.getId()))
+                    .as("two pre-existing edges plus exactly one concurrent edge")
+                    .hasSize(3);
         } finally {
             executor.shutdownNow();
         }
