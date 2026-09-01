@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.taskpriority.model.NoteAttachment;
+import com.taskpriority.model.Project;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.User;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteRepository;
+import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.UserRepository;
 import com.taskpriority.support.TestAuthSupport;
@@ -66,6 +68,9 @@ class NoteControllerApiTest {
 
     @Autowired
     private TaskRepository taskRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -642,6 +647,130 @@ class NoteControllerApiTest {
 
         org.assertj.core.api.Assertions.assertThat(multipartFileLimit).isGreaterThanOrEqualTo(businessLimit);
         org.assertj.core.api.Assertions.assertThat(multipartRequestLimit).isGreaterThanOrEqualTo(businessLimit);
+    }
+
+    @Test
+    void noteWithoutProjectDefaultsToGeneralType() throws Exception {
+        String payload = """
+                {"title":"No project","body":"Still works"}
+                """;
+
+        mockMvc.perform(post("/api/v1/notes").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.projectId").doesNotExist())
+                .andExpect(jsonPath("$.noteType").value("GENERAL"));
+    }
+
+    @Test
+    void createProjectScopedNoteWithType() throws Exception {
+        Project project = saveProject("Docs project");
+        String payload = """
+                {"title":"Kickoff notes","body":"Agenda + decisions","noteType":"MEETING","projectId":%d}
+                """.formatted(project.getId());
+
+        mockMvc.perform(post("/api/v1/notes").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.projectId").value(project.getId().intValue()))
+                .andExpect(jsonPath("$.noteType").value("MEETING"));
+    }
+
+    @Test
+    void creatingNoteWithAnotherUsersProjectIdReturns404() throws Exception {
+        Project ownProject = saveProject("My project");
+        User otherUser = TestAuthSupport.loginAsNewUser(userRepository); // switches auth context
+        // Note is created as "otherUser"; ownProject belongs to testUser, so it must be rejected.
+        String payload = """
+                {"title":"Sneaky note","body":"...","projectId":%d}
+                """.formatted(ownProject.getId());
+
+        mockMvc.perform(post("/api/v1/notes").contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isNotFound());
+        org.assertj.core.api.Assertions.assertThat(noteRepository.findByUserIdAndTaskIsNullOrderByUpdatedAtDescIdDesc(otherUser.getId())).isEmpty();
+    }
+
+    @Test
+    void findAllFiltersByProjectId() throws Exception {
+        Project projectA = saveProject("Project A");
+        Project projectB = saveProject("Project B");
+        createNoteWithProject("In A", projectA.getId(), null);
+        createNoteWithProject("In B", projectB.getId(), null);
+        createNote("No project", "body", null);
+
+        mockMvc.perform(get("/api/v1/notes").param("projectId", String.valueOf(projectA.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].title").value("In A"));
+    }
+
+    @Test
+    void findAllFiltersByNoteType() throws Exception {
+        createNoteWithProject("Meeting note", null, "MEETING");
+        createNoteWithProject("Research note", null, "RESEARCH");
+
+        mockMvc.perform(get("/api/v1/notes").param("type", "MEETING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].title").value("Meeting note"));
+    }
+
+    @Test
+    void projectNotesEndpointReturnsOnlyThatProjectsNotes() throws Exception {
+        Project projectA = saveProject("Project A");
+        Project projectB = saveProject("Project B");
+        createNoteWithProject("In A", projectA.getId(), null);
+        createNoteWithProject("In B", projectB.getId(), null);
+
+        mockMvc.perform(get("/api/v1/projects/{id}/notes", projectA.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].title").value("In A"));
+    }
+
+    @Test
+    void projectNotesEndpointFiltersByType() throws Exception {
+        Project project = saveProject("Project A");
+        createNoteWithProject("Meeting note", project.getId(), "MEETING");
+        createNoteWithProject("Research note", project.getId(), "RESEARCH");
+
+        mockMvc.perform(get("/api/v1/projects/{id}/notes", project.getId()).param("type", "MEETING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].title").value("Meeting note"));
+    }
+
+    @Test
+    void projectNotesEndpointForAnotherUsersProjectReturns404() throws Exception {
+        Project project = saveProject("My project");
+        TestAuthSupport.loginAsNewUser(userRepository); // switch auth context
+
+        mockMvc.perform(get("/api/v1/projects/{id}/notes", project.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    private Project saveProject(String name) {
+        Project project = new Project(name);
+        project.setUserId(testUser.getId());
+        return projectRepository.save(project);
+    }
+
+    private long createNoteWithProject(String title, Long projectId, String noteType) throws Exception {
+        ObjectNode payload = objectMapper.createObjectNode()
+                .put("title", title)
+                .put("body", "body");
+        if (projectId != null) {
+            payload.put("projectId", projectId);
+        }
+        if (noteType != null) {
+            payload.put("noteType", noteType);
+        }
+        String response = mockMvc.perform(post("/api/v1/notes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).get("id").asLong();
     }
 
     private Task saveTask(String title) {

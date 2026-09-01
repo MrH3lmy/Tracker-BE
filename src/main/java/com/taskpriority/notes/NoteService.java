@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taskpriority.auth.CurrentUserService;
 import com.taskpriority.common.exception.ResourceNotFoundException;
 import com.taskpriority.entitlement.EntitlementService;
+import com.taskpriority.model.ActivityEntityType;
+import com.taskpriority.model.ActivityEventType;
 import com.taskpriority.model.AttachmentStorageProvider;
 import com.taskpriority.model.Note;
 import com.taskpriority.model.NoteAttachment;
@@ -13,6 +15,7 @@ import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.NoteCollection;
 import com.taskpriority.model.NoteBlock;
 import com.taskpriority.model.NoteTaskLink;
+import com.taskpriority.model.NoteType;
 import com.taskpriority.model.NoteVersion;
 import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
@@ -28,6 +31,7 @@ import com.taskpriority.notes.api.UpdateNoteLayoutRequest;
 import com.taskpriority.notes.storage.AttachmentStorage;
 import com.taskpriority.notes.storage.AttachmentStorageException;
 import com.taskpriority.notes.storage.StoredObject;
+import com.taskpriority.project.ProjectActivityService;
 import com.taskpriority.task.api.TaskScreenshotResponse;
 import com.taskpriority.repository.NoteAttachmentRepository;
 import com.taskpriority.repository.NoteBlockRepository;
@@ -36,6 +40,7 @@ import com.taskpriority.repository.NoteSpecifications;
 import com.taskpriority.repository.NoteCollectionRepository;
 import com.taskpriority.repository.NoteTaskLinkRepository;
 import com.taskpriority.repository.NoteVersionRepository;
+import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
 import com.taskpriority.repository.TagRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -77,6 +82,7 @@ public class NoteService {
     private static final int MAX_ATTACHMENT_SOURCE_LENGTH = 100;
 
     private final TaskRepository taskRepository;
+    private final ProjectRepository projectRepository;
     private final TagRepository tagRepository;
     private final NoteAttachmentRepository noteAttachmentRepository;
     private final NoteBlockRepository noteBlockRepository;
@@ -87,6 +93,7 @@ public class NoteService {
     private final CurrentUserService currentUserService;
     private final EntitlementService entitlementService;
     private final Optional<AttachmentStorage> attachmentStorage;
+    private final ProjectActivityService activityService;
     private final long maxScreenshotSizeBytes;
     private static final Duration VERSION_DEBOUNCE = Duration.ofMinutes(2);
     private static final int MAJOR_EDIT_BODY_DELTA = 120;
@@ -95,14 +102,15 @@ public class NoteService {
     );
 
 
-    public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, TagRepository tagRepository,
+    public NoteService(NoteRepository noteRepository, NoteCollectionRepository noteCollectionRepository, TaskRepository taskRepository, ProjectRepository projectRepository, TagRepository tagRepository,
                        NoteAttachmentRepository noteAttachmentRepository, NoteBlockRepository noteBlockRepository, NoteTaskLinkRepository noteTaskLinkRepository, NoteVersionRepository noteVersionRepository, NoteTaskLinkMapper noteTaskLinkMapper, ObjectMapper objectMapper,
                        CurrentUserService currentUserService, EntitlementService entitlementService,
-                       Optional<AttachmentStorage> attachmentStorage,
+                       Optional<AttachmentStorage> attachmentStorage, ProjectActivityService activityService,
                        @Value("${app.notes.screenshots.max-file-size-bytes:5242880}") long maxScreenshotSizeBytes) {
         this.noteRepository = noteRepository;
         this.noteCollectionRepository = noteCollectionRepository;
         this.taskRepository = taskRepository;
+        this.projectRepository = projectRepository;
         this.tagRepository = tagRepository;
         this.noteAttachmentRepository = noteAttachmentRepository;
         this.noteBlockRepository = noteBlockRepository;
@@ -113,6 +121,7 @@ public class NoteService {
         this.currentUserService = currentUserService;
         this.entitlementService = entitlementService;
         this.attachmentStorage = attachmentStorage;
+        this.activityService = activityService;
         this.maxScreenshotSizeBytes = maxScreenshotSizeBytes;
     }
 
@@ -120,7 +129,8 @@ public class NoteService {
     public List<NoteResponse> findAll(Long taskId, Long collectionId, String query, NoteContentType contentType, List<String> tags,
                                       Boolean hasAttachments, Boolean linkedTask, String createdFrom, String createdTo,
                                       String updatedFrom, String updatedTo, Boolean untagged, String tagMode,
-                                      String sortBy, String sortDirection, Integer page, Integer size) {
+                                      String sortBy, String sortDirection, Integer page, Integer size,
+                                      Long projectId, NoteType noteType) {
         Long userId = currentUserService.requireUserId();
         if (taskId != null && !taskRepository.existsByUserIdAndId(userId, taskId)) {
             throw new ResourceNotFoundException("Task with id " + taskId + " not found");
@@ -128,12 +138,16 @@ public class NoteService {
         if (collectionId != null && !noteCollectionRepository.existsByUserIdAndId(userId, collectionId)) {
             throw new ResourceNotFoundException("Note collection with id " + collectionId + " not found");
         }
+        if (projectId != null && !projectRepository.existsByUserIdAndId(userId, projectId)) {
+            throw new ResourceNotFoundException("Project with id " + projectId + " not found");
+        }
         String normalizedQuery = normalizeQuery(query);
         List<String> normalizedTags = normalizeTags(tags);
         Pageable pageable = buildNotesPageable(sortBy, sortDirection, page, size, taskId != null);
         List<Long> noteIds = noteRepository.findIds(NoteSpecifications.matching(userId, taskId, collectionId, normalizedQuery, contentType,
                         hasAttachments, linkedTask, parseStartDateTime(createdFrom), parseEndDateTime(createdTo),
-                        parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode), pageable);
+                        parseStartDateTime(updatedFrom), parseEndDateTime(updatedTo), untagged, normalizedTags, tagMode,
+                        projectId, noteType), pageable);
         if (noteIds.isEmpty()) {
             return List.of();
         }
@@ -246,6 +260,8 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
+        note.setProjectId(resolveProjectId(request.projectId()));
+        note.setNoteType(request.noteType());
         // Read-then-increment, not atomic: two concurrent creates could read the same max and
         // assign the same displayOrder. Accepted for a single-user app - worst case is cosmetic
         // duplicate sticky-note numbers, not data loss. A true fix would need a DB sequence, but
@@ -258,7 +274,12 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(userId, request.tags()));
-        return toResponse(noteRepository.save(note));
+        Note saved = noteRepository.save(note);
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.NOTE_CREATED, ActivityEntityType.NOTE,
+                    saved.getId(), "Created note: " + saved.getTitle(), null);
+        }
+        return toResponse(saved);
     }
 
     @Transactional
@@ -273,6 +294,8 @@ public class NoteService {
         note.setContentType(contentType);
         note.setTask(resolveTask(request.taskId()));
         note.setCollection(resolveCollection(request.collectionId()));
+        note.setProjectId(resolveProjectId(request.projectId()));
+        note.setNoteType(request.noteType());
         if (request.displayOrder() != null) {
             note.setDisplayOrder(request.displayOrder());
         }
@@ -283,7 +306,12 @@ public class NoteService {
         note.setColor(normalizeColor(request.color()));
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(userId, request.tags()));
-        return toResponse(noteRepository.save(note));
+        Note saved = noteRepository.save(note);
+        if (saved.getProjectId() != null) {
+            activityService.record(saved.getProjectId(), ActivityEventType.NOTE_UPDATED, ActivityEntityType.NOTE,
+                    saved.getId(), "Updated note: " + saved.getTitle(), null);
+        }
+        return toResponse(saved);
     }
 
 
@@ -542,6 +570,20 @@ public class NoteService {
         }
         return taskRepository.findByUserIdAndId(currentUserService.requireUserId(), taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task with id " + taskId + " not found"));
+    }
+
+    /**
+     * Never trusts a supplied projectId merely because the row exists (issue #287) - a note can
+     * only be attached to a project the authenticated user owns.
+     */
+    private Long resolveProjectId(Long projectId) {
+        if (projectId == null) {
+            return null;
+        }
+        if (!projectRepository.existsByUserIdAndId(currentUserService.requireUserId(), projectId)) {
+            throw new ResourceNotFoundException("Project with id " + projectId + " not found");
+        }
+        return projectId;
     }
 
 
@@ -835,6 +877,8 @@ public class NoteService {
                 taskId,
                 collectionId,
                 collectionName,
+                note.getProjectId(),
+                note.getNoteType(),
                 note.getDisplayOrder(),
                 note.getPositionX(),
                 note.getPositionY(),

@@ -106,7 +106,7 @@ public class SearchService {
 
     private List<SearchResultItem> searchNotes(Long userId, String query, String tag) {
         List<String> tagFilter = (tag == null || tag.isBlank()) ? null : List.of(tag);
-        var spec = NoteSpecifications.matching(userId, null, null, query.isEmpty() ? null : query, null, null, null, null, null, null, null, null, tagFilter, "any");
+        var spec = NoteSpecifications.matching(userId, null, null, query.isEmpty() ? null : query, null, null, null, null, null, null, null, null, tagFilter, "any", null, null);
         List<Note> notes = noteRepository.findAll(spec);
         return notes.stream()
                 .map(note -> new SearchResultItem("NOTE", note.getId(), note.getTitle(), snippetOf(note.getBody()), "/notes?q=" + urlEncode(note.getTitle())))

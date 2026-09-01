@@ -3,6 +3,7 @@ package com.taskpriority.notes.api;
 import com.taskpriority.common.exception.ApiErrorResponse;
 import com.taskpriority.model.NoteAttachment;
 import com.taskpriority.model.NoteContentType;
+import com.taskpriority.model.NoteType;
 import com.taskpriority.notes.NoteService;
 import com.taskpriority.notes.NoteTaskConversionService;
 import com.taskpriority.notes.ai.NoteAiGenerationService;
@@ -47,7 +48,7 @@ public class NoteController {
         this.noteAiGenerationService = noteAiGenerationService;
     }
 
-    @Operation(summary = "List/search notes", description = "Supports filtering by task, collection, free-text query, content type, tags, attachment/link presence, created/updated date ranges, tag mode, sorting, and pagination.")
+    @Operation(summary = "List/search notes", description = "Supports filtering by task, collection, project, note type, free-text query, content type, tags, attachment/link presence, created/updated date ranges, tag mode, sorting, and pagination.")
     @GetMapping
     public List<NoteResponse> all(
             @RequestParam(required = false) Long taskId,
@@ -66,9 +67,11 @@ public class NoteController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) String sortDirection,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) NoteType type
     ) {
-        return noteService.findAll(taskId, collectionId, query, contentType, tags, hasAttachments, linkedTask, createdFrom, createdTo, updatedFrom, updatedTo, untagged, tagMode, sortBy, sortDirection, page, size);
+        return noteService.findAll(taskId, collectionId, query, contentType, tags, hasAttachments, linkedTask, createdFrom, createdTo, updatedFrom, updatedTo, untagged, tagMode, sortBy, sortDirection, page, size, projectId, type);
     }
 
     @Operation(summary = "Get a note by id")

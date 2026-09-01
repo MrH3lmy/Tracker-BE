@@ -1,6 +1,7 @@
 package com.taskpriority.notes.api;
 
 import com.taskpriority.model.NoteContentType;
+import com.taskpriority.model.NoteType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -22,6 +23,11 @@ public record CreateNoteRequest(
 
         @Positive(message = "collectionId must be greater than 0")
         Long collectionId,
+
+        @Positive(message = "projectId must be greater than 0")
+        Long projectId,
+
+        NoteType noteType,
 
         Integer displayOrder,
 

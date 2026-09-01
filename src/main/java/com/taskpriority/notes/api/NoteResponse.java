@@ -1,6 +1,7 @@
 package com.taskpriority.notes.api;
 
 import com.taskpriority.model.NoteContentType;
+import com.taskpriority.model.NoteType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,6 +14,8 @@ public record NoteResponse(
         Long taskId,
         Long collectionId,
         String collectionName,
+        Long projectId,
+        NoteType noteType,
         Integer displayOrder,
         Integer positionX,
         Integer positionY,

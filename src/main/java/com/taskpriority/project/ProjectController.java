@@ -1,15 +1,25 @@
 package com.taskpriority.project;
 
 import com.taskpriority.common.exception.ApiErrorResponse;
+import com.taskpriority.model.NoteType;
 import com.taskpriority.model.Project;
+import com.taskpriority.notes.NoteService;
+import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.task.api.TaskApiMapper;
 import com.taskpriority.task.api.TaskResponse;
+import com.taskpriority.task.api.TodayResponse;
+import com.taskpriority.task.application.TodayService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -21,14 +31,27 @@ import java.util.List;
 @RequestMapping("/api/v1/projects")
 @Tag(name = "Projects", description = "Projects, their tasks, and milestones")
 public class ProjectController {
+    // Same header-based pagination contract as TaskControllerV1 (X-Total-Count etc., plain JSON
+    // array body) - see that class's Javadoc for why. Sort is fixed, not client-specified, so
+    // pagination stays deterministic even when rows share an occurredAt timestamp.
+    static final int DEFAULT_ACTIVITY_PAGE_SIZE = 50;
+    static final int MAX_ACTIVITY_PAGE_SIZE = 200;
+    private static final Sort DEFAULT_ACTIVITY_SORT = Sort.by(Sort.Order.desc("occurredAt"), Sort.Order.desc("id"));
+
     private final ProjectService projectService;
     private final ProjectApiMapper mapper;
     private final TaskApiMapper taskApiMapper;
+    private final TodayService todayService;
+    private final NoteService noteService;
+    private final ProjectActivityService activityService;
 
-    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper) {
+    public ProjectController(ProjectService projectService, ProjectApiMapper mapper, TaskApiMapper taskApiMapper, TodayService todayService, NoteService noteService, ProjectActivityService activityService) {
         this.projectService = projectService;
         this.mapper = mapper;
         this.taskApiMapper = taskApiMapper;
+        this.todayService = todayService;
+        this.noteService = noteService;
+        this.activityService = activityService;
     }
 
     @Operation(summary = "List all projects")
@@ -56,6 +79,45 @@ public class ProjectController {
     @GetMapping("/{id}/tasks")
     public List<TaskResponse> tasks(@PathVariable Long id) {
         return projectService.findTasks(id).stream().map(taskApiMapper::toResponse).toList();
+    }
+
+    @Operation(summary = "List a project's notes", description = "Optionally filter by note type. 404s if the project isn't owned by the authenticated user.")
+    @ApiResponse(responseCode = "404", description = "Project not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GetMapping("/{id}/notes")
+    public List<NoteResponse> notes(@PathVariable Long id, @RequestParam(required = false) NoteType type) {
+        return noteService.findAll(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, id, type);
+    }
+
+    @Operation(summary = "Get today's actionable tasks for this project", description = "Same semantics as GET /api/v1/tasks/today, restricted to this project's tasks.")
+    @ApiResponse(responseCode = "404", description = "Project not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GetMapping("/{id}/today")
+    public TodayResponse today(@PathVariable Long id) {
+        return todayService.getProjectToday(id);
+    }
+
+    @Operation(summary = "Get a project's activity timeline", description = "Newest first (occurredAt desc, id desc as a tiebreaker), so pagination stays deterministic even when rows share a timestamp. Page metadata is returned in X-Total-Count/X-Total-Pages/X-Page/X-Page-Size/X-Has-Next headers, same contract as GET /api/v1/tasks.")
+    @ApiResponse(responseCode = "404", description = "Project not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GetMapping("/{id}/activity")
+    public ResponseEntity<List<ProjectActivityResponse>> activity(
+            @PathVariable Long id,
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size, capped at " + MAX_ACTIVITY_PAGE_SIZE) @RequestParam(defaultValue = "" + DEFAULT_ACTIVITY_PAGE_SIZE) int size
+    ) {
+        Page<ProjectActivityResponse> result = activityService.findPage(id, activityPageable(page, size));
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(result.getTotalElements()))
+                .header("X-Total-Pages", String.valueOf(result.getTotalPages()))
+                .header("X-Page", String.valueOf(result.getNumber()))
+                .header("X-Page-Size", String.valueOf(result.getSize()))
+                .header("X-Has-Next", String.valueOf(result.hasNext()))
+                .body(result.getContent());
+    }
+
+    private static Pageable activityPageable(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_ACTIVITY_PAGE_SIZE);
+        return PageRequest.of(safePage, safeSize, DEFAULT_ACTIVITY_SORT);
     }
 
     @Operation(summary = "Create a project")

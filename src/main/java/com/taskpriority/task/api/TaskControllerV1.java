@@ -10,6 +10,7 @@ import com.taskpriority.service.BlockerAnalysisService;
 import com.taskpriority.notes.NoteService;
 import com.taskpriority.notes.api.NoteResponse;
 import com.taskpriority.task.application.DuplicateDetectionService;
+import com.taskpriority.task.application.TodayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,9 +48,16 @@ public class TaskControllerV1 {
     private final DuplicateDetectionService duplicateDetectionService;
     private final BlockerAnalysisService blockerAnalysisService;
     private final NoteService noteService;
+    private final TodayService todayService;
 
-    public TaskControllerV1(TaskService taskService, TaskApiMapper mapper, DuplicateDetectionService duplicateDetectionService, BlockerAnalysisService blockerAnalysisService, NoteService noteService) {
-        this.taskService = taskService; this.mapper = mapper; this.duplicateDetectionService = duplicateDetectionService; this.blockerAnalysisService = blockerAnalysisService; this.noteService = noteService;
+    public TaskControllerV1(TaskService taskService, TaskApiMapper mapper, DuplicateDetectionService duplicateDetectionService, BlockerAnalysisService blockerAnalysisService, NoteService noteService, TodayService todayService) {
+        this.taskService = taskService; this.mapper = mapper; this.duplicateDetectionService = duplicateDetectionService; this.blockerAnalysisService = blockerAnalysisService; this.noteService = noteService; this.todayService = todayService;
+    }
+
+    @Operation(summary = "Get today's actionable tasks", description = "Overdue incomplete tasks, tasks due today, and tasks scheduled (start date) for today - excludes completed tasks and tasks belonging to another user. Deterministically ordered: overdue, then due-today, then scheduled-today, each group sorted by priority score, due date, then id.")
+    @GetMapping("/today")
+    public TodayResponse today() {
+        return todayService.getToday();
     }
 
     @Operation(summary = "List tasks", description = "Paginated and filtered at the database level. Page metadata (total count/pages, current page/size, hasNext) is returned in X-Total-Count/X-Total-Pages/X-Page/X-Page-Size/X-Has-Next response headers rather than the JSON body, so the body stays a plain array for backward compatibility with existing clients. size is capped server-side at " + MAX_PAGE_SIZE + " regardless of what's requested.")

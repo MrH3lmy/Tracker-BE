@@ -18,5 +18,14 @@ public record ConvertNoteToTaskRequest(
         Area area,
         Effort effort,
         @Positive(message = "parentTaskId must be greater than 0")
-        Long parentTaskId
+        Long parentTaskId,
+        /**
+         * The meeting-note action item being converted, i.e. a specific {@code NoteBlock} within
+         * this note (issue #287). When present, this is the idempotency key: converting the same
+         * (note, block) pair again returns the task/link already created for it instead of making
+         * a duplicate. Omitted entirely, behavior is unchanged from before this field existed -
+         * every call creates a new task from the free-text selection/title/body.
+         */
+        @Positive(message = "noteBlockId must be greater than 0")
+        Long noteBlockId
 ) {}

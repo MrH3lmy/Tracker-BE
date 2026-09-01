@@ -61,7 +61,8 @@ class ProjectServiceTest {
         when(currentUserService.requireUserId()).thenReturn(USER_ID);
         when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
         when(milestoneRepository.findByUserIdAndProjectIdOrderByTargetDateAscIdAsc(eq(USER_ID), any())).thenReturn(List.of());
-        projectService = new ProjectService(projectRepository, milestoneRepository, taskRepository, new ProjectApiMapper(), currentUserService);
+        ProjectActivityService activityService = mock(ProjectActivityService.class);
+        projectService = new ProjectService(projectRepository, milestoneRepository, taskRepository, new ProjectApiMapper(), currentUserService, activityService);
     }
 
     @Test
