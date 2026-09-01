@@ -225,14 +225,30 @@ Stop and remove DB volume:
 docker compose down -v
 ```
 
-Services:
+Services (default host ports):
 
 - Frontend: `http://localhost:5173`
 - App/API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
 - MinIO (S3-compatible object storage for note attachments): API `http://localhost:9000`, console `http://localhost:9001` (`taskpriority-dev` / `taskpriority-dev-secret`)
 
-The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:8080`, matching `frontend/.env.example`.
+The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:${APP_PORT:-8080}` at container-start time, so it tracks `APP_PORT` below automatically.
+
+#### Host port conflicts
+
+Every service's *host*-side port is configurable via environment variables (see `.env.example`) - only the port your machine listens on changes; the app always talks to the other containers over the internal Compose network (e.g. `http://minio:9000`), never through these host ports. If a port is already taken on your machine (a common one: MinIO's `9000`, which collides with other local dev tooling), override it:
+
+```bash
+MINIO_PORT=19000 MINIO_CONSOLE_PORT=19001 docker compose up
+```
+
+or copy `.env.example` to `.env` and edit it there for a change that persists across runs. Available overrides: `DB_PORT` (default `5432`), `MINIO_PORT` (default `9000`), `MINIO_CONSOLE_PORT` (default `9001`), `REDIS_PORT` (default `6379`), `APP_PORT` (default `8080`), `FRONTEND_PORT` (default `5173`).
+
+Three different addresses are in play and shouldn't be confused:
+
+1. **Backend container → MinIO**: always `http://minio:9000` (the Docker Compose service name and *container* port - see `STORAGE_S3_ENDPOINT` in `docker-compose.yml`). This never changes, regardless of `MINIO_PORT`.
+2. **Your browser/host tools → MinIO API**: `http://localhost:${MINIO_PORT:-9000}` (only needed if you inspect the bucket directly with `mc`/an S3 client; the app itself never uses this address).
+3. **Your browser → MinIO console**: `http://localhost:${MINIO_CONSOLE_PORT:-9001}`.
 
 ### Note attachment storage
 

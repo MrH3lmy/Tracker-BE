@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: taskpriority
       POSTGRES_PASSWORD: taskpriority
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,8 +31,8 @@ services:
       MINIO_ROOT_PASSWORD: taskpriority-dev-secret
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -47,7 +47,7 @@ services:
     mem_limit: 256m
     cpus: 0.25
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -93,7 +93,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
 
   frontend:
     image: node:22-alpine
@@ -104,9 +104,9 @@ services:
     depends_on:
       - app
     environment:
-      VITE_API_BASE_URL: http://localhost:8080
+      VITE_API_BASE_URL: http://localhost:${APP_PORT:-8080}
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
