@@ -3,6 +3,7 @@ package com.taskpriority.task.api;
 import com.taskpriority.model.Project;
 import com.taskpriority.model.Status;
 import com.taskpriority.model.Task;
+import com.taskpriority.model.TaskDependencyType;
 import com.taskpriority.model.User;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskDependencyRepository;
@@ -18,6 +19,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,7 +73,14 @@ class TaskDependencyReadinessIntegrationTest {
     }
 
     private String dependencyBody(Long blocksTaskId) {
-        return "{\"blocksTaskId\":" + blocksTaskId + "}";
+        return dependencyBody(blocksTaskId, null);
+    }
+
+    private String dependencyBody(Long blocksTaskId, TaskDependencyType dependencyType) {
+        if (dependencyType == null) {
+            return "{\"blocksTaskId\":" + blocksTaskId + "}";
+        }
+        return "{\"blocksTaskId\":" + blocksTaskId + ",\"dependencyType\":\"" + dependencyType.name() + "\"}";
     }
 
     // ---- Readiness rules ----------------------------------------------------------------
@@ -84,6 +94,27 @@ class TaskDependencyReadinessIntegrationTest {
                 .andExpect(jsonPath("$.blocked").value(false))
                 .andExpect(jsonPath("$.ready").value(true))
                 .andExpect(jsonPath("$.blockers.length()").value(0));
+    }
+
+    @Test
+    void readinessHonorsWorkflowActionabilityAcrossAllStatuses() throws Exception {
+        Map<Status, Boolean> expectedReady = Map.of(
+                Status.BACKLOG, false,
+                Status.NOT_STARTED, true,
+                Status.IN_PROGRESS, true,
+                Status.WAITING, false,
+                Status.BLOCKED, false,
+                Status.DONE, false,
+                Status.CANCELLED, false
+        );
+
+        for (Map.Entry<Status, Boolean> entry : expectedReady.entrySet()) {
+            Task task = saveTask("Status " + entry.getKey(), entry.getKey(), null);
+            mockMvc.perform(get("/api/v1/tasks/{id}", task.getId()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.blocked").value(false))
+                    .andExpect(jsonPath("$.ready").value(entry.getValue()));
+        }
     }
 
     @Test
@@ -101,6 +132,20 @@ class TaskDependencyReadinessIntegrationTest {
                 .andExpect(jsonPath("$.blockers[0].id").value(blocker.getId()))
                 .andExpect(jsonPath("$.blockers[0].title").value("Blocker"))
                 .andExpect(jsonPath("$.blockers[0].status").value("IN_PROGRESS"));
+    }
+
+    @Test
+    void waitingTaskCanExposeDependencyBlockersButIsNeverReady() throws Exception {
+        Task blocker = saveTask("Blocker", Status.IN_PROGRESS, null);
+        Task task = saveTask("Waiting dependent", Status.WAITING, null);
+
+        mockMvc.perform(post("/api/v1/tasks/{id}/dependencies", task.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dependencyBody(blocker.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocked").value(true))
+                .andExpect(jsonPath("$.ready").value(false))
+                .andExpect(jsonPath("$.blockers[0].id").value(blocker.getId()));
     }
 
     @Test
@@ -188,6 +233,28 @@ class TaskDependencyReadinessIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.blocked").value(false))
                 .andExpect(jsonPath("$.ready").value(true));
+    }
+
+    @Test
+    void relatedDependencyIsInformationalAndDoesNotParticipateInBlocksDag() throws Exception {
+        Task a = saveTask("A", Status.NOT_STARTED, null);
+        Task b = saveTask("B", Status.NOT_STARTED, null);
+
+        // A RELATED->B must neither block A nor create a prerequisite-DAG path.
+        mockMvc.perform(post("/api/v1/tasks/{id}/dependencies", a.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dependencyBody(b.getId(), TaskDependencyType.RELATED)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocked").value(false))
+                .andExpect(jsonPath("$.ready").value(true));
+
+        // B BLOCKS->A would form a directed cycle only if RELATED were incorrectly included.
+        mockMvc.perform(post("/api/v1/tasks/{id}/dependencies", b.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dependencyBody(a.getId(), TaskDependencyType.BLOCKS)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocked").value(true))
+                .andExpect(jsonPath("$.ready").value(false));
     }
 
     // ---- Validation -----------------------------------------------------------------------
