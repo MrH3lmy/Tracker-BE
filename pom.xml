@@ -112,6 +112,21 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- awssdk:s3 -> http-client-spi -> httpclient5:5.5.2 still declares httpcore5/httpcore5-h2
+             5.3.6, which has HIGH CVEs fixed in 5.4.3 (CVE-2026-54399, CVE-2026-54428) - force both
+             to the fixed version directly, same technique as the postgresql pin above. -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5</artifactId>
+            <version>5.4.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5-h2</artifactId>
+            <version>5.4.3</version>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
