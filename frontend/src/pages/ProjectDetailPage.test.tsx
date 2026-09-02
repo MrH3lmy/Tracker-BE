@@ -36,6 +36,9 @@ const TASKS = [
     ready: false,
     blockers: [{ id: 100, title: 'Ready checkout task', status: 'NOT_STARTED' }],
   },
+  // Not dependency-blocked but not actionable either (issue #297 regression case): must not be
+  // counted or filtered into "Ready to work" just because blocked=false.
+  { id: 102, title: 'Waiting checkout task', status: 'WAITING', projectId: 1, blocked: false, ready: false },
 ];
 
 function mockFetch() {
@@ -111,6 +114,26 @@ describe('ProjectDetailPage - Project Command Center', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear filter' }));
     expect(await screen.findByText('Ready checkout task')).toBeInTheDocument();
+  });
+
+  it('counts and filters "Ready to work" using the backend ready field, not just the absence of blocked (issue #297 regression)', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Checkout revamp');
+
+    // Only the one NOT_STARTED/ready=true task counts, even though the WAITING task also has
+    // blocked=false - it must not be miscounted as ready just because it isn't dependency-blocked.
+    const readyButton = screen.getByRole('button', { name: /Ready to work/ });
+    expect(within(readyButton).getByText('1')).toBeInTheDocument();
+
+    await user.click(readyButton);
+
+    expect(await screen.findByText('Filtered: Ready')).toBeInTheDocument();
+    expect(screen.getByText('Ready checkout task')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting checkout task')).not.toBeInTheDocument();
+    expect(screen.queryByText('Blocked checkout task')).not.toBeInTheDocument();
   });
 
   it('navigates to the Notes tab and shows an empty state that teaches the next action', async () => {

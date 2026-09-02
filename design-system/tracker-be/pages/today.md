@@ -23,8 +23,15 @@ Two-column at `lg:` (`grid-cols-[minmax(0,1fr)_320px]`), single column below tha
 2. **Blocked** panel directly below, same anatomy but orange (`bg-caution-soft`/`text-caution`,
    `border-caution/40`) - a genuinely different color block, not a smaller/quieter version of the
    Ready panel, so blocked reads as its own state rather than an afterthought.
-3. Today's timeline and top recommendations stay in the primary column (still "what to do today"),
-   below the two panels.
+3. **Waiting / not actionable** panel below that (added per the follow-up review, issue #297):
+   dependency readiness (`blocked`) and status-actionability (`ready`) are two separate backend
+   fields - a `WAITING`/`BACKLOG`/manually-`BLOCKED` task can have `blocked=false` without being
+   `ready`. Classifying "Ready to work" from `!blocked` alone silently mislabeled those tasks as
+   actionable. This third, deliberately muted panel (`bg-inset`, neutral `fg-subtle` icon chip -
+   not colored like Ready/Blocked, since it isn't an alert) keeps them visible without either
+   claiming they're ready or dropping them from view.
+4. Today's timeline and top recommendations stay in the primary column (still "what to do today"),
+   below the three panels.
 
 **Secondary column** (`aside`, narrower, per the review's "habits/timeline/weekly review clearly
 secondary" instruction):

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge, Button, EmptyState } from '../ui';
-import { AlertTriangle, CheckCircle2, Inbox } from '../ui/icons';
+import { AlertTriangle, CheckCircle2, Clock, Inbox } from '../ui/icons';
 import { formatEnumLabel } from '../../lib/enumLabels';
 import { BlockerDisclosure } from './BlockerDisclosure';
 import { ReadinessBadge } from './ReadinessBadge';
@@ -83,8 +83,13 @@ export function TodaySections({
   emptyDescription = "You're clear — nothing overdue, due, or scheduled for today.",
 }: TodaySectionsProps) {
   const tasks = useMemo(() => data?.tasks ?? [], [data]);
-  const ready = useMemo(() => tasks.filter((entry) => !entry.blocked), [tasks]);
   const blocked = useMemo(() => tasks.filter((entry) => entry.blocked), [tasks]);
+  // `entry.blocked` is dependency-derived; `task.ready` is the backend's separate authoritative
+  // field for whether a task's own status is actionable (issue #291/#297 review) - a WAITING or
+  // BACKLOG task can be unblocked (blocked=false) without being ready. Never infer readiness from
+  // `!blocked` alone: that silently treats non-actionable statuses as "ready to work".
+  const ready = useMemo(() => tasks.filter((entry) => !entry.blocked && entry.task.ready === true), [tasks]);
+  const waiting = useMemo(() => tasks.filter((entry) => !entry.blocked && entry.task.ready !== true), [tasks]);
   const readyByReason = useMemo(
     () => REASON_ORDER.map((reason) => ({ reason, items: ready.filter((entry) => entry.todayReason === reason) })).filter((group) => group.items.length > 0),
     [ready],
@@ -158,6 +163,26 @@ export function TodaySections({
           </div>
           <ul className="flex flex-col divide-y divide-line px-4 py-1 sm:px-5">
             {blocked.map((entry) => <TodayRow key={entry.task.id} entry={entry} />)}
+          </ul>
+        </section>
+      )}
+
+      {waiting.length > 0 && (
+        <section aria-labelledby="today-waiting-heading" className="overflow-hidden rounded-2xl border border-line bg-card">
+          <div className="flex items-center justify-between gap-3 bg-inset px-4 py-3.5 sm:px-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-fg-subtle/15 text-fg-subtle">
+                <Clock className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h3 id="today-waiting-heading" className="text-sm font-bold tracking-tight text-fg sm:text-base">Waiting / not actionable</h3>
+                <p className="text-xs text-fg-muted">Not blocked by a dependency, but not ready to work by status</p>
+              </div>
+            </div>
+            <span className="font-mono text-2xl font-bold text-fg-subtle tabular-nums sm:text-3xl">{waiting.length}</span>
+          </div>
+          <ul className="flex flex-col divide-y divide-line px-4 py-1 sm:px-5">
+            {waiting.map((entry) => <TodayRow key={entry.task.id} entry={entry} />)}
           </ul>
         </section>
       )}

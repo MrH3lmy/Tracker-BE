@@ -110,7 +110,10 @@ export function ProjectDetailPage() {
     return [...notes].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')).slice(0, 3);
   }, [recentNotesQuery.data]);
 
-  const readyTasks = useMemo(() => tasks.filter((task) => !task.blocked), [tasks]);
+  // `task.ready` is the backend's authoritative derived field, distinct from `!task.blocked`
+  // (issue #291/#297 review) - BACKLOG/WAITING/manually-BLOCKED/DONE/CANCELLED tasks can be
+  // blocked=false without being actionable, and must not count as "Ready to work".
+  const readyTasks = useMemo(() => tasks.filter((task) => task.ready === true), [tasks]);
   const blockedTasks = useMemo(() => tasks.filter((task) => task.blocked), [tasks]);
   const visibleTasks = useMemo(() => {
     if (readinessFilter === 'ready') return readyTasks;
