@@ -1,4 +1,14 @@
-@import "@fontsource-variable/inter";
+/*
+ * Typography (UI UX Pro Max "Dashboard Data" pairing - Fira Sans body / Fira Code for
+ * tabular/numeric emphasis): a deliberate departure from the previous Inter-everywhere
+ * system, chosen for the "technical, precise, dashboard" mood the design-system search
+ * returned for this product type. See design-system/tracker-be/MASTER.md.
+ */
+@import "@fontsource/fira-sans/400.css";
+@import "@fontsource/fira-sans/500.css";
+@import "@fontsource/fira-sans/600.css";
+@import "@fontsource/fira-sans/700.css";
+@import "@fontsource-variable/fira-code";
 @import "tailwindcss";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -10,63 +20,70 @@
  * (bg-canvas, text-fg-muted, border-line, bg-brand, ...).
  */
 
+/*
+ * "Cockpit" palette (UI UX Pro Max --design-system, product type "Productivity Tool":
+ * teal primary + orange functional accent). Deliberately different hue family from the
+ * previous blue Light Modern / Midnight Pro theme - see design-system/tracker-be/MASTER.md
+ * for the search transcript and design-system-tool-output/ for the raw tool output.
+ * Every text/background pair below is verified >=4.5:1 (script in that same folder).
+ */
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --app-canvas: #f7f8fa;
+  --app-canvas: #f0fdfa;
   --app-card: #ffffff;
-  --app-glass: rgb(255 255 255 / 0.75);
-  --app-inset: #eef0f3;
+  --app-glass: #ffffff;
+  --app-inset: #e6f7f4;
   --app-raised: #ffffff;
   --app-scrim: rgb(15 23 42 / 0.4);
-  --app-fg: #0f172a;
+  --app-fg: #134e4a;
   --app-fg-muted: #475569;
-  --app-fg-subtle: #71809a;
-  --app-line: #e2e8f0;
-  --app-line-strong: #cbd5e1;
-  --app-brand: #2563eb;
-  --app-brand-hover: #1d4ed8;
-  --app-brand-soft: #eff6ff;
+  --app-fg-subtle: #64837e;
+  --app-line: #b9e4dc;
+  --app-line-strong: #7fd0c2;
+  --app-brand: #0f766e;
+  --app-brand-hover: #115e59;
+  --app-brand-soft: #ccfbf1;
   --app-brand-fg: #ffffff;
-  --app-positive: #15803d;
-  --app-positive-soft: #f0fdf4;
-  --app-caution: #b45309;
-  --app-caution-soft: #fffbeb;
-  --app-critical: #dc2626;
-  --app-critical-soft: #fff7f7;
+  --app-positive: #047857;
+  --app-positive-soft: #d1fae5;
+  --app-caution: #9a3412;
+  --app-caution-soft: #ffedd5;
+  --app-critical: #b91c1c;
+  --app-critical-soft: #fee2e2;
   --app-neutral: #475569;
   --app-neutral-soft: #f1f5f9;
-  --app-glow-brand: 0 1px 2px rgb(37 99 235 / 0.18), 0 4px 12px rgb(37 99 235 / 0.12);
-  --app-glow-brand-lg: 0 8px 24px rgb(37 99 235 / 0.18);
+  --app-glow-brand: 0 1px 2px rgb(15 118 110 / 0.2), 0 4px 12px rgb(15 118 110 / 0.14);
+  --app-glow-brand-lg: 0 8px 24px rgb(15 118 110 / 0.2);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --app-canvas: #0b0f1a;
-  --app-card: #131826;
-  --app-glass: rgb(19 24 38 / 0.75);
-  --app-inset: #1b2233;
-  --app-raised: #1a202f;
-  --app-scrim: rgb(0 0 0 / 0.55);
-  --app-fg: #f1f5f9;
-  --app-fg-muted: #94a3b8;
-  --app-fg-subtle: #64748b;
-  --app-line: #232b3d;
-  --app-line-strong: #313b52;
-  --app-brand: #2b6cee;
-  --app-brand-hover: #5b8ff5;
-  --app-brand-soft: #06101f;
-  --app-brand-fg: #ffffff;
-  --app-positive: #4ade80;
-  --app-positive-soft: #14291e;
-  --app-caution: #fbbf24;
-  --app-caution-soft: #2c2313;
+  --app-canvas: #071211;
+  --app-card: #101a19;
+  --app-glass: #101a19;
+  --app-inset: #16211f;
+  --app-raised: #17231f;
+  --app-scrim: rgb(0 0 0 / 0.6);
+  --app-fg: #ecfeff;
+  --app-fg-muted: #9fb4b1;
+  --app-fg-subtle: #6f8783;
+  --app-line: #1c2b29;
+  --app-line-strong: #2b423e;
+  --app-brand: #14b8a6;
+  --app-brand-hover: #2dd4bf;
+  --app-brand-soft: #0d211f;
+  --app-brand-fg: #04120f;
+  --app-positive: #34d399;
+  --app-positive-soft: #0d2a1e;
+  --app-caution: #fb923c;
+  --app-caution-soft: #2c1c0f;
   --app-critical: #f87171;
   --app-critical-soft: #2e1a1a;
-  --app-neutral: #94a3b8;
-  --app-neutral-soft: #1b2233;
-  --app-glow-brand: 0 0 0 1px rgb(43 108 238 / 0.28), 0 2px 14px rgb(43 108 238 / 0.3);
-  --app-glow-brand-lg: 0 0 26px rgb(43 108 238 / 0.34);
+  --app-neutral: #9fb4b1;
+  --app-neutral-soft: #16211f;
+  --app-glow-brand: 0 0 0 1px rgb(20 184 166 / 0.3), 0 2px 14px rgb(20 184 166 / 0.32);
+  --app-glow-brand-lg: 0 0 26px rgb(20 184 166 / 0.36);
 }
 
 [data-theme="aurora"] {
@@ -231,8 +248,8 @@
 }
 
 @theme {
-  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Fira Code Variable', 'Fira Code', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius-xs: 0.25rem;
   --radius-sm: 0.375rem;
@@ -247,7 +264,9 @@
   --shadow-md: 0 4px 12px rgb(9 9 11 / 0.08), 0 1px 2px rgb(9 9 11 / 0.04);
   --shadow-lg: 0 12px 32px rgb(9 9 11 / 0.12), 0 2px 6px rgb(9 9 11 / 0.06);
 
-  --blur-panel: 12px;
+  /* Flat Design (UI UX Pro Max style match): no glass/blur panels, definition comes from
+     borders + the accent-rail system instead of translucency + shadow. */
+  --blur-panel: 0px;
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --duration-fast: 120ms;
@@ -259,7 +278,7 @@
   :root {
     line-height: 1.5;
     font-weight: 400;
-    font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
 
   body {

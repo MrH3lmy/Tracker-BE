@@ -17,6 +17,16 @@ export interface RecurrenceRuleRecord {
   longestStreak?: number;
 }
 
+/**
+ * One unfinished required prerequisite for a task (issue #282/#296). A dependency-graph fact
+ * computed by the backend, not a copy of the dependent task's own workflow `status` field.
+ */
+export interface TaskBlockerRef {
+  id: number;
+  title: string;
+  status?: TaskStatus;
+}
+
 export interface TaskRecord {
   id: number;
   title: string;
@@ -46,6 +56,14 @@ export interface TaskRecord {
   blockingTaskIds?: number[];
   overdue?: boolean;
   priorityScore?: number;
+  /**
+   * Dependency-derived readiness (issue #282/#296) - distinct from the manual `status` field
+   * (e.g. a WAITING task can still be `ready`, and a NOT_STARTED task can be `blocked`). Never
+   * conflate the two in UI: render them as visually separate chip families.
+   */
+  blocked?: boolean;
+  ready?: boolean;
+  blockers?: TaskBlockerRef[];
   subtaskIds?: number[];
   subtaskCount?: number;
   completedSubtaskCount?: number;
@@ -86,6 +104,25 @@ export interface BlockerWarning {
 export interface BlockerAnalysis {
   warnings: BlockerWarning[];
   dependencyCount: number;
+}
+
+/** Why a task appears in Today (issue #286/#296) - server-computed, never re-derived client-side. */
+export const TODAY_REASON_VALUES = ['OVERDUE', 'DUE_TODAY', 'SCHEDULED_TODAY'] as const;
+export type TodayReason = (typeof TODAY_REASON_VALUES)[number];
+
+export interface TodayTaskRecord {
+  task: TaskRecord;
+  todayReason: TodayReason;
+  blocked: boolean;
+}
+
+/**
+ * `tasks` is pre-ordered by the backend (overdue, then due-today, then scheduled-today, priority
+ * desc within each group) - the client groups this array for display, it never re-sorts it.
+ */
+export interface TodayResponseRecord {
+  date: string;
+  tasks: TodayTaskRecord[];
 }
 
 export interface CreateTaskPayload {

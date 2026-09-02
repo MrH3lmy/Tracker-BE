@@ -51,6 +51,32 @@ export interface CreateProjectPayload {
   goal?: string;
 }
 
+export const ACTIVITY_EVENT_TYPE_VALUES = [
+  'PROJECT_CREATED',
+  'PROJECT_UPDATED',
+  'TASK_CREATED',
+  'TASK_UPDATED',
+  'TASK_COMPLETED',
+  'NOTE_CREATED',
+  'NOTE_UPDATED',
+  'NOTE_TASK_CREATED',
+] as const;
+export type ActivityEventType = (typeof ACTIVITY_EVENT_TYPE_VALUES)[number];
+
+export type ActivityEntityType = 'PROJECT' | 'TASK' | 'NOTE';
+
+export interface ProjectActivityRecord {
+  id: number;
+  projectId: number;
+  actorUserId?: number;
+  eventType: ActivityEventType;
+  entityType: ActivityEntityType;
+  entityId?: number;
+  summary: string;
+  metadata?: Record<string, unknown>;
+  occurredAt: string;
+}
+
 export interface CreateMilestonePayload {
   title: string;
   targetDate?: string;

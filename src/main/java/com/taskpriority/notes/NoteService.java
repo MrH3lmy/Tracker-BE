@@ -21,6 +21,7 @@ import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
 import com.taskpriority.notes.api.CreateNoteTaskLinkRequest;
+import com.taskpriority.notes.api.NoteBlockResponse;
 import com.taskpriority.notes.api.NoteTaskLinkResponse;
 import com.taskpriority.notes.api.NoteVersionResponse;
 import com.taskpriority.notes.api.CreateScreenshotRequest;
@@ -839,7 +840,8 @@ public class NoteService {
                 .map(this::toAttachmentResponse)
                 .toList();
         List<NoteTaskLinkResponse> links = noteTaskLinkRepository.findByUserIdAndNoteId(userId, note.getId()).stream().map(noteTaskLinkMapper::toResponse).toList();
-        return buildResponse(note, attachments, links);
+        List<NoteBlockResponse> blocks = noteBlockRepository.findByUserIdAndNoteIdOrderByPositionAscIdAsc(userId, note.getId()).stream().map(this::toBlockResponse).toList();
+        return buildResponse(note, attachments, links, blocks);
     }
 
     private List<NoteResponse> toResponseBatch(List<Note> notes) {
@@ -855,13 +857,20 @@ public class NoteService {
         Map<Long, List<NoteTaskLinkResponse>> linksByNote = noteTaskLinkRepository.findByUserIdAndNoteIdIn(userId, noteIds).stream()
                 .collect(Collectors.groupingBy(link -> link.getNote().getId(),
                         Collectors.mapping(noteTaskLinkMapper::toResponse, Collectors.toList())));
+        Map<Long, List<NoteBlockResponse>> blocksByNote = noteBlockRepository.findByUserIdAndNoteIdInOrderByPositionAscIdAsc(userId, noteIds).stream()
+                .collect(Collectors.groupingBy(block -> block.getNote().getId(),
+                        Collectors.mapping(this::toBlockResponse, Collectors.toList())));
 
         return notes.stream()
-                .map(note -> buildResponse(note, attachmentsByNote.getOrDefault(note.getId(), List.of()), linksByNote.getOrDefault(note.getId(), List.of())))
+                .map(note -> buildResponse(note, attachmentsByNote.getOrDefault(note.getId(), List.of()), linksByNote.getOrDefault(note.getId(), List.of()), blocksByNote.getOrDefault(note.getId(), List.of())))
                 .toList();
     }
 
-    private NoteResponse buildResponse(Note note, List<NoteAttachmentResponse> attachments, List<NoteTaskLinkResponse> links) {
+    private NoteBlockResponse toBlockResponse(NoteBlock block) {
+        return new NoteBlockResponse(block.getId(), block.getType(), block.getContent(), block.getPosition(), Boolean.TRUE.equals(block.getChecked()), block.getMetadata());
+    }
+
+    private NoteResponse buildResponse(Note note, List<NoteAttachmentResponse> attachments, List<NoteTaskLinkResponse> links, List<NoteBlockResponse> blocks) {
         Long taskId = note.getTask() == null ? null : note.getTask().getId();
         Long collectionId = note.getCollection() == null ? null : note.getCollection().getId();
         String collectionName = note.getCollection() == null ? null : note.getCollection().getName();
@@ -889,6 +898,7 @@ public class NoteService {
                 tags,
                 attachments,
                 links,
+                blocks,
                 note.getCreatedAt(),
                 note.getUpdatedAt()
         );

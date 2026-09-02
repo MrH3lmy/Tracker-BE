@@ -26,6 +26,7 @@ public record NoteResponse(
         List<String> tags,
         List<NoteAttachmentResponse> attachments,
         List<NoteTaskLinkResponse> taskLinks,
+        List<NoteBlockResponse> blocks,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

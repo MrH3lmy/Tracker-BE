@@ -2,9 +2,12 @@ import type { ClipboardEvent, Dispatch, FormEvent, RefObject, SetStateAction } f
 import { Link } from "react-router-dom";
 import { QueryState } from "../QueryState";
 import { NoteBlockEditor, blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "./NoteBlockEditor";
-import type { NoteAiAction, NoteAiGenerationRecord, NoteContentType, NoteRecord, NoteTemplateRecord } from "./noteTypes";
+import type { NoteAiAction, NoteAiGenerationRecord, NoteContentType, NoteRecord, NoteTemplateRecord, NoteType } from "./noteTypes";
+import { NOTE_TYPE_VALUES } from "./noteTypes";
 import { NOTE_CONTENT_TYPES, formatDate, humanizeContentType, type NoteFormState } from "./notesPageHelpers";
+import { formatEnumLabel } from "../../lib/enumLabels";
 import type { TaskRecord } from "../tasks/taskTypes";
+import type { ProjectRecord } from "../projects/projectTypes";
 import { Badge, Button, Card, CardHeader, Collapsible, Drawer, Field, Input, Select, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from "../ui";
 
 interface TemplateVariableState {
@@ -45,6 +48,7 @@ interface CreateNoteDrawerProps {
   setForm: Dispatch<SetStateAction<NoteFormState>>;
   availableTasks: TaskRecord[];
   collections: Array<{ id: number; name: string }>;
+  projects: ProjectRecord[];
   draftBlocks: DraftNoteBlock[];
   setDraftBlocks: Dispatch<SetStateAction<DraftNoteBlock[]>>;
   handleTaskMentionShortcut: () => void;
@@ -69,7 +73,7 @@ interface CreateNoteDrawerProps {
 }
 
 export function CreateNoteDrawer({
-  isOpen, onClose, editingNoteId, isBusy, canSubmit, noteFormTitleRef, noteTitleInputRef, canCreateFromTemplate, handleCreateFromTemplate, isCreateFromTemplatePending, templatesQueryIsLoading, templates, selectedTemplateId, setSelectedTemplateId, templateVariableKeys, templateVariables, setTemplateVariables, selectedTemplate, renderedTemplatePreview, handleSubmit, activeForm, noteDate, setForm, availableTasks, collections, draftBlocks, setDraftBlocks, handleTaskMentionShortcut, aiFeaturesEnabled, aiNoteActions, runAiActionForNote, aiReviewSuggestion, setAiReviewSuggestion, appendAiSuggestionToBody, aiGenerations, showRawBody, setShowRawBody, noteBodyRef, handleBodyPaste, notes, deleteTaskLink, clipboardImageMessage, pendingClipboardImages, latestMutationResult, onConvertToTask, linkMentionedTask,
+  isOpen, onClose, editingNoteId, isBusy, canSubmit, noteFormTitleRef, noteTitleInputRef, canCreateFromTemplate, handleCreateFromTemplate, isCreateFromTemplatePending, templatesQueryIsLoading, templates, selectedTemplateId, setSelectedTemplateId, templateVariableKeys, templateVariables, setTemplateVariables, selectedTemplate, renderedTemplatePreview, handleSubmit, activeForm, noteDate, setForm, availableTasks, collections, projects, draftBlocks, setDraftBlocks, handleTaskMentionShortcut, aiFeaturesEnabled, aiNoteActions, runAiActionForNote, aiReviewSuggestion, setAiReviewSuggestion, appendAiSuggestionToBody, aiGenerations, showRawBody, setShowRawBody, noteBodyRef, handleBodyPaste, notes, deleteTaskLink, clipboardImageMessage, pendingClipboardImages, latestMutationResult, onConvertToTask, linkMentionedTask,
 }: CreateNoteDrawerProps) {
   const editingNote = editingNoteId === null ? null : notes.find((note) => note.id === editingNoteId) ?? null;
 
@@ -144,6 +148,17 @@ export function CreateNoteDrawer({
                   <Select id="noteCollectionId" value={activeForm.collectionId} onChange={(event) => setForm((current) => ({ ...current, collectionId: event.target.value }))}>
                     <option value="">No collection</option>
                     {collections.map((collection) => <option key={collection.id} value={String(collection.id)}>{collection.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Project (optional)" htmlFor="noteProjectId">
+                  <Select id="noteProjectId" value={activeForm.projectId} onChange={(event) => setForm((current) => ({ ...current, projectId: event.target.value }))}>
+                    <option value="">No project</option>
+                    {projects.map((project) => <option key={project.id} value={String(project.id)}>{project.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Note type" htmlFor="noteType">
+                  <Select id="noteType" value={activeForm.noteType} onChange={(event) => setForm((current) => ({ ...current, noteType: event.target.value as NoteType }))}>
+                    {NOTE_TYPE_VALUES.map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
                   </Select>
                 </Field>
                 <Field label="Date" htmlFor="noteDate">

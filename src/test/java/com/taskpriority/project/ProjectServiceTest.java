@@ -15,6 +15,7 @@ import com.taskpriority.model.Tier;
 import com.taskpriority.repository.MilestoneRepository;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.service.TaskService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,7 @@ class ProjectServiceTest {
     private ProjectRepository projectRepository;
     private MilestoneRepository milestoneRepository;
     private TaskRepository taskRepository;
+    private TaskService taskService;
     private ProjectService projectService;
 
     private Project project(Long id, LocalDate targetDate) {
@@ -62,7 +64,8 @@ class ProjectServiceTest {
         when(currentUserService.requireUser()).thenReturn(new AuthenticatedUser(USER_ID, "u@example.com", Tier.FREE, Role.USER));
         when(milestoneRepository.findByUserIdAndProjectIdOrderByTargetDateAscIdAsc(eq(USER_ID), any())).thenReturn(List.of());
         ProjectActivityService activityService = mock(ProjectActivityService.class);
-        projectService = new ProjectService(projectRepository, milestoneRepository, taskRepository, new ProjectApiMapper(), currentUserService, activityService);
+        taskService = mock(TaskService.class);
+        projectService = new ProjectService(projectRepository, milestoneRepository, taskRepository, new ProjectApiMapper(), currentUserService, activityService, taskService);
     }
 
     @Test
@@ -156,6 +159,24 @@ class ProjectServiceTest {
         assertEquals(0, overview.totalTasks());
         assertEquals(0, overview.progressPercent());
         assertEquals("LOW", overview.riskLevel());
+    }
+
+    @Test
+    void findTasksPopulatesTransientReadinessFieldsViaTheSameBatchComputationOtherEndpointsUse() {
+        // Regression test (issue #296): findTasks used to return bare entities straight from the
+        // repository, so blocked/ready/blockers (all @Transient) stayed at their false/empty
+        // defaults regardless of actual dependency state - every other task-listing endpoint
+        // populates them via TaskService.computeDerivedFieldsBatch before mapping to a response.
+        Project project = project(1L, null);
+        when(projectRepository.findByUserIdAndId(USER_ID, 1L)).thenReturn(Optional.of(project));
+        Task task = task(1L, Status.NOT_STARTED, null, null, null);
+        List<Task> tasks = List.of(task);
+        when(taskRepository.findByUserIdAndProjectId(USER_ID, 1L)).thenReturn(tasks);
+
+        List<Task> result = projectService.findTasks(1L);
+
+        assertEquals(tasks, result);
+        verify(taskService).computeDerivedFieldsBatch(tasks);
     }
 
     @Test

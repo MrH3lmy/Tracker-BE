@@ -7,11 +7,13 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface NoteBlockRepository extends JpaRepository<NoteBlock, Long> {
     List<NoteBlock> findByUserIdAndNoteIdOrderByPositionAscIdAsc(Long userId, Long noteId);
+    List<NoteBlock> findByUserIdAndNoteIdInOrderByPositionAscIdAsc(Long userId, Collection<Long> noteIds);
     Optional<NoteBlock> findByUserIdAndIdAndNoteId(Long userId, Long id, Long noteId);
 
     /**
