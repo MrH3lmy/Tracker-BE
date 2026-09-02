@@ -1,160 +1,233 @@
-# Tracker — Design System (MASTER)
+# Design System Master File
 
-Generated for issue #296 (Project Command Center + readiness UX). The `ui-ux-pro-max`
-Claude Code plugin named in the issue could not be installed in this session — both
-`claude plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill` and
-`npm install -g ui-ux-pro-max-cli` were refused by the session's auto-mode safety
-classifier (installing/executing an unverified third-party package during an
-unattended run), and the plugin is not present in the vetted claude.ai catalog either.
-This document runs the same *workflow* the issue describes by hand: product framing,
-explicit design dials, a persisted Master + per-page override structure, and focused
-interaction research — applied on top of Tracker's real, already-solid design system
-rather than a generic template.
+> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
+> If that file exists, its rules **override** this Master file.
+> If not, strictly follow the rules below.
 
-## 1. Product framing
+---
 
-**Product query:** personal productivity project operating system, task planning
-dashboard.
+**Project:** Tracker-BE
+**Generated:** 2026-09-01 23:45:39
+**Category:** Productivity Tool
+**Design Dials:** Variance 6/10 (Balanced / Modern) | Motion 4/10 (Standard) | Density 8/10 (Dense / Dashboard)
 
-Tracker is, in one line: **a personal project operating system** — task manager +
-project command center + notes/knowledge workspace + daily planning cockpit, for one
-user managing their own work. It is not a team PM tool (no assignees, no multi-user
-permissions surface visible in the UI) and not a note-taking app with tasks bolted on.
-Every screen should answer, within seconds: *what do I work on now, what's blocked and
-why, what's happening in this project, what changed.*
+---
 
-Non-goals this pass: no new visual language, no new component library, no backend
-changes beyond what's needed to consume already-shipped contracts (today, readiness,
-project today/activity, typed notes — see `API_DOCS.md` / `CLAUDE.md` package map).
+## Global Rules
 
-## 2. Existing system audit (reuse, don't replace)
+### Color Palette
 
-Audited before designing anything (`frontend/src/components/ui`, `styles/theme.css`,
-`theme.ts`, `router/routes.tsx`, `TodayPage.tsx`, `ProjectDetailPage.tsx`,
-`components/notes/*`, `components/tasks/*`):
+| Role | Hex | CSS Variable |
+|------|-----|--------------|
+| Primary | `#0D9488` | `--color-primary` |
+| On Primary | `#000000` | `--color-on-primary` |
+| Secondary | `#14B8A6` | `--color-secondary` |
+| On Secondary | `#0F172A` | `--color-on-secondary` |
+| Accent/CTA | `#EA580C` | `--color-accent` |
+| On Accent/CTA | `#000000` | `--color-on-accent` |
+| Background | `#F0FDFA` | `--color-background` |
+| Foreground | `#134E4A` | `--color-foreground` |
+| Card | `#FFFFFF` | `--color-card` |
+| Card Foreground | `#134E4A` | `--color-card-foreground` |
+| Muted | `#E8F1F4` | `--color-muted` |
+| Muted Foreground | `#475569` | `--color-muted-foreground` |
+| Border | `#99F6E4` | `--color-border` |
+| Destructive | `#DC2626` | `--color-destructive` |
+| On Destructive | `#FFFFFF` | `--color-on-destructive` |
+| Ring | `#0D9488` | `--color-ring` |
 
-- **Stack**: Tailwind v4 (`@tailwindcss/vite`), Radix primitives (Tabs, Dialog,
-  Popover, Dropdown, Collapsible), `lucide-react` via a single curated re-export
-  (`components/ui/icons.ts`) — no emoji icons anywhere, no ad-hoc icon imports.
-- **Design tokens** (`styles/theme.css`, five themes: Light Modern, Midnight Pro,
-  Aurora, Ocean Breeze, Forest, switched via `[data-theme]`): semantic color roles
-  (`brand`/`brand-soft`/`brand-hover`, `positive`/`caution`/`critical` + `-soft`
-  pairs, `neutral`/`neutral-soft`, `fg`/`fg-muted`/`fg-subtle`, `card`/`glass`/
-  `raised`/`inset`/`canvas`, `line`/`line-strong`, `scrim`), a radius scale
-  (`xs`→`2xl`), a shadow scale incl. brand glow, and **motion tokens**
-  (`--duration-fast/base/slow`, `--ease-standard`) plus a z-index scale
-  (`dropdown`/`sticky`/`overlay`/`toast`).
-- **Primitives** (`components/ui`): `Card`/`CardHeader`, `Badge` (6 variants:
-  neutral/brand/positive/caution/critical/outline), `Tabs*` (Radix, active state =
-  `bg-card` chip inside an `bg-inset` track), `SegmentedControl`, `EmptyState`
-  (icon + title + description + action — already the "empty states teach the next
-  action" pattern the issue asks for), `QueryState` (loading/error/empty one-liner),
-  `Drawer`/`Dialog`/`Popover`/`Menu`, `Field`/`Input`/`Select`/`Textarea`/`Checkbox`.
-- **Navigation**: `SectionTabs` — a small `NavLink`-based tab row already used to
-  group "views of the same data" under one primary nav item (Tasks: List/Board/
-  Matrix/Projects; Calendar: Month/Week/Day/Auto-plan). This is the existing pattern
-  for exactly the kind of sub-navigation the Project Command Center needs.
-- **Verdict**: this system is already professional, token-driven, and accessible in
-  intent (semantic roles, not raw colors). The job is to **extend** it — a couple of
-  new semantic primitives for readiness (see §5) and page composition — not replace
-  any of it. No Tailwind config forked, no new icon set, no new color tokens besides
-  the ones §5 explicitly justifies.
+**Color Notes:** Teal focus + action orange [Accent adjusted from #F97316]
 
-## 3. Design dials
+### Typography
 
-| Dial | Value | Why |
-|---|---|---|
-| Variance | 5/10 | Enough distinctiveness for a command-center feel (section headers with real hierarchy, a timeline rail, readiness treated as a first-class visual concept) without inventing a new visual language on top of five existing themes. |
-| Motion | 3/10 | "Restrained animation" + `prefers-reduced-motion` requirement. Reuse `--duration-fast`/`--ease-standard` for hover/focus/expand only. No page-transition choreography, no decorative motion. Disclosure (blocked-reason expand, tab switch) gets a fast opacity/height transition and nothing else. |
-| Density | 7/10 | Information-dense but scannable: today/task rows stay single-line with progressive disclosure for blockers; the command center overview is a stat/summary grid, not a slide. Held at 7 rather than 8 because mobile (375px) needs the same content without cramming — density adapts down on small screens (stacked cards, disclosure collapsed by default) rather than shrinking type. |
+- **Heading Font:** Plus Jakarta Sans
+- **Body Font:** Plus Jakarta Sans
+- **Mood:** friendly, modern, saas, clean, approachable, professional
+- **Google Fonts:** [Plus Jakarta Sans + Plus Jakarta Sans](https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap)
 
-These match the issue's suggested starting point; no adjustment was needed.
+**CSS Import:**
+```css
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+```
 
-## 4. Information hierarchy rules (apply everywhere)
+### Spacing Variables
 
-1. **Workflow status ≠ derived readiness.** `Status` (NOT_STARTED/IN_PROGRESS/
-   WAITING/BLOCKED/DONE/CANCELLED/ARCHIVED) is a manual field the user sets.
-   `ready`/`blocked`/`blockers[]` is a computed dependency-graph fact from the
-   backend. These are rendered with **visually distinct chip families** (see §5) so
-   a task manually marked `WAITING` is never confused with a task the backend has
-   computed is `BLOCKED` on another task. Never merge them into one badge.
-2. **Explain, don't decorate.** A `BLOCKED` chip is only ever accompanied by (or one
-   click from) the actual blocker list. No status badge exists without a reason a
-   user can reach in ≤1 interaction.
-3. **Progressive disclosure over badge pileup.** A task row shows at most: title,
-   one readiness indicator, one due/overdue indicator, importance star. Everything
-   else (full blocker list, activity metadata, note type detail) sits behind a
-   click/expand — this is the direct answer to "five badges on every card."
-4. **Today ordering is server truth.** The client never re-sorts or re-derives
-   `todayReason`/overdue/ready — it groups the backend's already-ordered array by
-   `todayReason` + `blocked`, preserving intra-group order.
+*Density: 8/10 — Dense / Dashboard*
 
-## 5. New semantic primitives
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--space-xs` | `2px` / `0.125rem` | Tight gaps |
+| `--space-sm` | `4px` / `0.25rem` | Icon gaps, inline spacing |
+| `--space-md` | `8px` / `0.5rem` | Standard padding |
+| `--space-lg` | `12px` / `0.75rem` | Section padding |
+| `--space-xl` | `16px` / `1rem` | Large gaps |
+| `--space-2xl` | `24px` / `1.5rem` | Section margins |
+| `--space-3xl` | `32px` / `2rem` | Hero padding |
 
-Two small additions, both composed from existing tokens (no new colors):
+### Shadow Depths
 
-- **`ReadinessBadge`** (`components/tasks/ReadinessBadge.tsx`) — renders `Ready`
-  (positive-soft, `CheckCircle2`) or `Blocked` (caution-soft, `AlertTriangle`) *only
-  when the value is worth surfacing* (a task that's simply not blocked and has no
-  dependents renders nothing — avoids badge noise on the 90% common case). Text
-  label always present alongside color/icon (status never color-only, per a11y
-  rule). Deliberately a different shape/variant family from `taskStatusVariant`
-  Badges so it reads as "a different axis," reinforcing rule #1.
-- **`BlockerDisclosure`** (`components/tasks/BlockerDisclosure.tsx`) — a
-  `Collapsible`-based (existing Radix wrapper) "Waiting for →" list under a blocked
-  task, each blocker a link to `/tasks/{id}` when practical, showing the blocker's
-  own status Badge. Collapsed by default in dense lists (Today, Project Tasks),
-  expanded by default in single-task contexts (Task Detail).
-- **`NoteTypeBadge`** (`components/notes/NoteTypeBadge.tsx`) — outline-family Badge,
-  one fixed icon+label per `NoteType` (GENERAL/MEETING/RESEARCH/TECHNICAL/
-  REQUIREMENTS/DECISION/RETROSPECTIVE), reusing existing icons where semantically
-  apt (`Sparkles` for decision, `Users`-less — see icon audit below) rather than
-  inventing new colors per type.
-- **Activity timeline row** (`components/projects/ActivityTimelineItem.tsx`) — an
-  icon-in-circle + summary + relative time row (visually related to the existing
-  `TimelineCard` pattern in `TodayPage.tsx`), with metadata behind a small
-  "Details" disclosure instead of raw JSON.
+| Level | Value | Usage |
+|-------|-------|-------|
+| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
+| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
+| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
+| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
 
-No new icons needed beyond what's already curated in `components/ui/icons.ts` plus
-a small, justified addition (`Link2`/`ArrowRight` already exist for navigable
-references; `History`/`ListChecks`/`Users` types get added to the curated icon
-export only if a note-type/activity mapping genuinely needs one — see
-`pages/project-command-center.md`).
+---
 
-## 6. Responsive & accessibility acceptance criteria (binding for every phase)
+## Component Specs
 
-- Breakpoints checked: 375 / 768 / 1024 / 1440. No horizontal scroll on the page
-  body; wide content (activity metadata, long blocker lists) scrolls in its own
-  container if needed.
-- Command Center navigation: `Tabs`/`SectionTabs` reflow to a horizontally
-  scrollable strip below ~768px rather than wrapping or truncating labels (see
-  `pages/project-command-center.md` §Navigation).
-- Contrast: reuse only existing token pairs already proven at ≥4.5:1 in both
-  light and dark themes (`fg`/`fg-muted` on `card`/`canvas`, `*-soft` backgrounds
-  with their matching foreground token) — no new raw hex values.
-- Every interactive target ≥44×44px on touch; hover-only affordances are never the
-  only way to reach an action (menus/disclosures open on tap/click, not hover).
-- Keyboard: all new disclosures/badges-as-buttons are real `<button>`/`<a>`
-  elements with visible focus rings (existing `focus-visible` treatment on
-  `Button`/`TabsTrigger` — reused, not reinvented).
-- `prefers-reduced-motion`: reuse the existing app-wide handling (durations
-  collapse via CSS media query already present in `theme.css`); no
-  animation is added outside `--duration-*` tokens.
+### Buttons
 
-## 7. Page docs
+```css
+/* Primary Button */
+.btn-primary {
+  background: #EA580C;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
 
-- [`pages/today.md`](pages/today.md) — Today v2 section hierarchy and readiness
-  presentation.
-- [`pages/project-command-center.md`](pages/project-command-center.md) — Command
-  Center tab structure, Overview composition, Project Today/Notes/Activity.
-- [`pages/notes.md`](pages/notes.md) — typed project notes, note-type visual
-  treatment, structured action → task conversion UX.
-- [`pages/activity.md`](pages/activity.md) — activity timeline scanning pattern.
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
 
-## 8. Research notes
+/* Secondary Button */
+.btn-secondary {
+  background: transparent;
+  color: #0D9488;
+  border: 2px solid #0D9488;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+```
 
-See [`research/interaction-notes.md`](research/interaction-notes.md) for the
-focused-topic pass (blocked-task disclosure, ready status, dashboard hierarchy,
-timeline scanning, responsive tabs, async states, badge/chip accessibility,
-keyboard focus, list density, cockpit layout) and how each maps to a concrete
-decision in this repo.
+### Cards
+
+```css
+.card {
+  background: #F0FDFA;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition: all 200ms ease;
+  cursor: pointer;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+```
+
+### Inputs
+
+```css
+.input {
+  padding: 12px 16px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 200ms ease;
+}
+
+.input:focus {
+  border-color: #0D9488;
+  outline: none;
+  box-shadow: 0 0 0 3px #0D948820;
+}
+```
+
+### Modals
+
+```css
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: var(--shadow-xl);
+  max-width: 500px;
+  width: 90%;
+}
+```
+
+---
+
+## Style Guidelines
+
+**Style:** Flat Design
+
+**Keywords:** 2D, minimalist, bold colors, no shadows, clean lines, simple shapes, typography-focused, modern, icon-heavy
+
+**Best For:** Web apps, mobile apps, cross-platform, startup MVPs, user-friendly, SaaS, dashboards, corporate
+
+**Key Effects:** No gradients/shadows, simple hover (color/opacity shift), fast loading, clean transitions (150-200ms ease), minimal icons
+
+### Page Pattern
+
+**Pattern Name:** Product Demo + Features
+
+- **Conversion Strategy:** Use an interactive demo only when it explains value better than static media. Provide captions, transcript, visible play/pause controls, and a non-video fallback; do not autoplay under reduced motion. Pause media when offscreen or hidden and keep the final product state available as static content.
+- **CTA Placement:** Video center + CTA right/bottom
+- **Section Order:** Hero > Product video/mockup (center) > Feature breakdown per section > Comparison (optional) > CTA
+
+---
+
+## Motion
+
+**Stagger List** (Standard) — Trigger: load or scroll | Duration: 300-450ms | Easing: `back.out(1.4)`
+
+```js
+gsap.from('.grid-item', { opacity: 0, scale: 0.92, y: 16, duration: 0.4, stagger: { each: 0.06, from: 'start', grid: 'auto' }, ease: 'back.out(1.4)' });
+```
+
+**Framework notes:** grid: 'auto' lets GSAP infer rows/columns from a CSS grid layout for a natural wave stagger; Use matchMedia('(prefers-reduced-motion: reduce)') to skip non-essential motion and render the final state immediately
+
+- ✅ Combine with from: 'center' for a bento-grid layout to draw the eye inward first
+- ❌ Don't use back.out on dense data tables; the overshoot reads as sloppy on informational UI
+- ⚡ Group DOM writes; avoid interleaving layout reads (getBoundingClientRect) between staggered tweens
+
+---
+
+## Anti-Patterns (Do NOT Use)
+
+- ❌ Complex onboarding
+- ❌ Slow performance
+
+### Additional Forbidden Patterns
+
+- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
+- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
+- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
+- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
+- ❌ **Instant state changes** — Always use transitions (150-300ms)
+- ❌ **Invisible focus states** — Focus states must be visible for a11y
+
+---
+
+## Pre-Delivery Checklist
+
+Before delivering any UI code, verify:
+
+- [ ] No emojis used as icons (use SVG instead)
+- [ ] All icons from consistent icon set (Heroicons/Lucide)
+- [ ] `cursor-pointer` on all clickable elements
+- [ ] Hover states with smooth transitions (150-300ms)
+- [ ] Light mode: text contrast 4.5:1 minimum
+- [ ] Focus states visible for keyboard navigation
+- [ ] `prefers-reduced-motion` respected
+- [ ] Responsive: 375px, 768px, 1024px, 1440px
+- [ ] No content hidden behind fixed navbars
+- [ ] No horizontal scroll on mobile

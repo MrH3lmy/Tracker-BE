@@ -1,5 +1,11 @@
 # Page override — Project Activity Timeline
 
+*Visual note: this tab wasn't called out in the PR #297 review and needed no structural change -
+it automatically inherits the new teal/orange palette, Fira Sans/Fira Code typography, and flat
+card style from `../MASTER.md`. The `font-mono` numeral treatment introduced elsewhere (Today,
+Project Overview) was not applied to relative timestamps here since they're prose ("12 minutes
+ago"), not tabular data.*
+
 Source: `GET /api/v1/projects/{id}/activity?page&size` — newest first, paginated
 via `X-Total-Count`/`X-Has-Next` headers (same contract as the tasks list).
 

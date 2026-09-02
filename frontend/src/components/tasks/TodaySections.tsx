@@ -15,6 +15,13 @@ const REASON_LABEL: Record<TodayReason, string> = {
   SCHEDULED_TODAY: 'Scheduled today',
 };
 
+/** Reason -> rail/dot accent (issue #296 redesign): overdue reads urgent, due-today reads brand-primary, scheduled reads calm/neutral - a scan-order cue on top of the grouping itself. */
+const REASON_ACCENT: Record<TodayReason, string> = {
+  OVERDUE: 'bg-critical',
+  DUE_TODAY: 'bg-brand',
+  SCHEDULED_TODAY: 'bg-fg-subtle',
+};
+
 const REASON_ORDER: TodayReason[] = ['OVERDUE', 'DUE_TODAY', 'SCHEDULED_TODAY'];
 
 function TodayRow({ entry }: { entry: TodayTaskRecord }) {
@@ -23,22 +30,22 @@ function TodayRow({ entry }: { entry: TodayTaskRecord }) {
   const showStatusBadge = task.status && task.status !== 'NOT_STARTED' && task.status !== 'DONE';
 
   return (
-    <li className="rounded-lg border border-line bg-inset/30">
+    <li>
       <button
         type="button"
         onClick={() => navigate(`/tasks/${task.id}`)}
-        className="flex min-h-11 w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors duration-(--duration-fast) hover:bg-inset"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-(--duration-fast) hover:bg-inset"
       >
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{task.title}</span>
         <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {task.important && <Badge variant="caution">Important</Badge>}
-          {todayReason === 'OVERDUE' && task.dueDate && <Badge variant="critical">Due {formatDate(task.dueDate)}</Badge>}
+          {todayReason === 'OVERDUE' && task.dueDate && <Badge variant="critical" className="font-mono">Due {formatDate(task.dueDate)}</Badge>}
           <ReadinessBadge blocked={blocked} />
           {showStatusBadge && <Badge variant={taskStatusVariant(task.status)}>{formatEnumLabel(task.status)}</Badge>}
         </span>
       </button>
       {blocked && task.blockers && task.blockers.length > 0 && (
-        <div className="px-3.5 pb-3">
+        <div className="px-2 pb-2">
           <BlockerDisclosure blockers={task.blockers} />
         </div>
       )}
@@ -59,7 +66,12 @@ export interface TodaySectionsProps {
 /**
  * Shared between the global Today page and a project's Today tab (issue #296) - the same
  * ready/blocked/reason grouping logic must never be implemented twice. Groups the backend's
- * already-ordered `tasks` array; never re-sorts it (see design-system/tracker-be/pages/today.md).
+ * already-ordered `tasks` array; never re-sorts it.
+ *
+ * Visual composition (issue #296 review): two instrument panels rather than a plain card list -
+ * Ready is a teal hero panel with a large tabular-numeral readout, Blocked is a distinctly
+ * orange-tinted lane, and each Ready sub-group carries a colored rail (red/teal/neutral) so the
+ * reason is legible before reading any text. See design-system/tracker-be/pages/today.md.
  */
 export function TodaySections({
   data,
@@ -98,19 +110,30 @@ export function TodaySections({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {readyByReason.length > 0 && (
-        <section aria-labelledby="today-ready-heading">
-          <div className="mb-2 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-positive" aria-hidden />
-            <h3 id="today-ready-heading" className="text-sm font-semibold text-fg">Ready to work</h3>
-            <Badge variant="neutral">{ready.length}</Badge>
+        <section aria-labelledby="today-ready-heading" className="overflow-hidden rounded-2xl border border-line bg-card">
+          <div className="flex items-center justify-between gap-3 bg-brand-soft px-4 py-3.5 sm:px-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-fg">
+                <CheckCircle2 className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h3 id="today-ready-heading" className="text-sm font-bold tracking-tight text-fg sm:text-base">Ready to work</h3>
+                <p className="text-xs text-fg-muted">Do these now, in order</p>
+              </div>
+            </div>
+            <span className="font-mono text-2xl font-bold text-brand tabular-nums sm:text-3xl">{ready.length}</span>
           </div>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col divide-y divide-line">
             {readyByReason.map((group) => (
-              <div key={group.reason}>
-                <p className="mb-1.5 text-xs font-semibold tracking-wide text-fg-subtle uppercase">{REASON_LABEL[group.reason]}</p>
-                <ul className="flex flex-col gap-1.5">
+              <div key={group.reason} className="px-4 py-3 sm:px-5">
+                <p className="mb-1.5 flex items-center gap-2 text-[11px] font-bold tracking-wider text-fg-subtle uppercase">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${REASON_ACCENT[group.reason]}`} aria-hidden />
+                  {REASON_LABEL[group.reason]}
+                  <span className="font-mono text-fg-subtle">({group.items.length})</span>
+                </p>
+                <ul className="flex flex-col">
                   {group.items.map((entry) => <TodayRow key={entry.task.id} entry={entry} />)}
                 </ul>
               </div>
@@ -120,13 +143,20 @@ export function TodaySections({
       )}
 
       {blocked.length > 0 && (
-        <section aria-labelledby="today-blocked-heading">
-          <div className="mb-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-caution" aria-hidden />
-            <h3 id="today-blocked-heading" className="text-sm font-semibold text-fg">Blocked</h3>
-            <Badge variant="neutral">{blocked.length}</Badge>
+        <section aria-labelledby="today-blocked-heading" className="overflow-hidden rounded-2xl border border-caution/40 bg-card">
+          <div className="flex items-center justify-between gap-3 bg-caution-soft px-4 py-3.5 sm:px-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caution/15 text-caution">
+                <AlertTriangle className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h3 id="today-blocked-heading" className="text-sm font-bold tracking-tight text-fg sm:text-base">Blocked</h3>
+                <p className="text-xs text-fg-muted">Waiting on something else</p>
+              </div>
+            </div>
+            <span className="font-mono text-2xl font-bold text-caution tabular-nums sm:text-3xl">{blocked.length}</span>
           </div>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col divide-y divide-line px-4 py-1 sm:px-5">
             {blocked.map((entry) => <TodayRow key={entry.task.id} entry={entry} />)}
           </ul>
         </section>

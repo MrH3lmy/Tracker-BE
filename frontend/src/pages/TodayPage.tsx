@@ -338,12 +338,17 @@ export function TodayPage() {
       )}
 
       {!isLoading && !hasError && !isNewAccount && (
-        <>
-          <Card aria-labelledby="today-sections-title">
-            <CardHeader
-              title={<span id="today-sections-title">What to work on</span>}
-              description="Ready tasks first, then what's blocked and why."
-            />
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* Primary: the actionable cockpit - ready queue first, blocked lane second (issue #296). */}
+          <div aria-labelledby="today-sections-title" className="flex min-w-0 flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="today-sections-title" className="text-xs font-bold tracking-wider text-fg-subtle uppercase">Today's plan</h2>
+              <div className="flex items-center gap-2 font-mono text-xs text-fg-subtle">
+                <span>{today.summary?.dueToday ?? 0} due</span>
+                <span aria-hidden>·</span>
+                <span className={((today.summary?.overdueTasks ?? 0) > 0) ? 'font-semibold text-critical' : ''}>{today.summary?.overdueTasks ?? 0} overdue</span>
+              </div>
+            </div>
             <TodaySections
               data={todayTasksQuery.data?.data ?? undefined}
               isLoading={todayTasksQuery.isLoading}
@@ -351,30 +356,23 @@ export function TodayPage() {
               onRetry={() => todayTasksQuery.refetch()}
               isRetrying={todayTasksQuery.isFetching}
             />
-          </Card>
-
-          <WeeklyReviewPrompt />
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatTile icon={Calendar} label="Due today" value={String(today.summary?.dueToday ?? 0)} />
-            <StatTile icon={AlertTriangle} label="Overdue" value={String(today.summary?.overdueTasks ?? 0)} tone={((today.summary?.overdueTasks ?? 0) > 0) ? 'critical' : 'default'} />
-            <StatTile icon={Flame} label="Habits completed" value={`${today.habitsCompletedToday ?? 0}/${today.habitsTotalToday ?? 0}`} />
-            <StatTile icon={Clock} label="Focus time" value={formatFocusMinutes(today.scheduledFocusMinutes)} />
+            <TimelineCard entries={today.todayTimeline ?? []} />
+            <RecommendationsCard recommendations={today.topRecommendations ?? []} />
           </div>
 
-          <div className="grid items-start gap-4 lg:grid-cols-[2fr_1fr]">
-            <div className="flex flex-col gap-4">
-              <TimelineCard entries={today.todayTimeline ?? []} />
-              <RecommendationsCard recommendations={today.topRecommendations ?? []} />
-              <TaskListCard title="Upcoming" description="Due in the next 6 days." tasks={today.upcomingTasks ?? []} emptyMessage="Nothing else due soon." />
+          {/* Secondary: habits, focus time, and everything else that isn't "work on this now" (issue #296). */}
+          <aside className="flex flex-col gap-4">
+            <WeeklyReviewPrompt />
+            <div className="grid grid-cols-2 gap-3">
+              <StatTile icon={Flame} label="Habits" value={`${today.habitsCompletedToday ?? 0}/${today.habitsTotalToday ?? 0}`} />
+              <StatTile icon={Clock} label="Focus time" value={formatFocusMinutes(today.scheduledFocusMinutes)} />
             </div>
-            <div className="flex flex-col gap-4">
-              <HabitsTodayCard habits={today.habitsToday ?? []} />
-              <TaskListCard title="Waiting & blocked" description="Work that needs someone else or is stuck." tasks={today.waitingOrBlocked ?? []} emptyMessage="Nothing is waiting or blocked." />
-              <TaskListCard title="Follow-ups due" description="Check-ins you set for yourself." tasks={today.followUpsDue ?? []} emptyMessage="No follow-ups due." />
-            </div>
-          </div>
-        </>
+            <HabitsTodayCard habits={today.habitsToday ?? []} />
+            <TaskListCard title="Upcoming" description="Due in the next 6 days." tasks={today.upcomingTasks ?? []} emptyMessage="Nothing else due soon." />
+            <TaskListCard title="Waiting & blocked" description="Work that needs someone else or is stuck." tasks={today.waitingOrBlocked ?? []} emptyMessage="Nothing is waiting or blocked." />
+            <TaskListCard title="Follow-ups due" description="Check-ins you set for yourself." tasks={today.followUpsDue ?? []} emptyMessage="No follow-ups due." />
+          </aside>
+        </div>
       )}
     </div>
   );

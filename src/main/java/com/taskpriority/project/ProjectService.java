@@ -12,6 +12,7 @@ import com.taskpriority.model.Task;
 import com.taskpriority.repository.MilestoneRepository;
 import com.taskpriority.repository.ProjectRepository;
 import com.taskpriority.repository.TaskRepository;
+import com.taskpriority.service.TaskService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,16 +32,18 @@ public class ProjectService {
     private final ProjectApiMapper mapper;
     private final CurrentUserService currentUserService;
     private final ProjectActivityService activityService;
+    private final TaskService taskService;
 
     public ProjectService(ProjectRepository projectRepository, MilestoneRepository milestoneRepository,
                            TaskRepository taskRepository, ProjectApiMapper mapper, CurrentUserService currentUserService,
-                           ProjectActivityService activityService) {
+                           ProjectActivityService activityService, TaskService taskService) {
         this.projectRepository = projectRepository;
         this.milestoneRepository = milestoneRepository;
         this.taskRepository = taskRepository;
         this.mapper = mapper;
         this.currentUserService = currentUserService;
         this.activityService = activityService;
+        this.taskService = taskService;
     }
 
     @Transactional(readOnly = true)
@@ -91,7 +94,14 @@ public class ProjectService {
     public List<Task> findTasks(Long projectId) {
         Long userId = currentUserService.requireUserId();
         findById(projectId); // 404s if the project doesn't belong to this user
-        return taskRepository.findByUserIdAndProjectId(userId, projectId);
+        List<Task> tasks = taskRepository.findByUserIdAndProjectId(userId, projectId);
+        // blocked/ready/blockers (and dependency/subtask ids) are @Transient on Task - every other
+        // task-listing endpoint (TaskControllerV1, TodayService, ...) populates them via this same
+        // batch call before mapping to a response. This endpoint didn't, so a project's task list
+        // and the Project Command Center's Tasks/Overview tabs always showed blocked=false/ready=false
+        // regardless of actual dependency state - a real contract defect, not a display-only issue.
+        taskService.computeDerivedFieldsBatch(tasks);
+        return tasks;
     }
 
     @Transactional(readOnly = true)

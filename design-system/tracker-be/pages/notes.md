@@ -1,5 +1,11 @@
 # Page override — Typed / project notes
 
+*Visual note: this tab wasn't called out in the PR #297 review and needed no structural change -
+it automatically inherits the new teal/orange palette, Fira Sans typography, and flat card style
+from `../MASTER.md` since every component here reads the same shared `--color-*`/`--app-*`
+tokens. `NoteTypeBadge` keeps its existing `lucide-react` icons (see `../REDESIGN-296.md` §2 for
+why the icon library wasn't swapped to the tool's Phosphor recommendation).*
+
 ## Contract defect found and fixed (minimal, explained per the issue's scope rule)
 
 Before this change, no endpoint ever returned a `NoteBlock`'s real database `id` to the client.

@@ -46,30 +46,6 @@ function isReadinessFilterValue(value: string | null): value is Exclude<Readines
   return value === 'ready' || value === 'blocked' || value === 'overdue';
 }
 
-/**
- * Command-row tile (issue #296) - every summary links to the tab that explains it, so the
- * Overview reads as a command center rather than a stats page (design-system/tracker-be/pages/
- * project-command-center.md).
- */
-function CommandTile({ icon: Icon, label, value, tone, onClick }: { icon: typeof Clock; label: string; value: number; tone?: 'critical' | 'caution' | 'positive' | 'default'; onClick: () => void }) {
-  const toneClass = tone === 'critical' ? 'bg-critical/10 text-critical' : tone === 'caution' ? 'bg-caution/10 text-caution' : tone === 'positive' ? 'bg-positive/10 text-positive' : 'bg-brand-soft text-brand';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex min-h-11 items-center gap-3 rounded-xl border border-line bg-card p-4 text-left shadow-2xs transition-colors duration-(--duration-fast) hover:bg-inset/60"
-    >
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
-        <Icon className="h-4.5 w-4.5" aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <strong className="block text-lg font-semibold tracking-tight text-fg tabular-nums">{value}</strong>
-        <span className="text-xs text-fg-muted">{label}</span>
-      </div>
-    </button>
-  );
-}
-
 function TaskRow({ task, onUnassign, busy }: { task: TaskRecord; onUnassign: (taskId: number) => void; busy: boolean }) {
   return (
     <li>
@@ -198,7 +174,7 @@ export function ProjectDetailPage() {
   const nextMilestone = overview?.milestones.find((milestone) => milestone.status !== 'DONE');
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6" aria-busy={busy}>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6" aria-busy={busy}>
       <PageHeader
         title={project ? project.name : 'Project detail'}
         description={project?.description || 'Your command center for this project: what to work on, what changed, and what is next.'}
@@ -243,93 +219,120 @@ export function ProjectDetailPage() {
               <QueryState isLoading={overviewQuery.isLoading} isError={isQueryError(overviewQuery.data)} isEmpty={false} />
               {overview && (
                 <>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <CommandTile icon={CheckCircle2} label="Ready to work" value={readyTasks.length} tone="positive" onClick={() => goToTab('tasks', 'ready')} />
-                    <CommandTile icon={AlertTriangle} label="Blocked" value={blockedTasks.length} tone={blockedTasks.length > 0 ? 'caution' : 'default'} onClick={() => goToTab('tasks', 'blocked')} />
-                    <CommandTile icon={Clock} label="Overdue" value={overview.overdueTasks} tone={overview.overdueTasks > 0 ? 'critical' : 'default'} onClick={() => goToTab('tasks', 'overdue')} />
-                  </div>
-
-                  <Card className="flex flex-col gap-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-fg">Progress</p>
-                      <Badge variant={projectRiskVariant(overview.riskLevel)}>{formatEnumLabel(overview.riskLevel)} risk</Badge>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold text-fg">{overview.progressPercent}%</span>
-                      <span className="text-sm text-fg-muted">{overview.completedTasks} of {overview.totalTasks} tasks complete</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-inset" role="progressbar" aria-valuenow={overview.progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Project progress">
-                      <div className="h-full rounded-full bg-brand transition-[width] duration-(--duration-base)" style={{ width: `${overview.progressPercent}%` }} />
-                    </div>
-                    <p className="text-sm text-fg-muted">{overview.riskReason}</p>
-                  </Card>
-
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <Card className="text-center">
-                      <p className="text-lg font-bold text-fg">{overview.activeTasks}</p>
-                      <p className="text-xs text-fg-muted">Active tasks</p>
-                    </Card>
-                    <Card className="text-center">
-                      <p className="text-lg font-bold text-critical">{overview.overdueTasks}</p>
-                      <p className="text-xs text-fg-muted">Overdue</p>
-                    </Card>
-                    <Card className="text-center">
-                      <p className="text-lg font-bold text-fg">{overview.estimatedHours.toFixed(1)}h</p>
-                      <p className="text-xs text-fg-muted">Estimated</p>
-                    </Card>
-                    <Card className="text-center">
-                      <p className="text-lg font-bold text-fg">{overview.actualHours.toFixed(1)}h</p>
-                      <p className="text-xs text-fg-muted">Actual</p>
-                    </Card>
-                  </div>
-
-                  <Card>
-                    <CardHeader
-                      title="Next milestone"
-                      description={nextMilestone ? `${nextMilestone.title}${nextMilestone.targetDate ? ` · Target ${formatDate(nextMilestone.targetDate)}` : ''}` : 'All milestones complete.'}
-                      actions={<Button size="sm" variant="ghost" onClick={() => goToTab('milestones')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>}
-                    />
-                    <p className="text-sm text-fg-muted">{overview.completedMilestones} of {overview.milestones.length} milestones complete.</p>
-                  </Card>
-
-                  <Card>
-                    <CardHeader title="Recent activity" actions={<Button size="sm" variant="ghost" onClick={() => goToTab('activity')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>} />
-                    {recentActivityQuery.isLoading ? (
-                      <p className="text-sm text-fg-muted">Loading...</p>
-                    ) : recentActivity.length === 0 ? (
-                      <p className="text-sm text-fg-subtle">No activity yet.</p>
-                    ) : (
-                      <ul className="flex flex-col gap-3">
-                        {recentActivity.map((entry) => <ActivityTimelineItem key={entry.id} entry={entry} />)}
-                      </ul>
-                    )}
-                  </Card>
-
-                  <Card>
-                    <CardHeader title="Recent notes" actions={<Button size="sm" variant="ghost" onClick={() => goToTab('notes')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>} />
-                    {recentNotesQuery.isLoading ? (
-                      <p className="text-sm text-fg-muted">Loading...</p>
-                    ) : recentNotes.length === 0 ? (
-                      <EmptyState
-                        icon={StickyNote}
-                        title="No project notes yet"
-                        description="Capture meeting notes, decisions, or research for this project."
-                        action={<Link to={`/notes?projectId=${projectId}`}><Button size="sm" variant="primary"><Plus className="h-4 w-4" aria-hidden />Create project note</Button></Link>}
-                      />
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {recentNotes.map((note) => (
-                          <NoteCard
-                            key={note.id}
-                            note={note}
-                            layout="row"
-                            subtitle={<p className="text-sm text-fg-muted">Updated {formatNoteDate(note.updatedAt)}</p>}
-                            actions={<Link to={`/notes?projectId=${projectId}&q=${encodeURIComponent(note.title)}`} className="text-sm font-medium text-brand hover:underline">Open in Notes</Link>}
-                          />
-                        ))}
+                  {/* Instrument cluster (issue #296 review): project health + ready/blocked/overdue
+                      merged into one panel instead of a Progress card followed by three separate
+                      stat tiles - this is the "prominent health header + high-signal readiness area"
+                      the review asked for. */}
+                  <section className="overflow-hidden rounded-2xl border border-line bg-card">
+                    <div className="flex flex-col gap-4 bg-brand-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full" style={{ background: `conic-gradient(var(--app-brand) ${overview.progressPercent * 3.6}deg, var(--app-line) 0deg)` }}>
+                          <div className="absolute inset-1.5 rounded-full bg-card" aria-hidden />
+                          <span className="relative font-mono text-sm font-bold text-fg">{overview.progressPercent}%</span>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold tracking-wider text-fg-subtle uppercase">Project health</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <Badge variant={projectRiskVariant(overview.riskLevel)}>{formatEnumLabel(overview.riskLevel)} risk</Badge>
+                            <span className="text-sm text-fg-muted">{overview.completedTasks} of {overview.totalTasks} tasks complete</span>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </Card>
+                      <p className="max-w-sm text-sm text-fg-muted sm:text-right">{overview.riskReason}</p>
+                    </div>
+                    <div className="grid grid-cols-3 divide-x divide-line border-t border-line">
+                      <button type="button" onClick={() => goToTab('tasks', 'ready')} className="flex min-h-11 flex-col items-center gap-1 px-3 py-4 text-center transition-colors duration-(--duration-fast) hover:bg-inset">
+                        <CheckCircle2 className="h-4 w-4 text-brand" aria-hidden />
+                        <span className="font-mono text-2xl font-bold text-brand tabular-nums">{readyTasks.length}</span>
+                        <span className="text-xs font-medium text-fg-muted">Ready to work</span>
+                      </button>
+                      <button type="button" onClick={() => goToTab('tasks', 'blocked')} className="flex min-h-11 flex-col items-center gap-1 px-3 py-4 text-center transition-colors duration-(--duration-fast) hover:bg-inset">
+                        <AlertTriangle className="h-4 w-4 text-caution" aria-hidden />
+                        <span className="font-mono text-2xl font-bold text-caution tabular-nums">{blockedTasks.length}</span>
+                        <span className="text-xs font-medium text-fg-muted">Blocked</span>
+                      </button>
+                      <button type="button" onClick={() => goToTab('tasks', 'overdue')} className="flex min-h-11 flex-col items-center gap-1 px-3 py-4 text-center transition-colors duration-(--duration-fast) hover:bg-inset">
+                        <Clock className="h-4 w-4 text-critical" aria-hidden />
+                        <span className="font-mono text-2xl font-bold text-critical tabular-nums">{overview.overdueTasks}</span>
+                        <span className="text-xs font-medium text-fg-muted">Overdue</span>
+                      </button>
+                    </div>
+                  </section>
+
+                  {/* Main / secondary column split (issue #296 review) - milestone + effort stay in the
+                      primary flow, activity and notes move into a supporting sidebar. */}
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+                    <div className="flex min-w-0 flex-col gap-4">
+                      <Card>
+                        <CardHeader
+                          title="Next milestone"
+                          description={nextMilestone ? `${nextMilestone.title}${nextMilestone.targetDate ? ` · Target ${formatDate(nextMilestone.targetDate)}` : ''}` : 'All milestones complete.'}
+                          actions={<Button size="sm" variant="ghost" onClick={() => goToTab('milestones')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>}
+                        />
+                        <p className="text-sm text-fg-muted">{overview.completedMilestones} of {overview.milestones.length} milestones complete.</p>
+                      </Card>
+
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <Card className="text-center">
+                          <p className="font-mono text-lg font-bold text-fg">{overview.activeTasks}</p>
+                          <p className="text-xs text-fg-muted">Active tasks</p>
+                        </Card>
+                        <Card className="text-center">
+                          <p className="font-mono text-lg font-bold text-critical">{overview.overdueTasks}</p>
+                          <p className="text-xs text-fg-muted">Overdue</p>
+                        </Card>
+                        <Card className="text-center">
+                          <p className="font-mono text-lg font-bold text-fg">{overview.estimatedHours.toFixed(1)}h</p>
+                          <p className="text-xs text-fg-muted">Estimated</p>
+                        </Card>
+                        <Card className="text-center">
+                          <p className="font-mono text-lg font-bold text-fg">{overview.actualHours.toFixed(1)}h</p>
+                          <p className="text-xs text-fg-muted">Actual</p>
+                        </Card>
+                      </div>
+                    </div>
+
+                    <aside className="flex flex-col gap-4">
+                      <Card>
+                        <CardHeader title="Recent activity" actions={<Button size="sm" variant="ghost" onClick={() => goToTab('activity')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>} />
+                        {recentActivityQuery.isLoading ? (
+                          <p className="text-sm text-fg-muted">Loading...</p>
+                        ) : recentActivity.length === 0 ? (
+                          <p className="text-sm text-fg-subtle">No activity yet.</p>
+                        ) : (
+                          <ul className="flex flex-col gap-3">
+                            {recentActivity.map((entry) => <ActivityTimelineItem key={entry.id} entry={entry} />)}
+                          </ul>
+                        )}
+                      </Card>
+
+                      <Card>
+                        <CardHeader title="Recent notes" actions={<Button size="sm" variant="ghost" onClick={() => goToTab('notes')}>View all <ArrowRight className="h-3.5 w-3.5" aria-hidden /></Button>} />
+                        {recentNotesQuery.isLoading ? (
+                          <p className="text-sm text-fg-muted">Loading...</p>
+                        ) : recentNotes.length === 0 ? (
+                          <EmptyState
+                            icon={StickyNote}
+                            title="No project notes yet"
+                            description="Capture meeting notes, decisions, or research for this project."
+                            action={<Link to={`/notes?projectId=${projectId}`}><Button size="sm" variant="primary"><Plus className="h-4 w-4" aria-hidden />Create project note</Button></Link>}
+                          />
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                            {recentNotes.map((note) => (
+                              <NoteCard
+                                key={note.id}
+                                note={note}
+                                layout="row"
+                                subtitle={<p className="text-sm text-fg-muted">Updated {formatNoteDate(note.updatedAt)}</p>}
+                                actions={<Link to={`/notes?projectId=${projectId}&q=${encodeURIComponent(note.title)}`} className="text-sm font-medium text-brand hover:underline">Open in Notes</Link>}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </Card>
+                    </aside>
+                  </div>
                 </>
               )}
             </TabsContent>

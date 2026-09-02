@@ -1,81 +1,79 @@
-# Focused interaction research
+# Focused interaction research — actual tool output
 
-Each topic below is the "search" the issue asks for, done against real prior art +
-this codebase's own constraints, resolved to one concrete decision.
+Real results from the UI UX Pro Max search database (`--domain ux` unless noted). Full raw
+transcripts: `tool-transcripts/03-focused-searches.md` and `tool-transcripts/04-icons-retry.md`.
+Each entry below is the top verified result plus the concrete decision it drove.
 
 ## Blocked task explanation, progressive disclosure
-Decision: never show a bare "BLOCKED" chip. Blocked always ships with a
-`BlockerDisclosure` one interaction away: collapsed "Waiting for 2 tasks →" in dense
-lists (Today, Project Tasks), auto-expanded "Waiting for:" list in single-item
-contexts (Task Detail). Each blocker line is itself a link + its own status Badge —
-answers "why blocked" and "what unblocks it" in the same disclosure, no second
-fetch (backend already returns `blockers[].{id,title,status}`).
+Query returned one match (Typography/Heading Line Balance - not a strong fit; the database has
+no dedicated "progressive disclosure" entry for blocked-state explanation specifically, noted
+as a fallback per the skill's "no verified match" rule). Decision made from the closer badge/chip
++ keyboard-focus results below instead: blocked never shows without its blockers one interaction
+away (`BlockerDisclosure`, collapsed in dense lists, expanded on Task Detail).
 
 ## Ready task, actionable status
-Decision: `ready` is the **absence** of a badge in the common case (most tasks are
-simply workable — that's not news) and a quiet positive `Ready` chip only in
-contexts where the reader is actively triaging blocked vs. unblocked side by side
-(Today's "Ready to work" section header itself carries that meaning; per-row badges
-there would be redundant). Where `blocked`/`ready` sit next to a manual `Status`
-badge (Task Detail, Project Tasks), `ReadinessBadge` uses a different shape/tone
-family (pill outline + icon) than `taskStatusVariant` badges so the two axes never
-visually merge.
+Top results: "Submit Feedback" (show loading → success/error, not blocked) and "Contextual Live
+Badge Updates" (announce badge/count changes as one atomic status message, not a bare number;
+`<span role="status" aria-atomic="true">3 items in cart</span>` as the good example). Applied:
+the Ready panel's count is a plain visual `font-mono` readout, not a live region that would
+re-announce on every task completion - matches "don't make every badge a competing live region."
 
-## Project dashboard information hierarchy
-Decision (F-pattern, top-to-bottom priority): 1) what's actionable now (ready +
-blocked counts, linking to Today/Tasks), 2) risk/progress (reuse existing
-`ProjectOverviewResponse` progress bar + risk badge, unchanged — it already does
-this well), 3) what's next (next incomplete milestone), 4) what changed (last 3-5
-activity rows + last 2-3 notes), each with a "View all →" into its tab. No vanity
-counters (e.g. total lifetime tasks) get top billing — only counts that answer a
-question from the issue's product goal.
+## Dashboard information hierarchy
+Top results: "Color Only" (never convey state by color alone - already true, every readiness/
+status indicator pairs an icon or text with its color), "Heading Hierarchy" (sequential h1-h6,
+never skip levels - the new Ready/Blocked panel headings are real `<h3>`s, not styled `<div>`s).
 
 ## Activity timeline scanning
-Decision: icon-in-circle keyed by `eventType` (create/update/complete/note/
-conversion), bold summary line, relative timestamp (`Intl.RelativeTimeFormat`,
-falls back to absolute on hover/title), metadata folded behind a small "Details"
-disclosure rendered as a definition list (never raw JSON). Entity references
-(`entityType`+`entityId`) become a link when the type is TASK or NOTE and the
-route exists (`/tasks/:id`, or open the note in Notes with a filter); PROJECT
-entity rows don't self-link (already on that project's page).
+Top result: "Font Size Scale" - consistent modular type scale aids scanning. Applied via the new
+`font-mono tabular-nums` treatment for every numeric/date readout (stat counts, due-date badges,
+progress percentage) so numbers align and scan consistently, distinct from body text.
 
 ## Responsive tabs / mobile navigation
-Decision: reuse the existing `Tabs`/`TabsList` (Radix) for the Command Center's
-6 sections but make the list horizontally scrollable (`overflow-x-auto`,
-`flex-nowrap`, `scrollbar` hidden but scrollable) below 768px instead of Tailwind
-`flex-wrap`, which would stack labels illegibly at 6 items on a 375px screen. No
-separate mobile-only dropdown component — one implementation, CSS handles both
-breakpoints, consistent with "don't introduce a second navigation pattern."
+Top results: "Mobile First" (default mobile styles, add breakpoints upward) and "Table Handling"
+(`overflow-x-auto` wrapper for content that can't reflow). Applied: the Command Center's
+`TabsList` scrolls horizontally (`overflow-x-auto` + per-trigger `!flex-none`) rather than
+cramming six tabs to fit, exactly the "wide content scrolls in its own container" pattern.
 
 ## Loading / empty / error states
-Decision: every new query-backed section reuses `QueryState` for the
-loading/error/empty one-liner *or*, where a richer empty state teaches the next
-action (Project Notes with zero notes, Activity with zero events), the existing
-`EmptyState` component with an icon + actionable CTA — matching the issue's
-"No project notes yet → Create project note" example. Error states always expose
-a retry (`refetch()`), matching `TodayPage`'s existing error branch.
+Top results: "Empty States" (helpful message + action, not blank space), "Loading States"
+(skeleton/spinner feedback, never a frozen UI), "Error Messages" (`role="alert"` or `aria-live`,
+never color-only). Applied via the existing `EmptyState`/`QueryState` components, reused
+unchanged across every new panel/tab.
 
 ## Badge / chip accessibility
-Decision: status is never color-only — every Badge/ReadinessBadge/NoteTypeBadge
-pairs an icon or explicit text label with its color, per the existing `Badge`
-component's own convention (it already always renders text). No badge is used as
-the sole interactive affordance without a visible focus ring; badges that act as
-buttons (e.g. a clickable blocker chip) render as real `<button>`/`<a>` elements.
-
-## Task list information density
-Decision: dense rows (title + at most one readiness + one date/importance
-indicator) in list contexts; full detail (blockers expanded, recurrence, subtasks)
-reserved for Task Detail. This mirrors the existing `TaskListView` row density and
-extends it rather than redesigning task rows wholesale.
-
-## Project cockpit dashboard
-Decision: Overview is a command surface, not a report — every summary tile/section
-links to its tab (Ready/Blocked counts → Tasks tab filtered; milestone → Milestones
-tab; activity/notes previews → their tabs). This is what makes it a "cockpit"
-rather than a stats page, directly serving the issue's product goal list.
+Top results: "Compact Label Overflow" (`nowrap` + shrinkable label + full-value disclosure to
+keyboard/touch, never a hover-only tooltip) and "Contextual Live Badge Updates" (see above).
+Confirms the existing `Badge` component's approach (always renders full text, `truncate` +
+`min-w-0`, no hover-only affordance) was already correct.
 
 ## Keyboard focus, interactive status
-Decision: reuse `Button`/`TabsTrigger`'s existing `focus-visible` ring treatment for
-all new interactive elements (blocker links, disclosure triggers, activity entity
-links, note-type filter chips) — no new focus style invented, so keyboard behavior
-stays consistent app-wide.
+Top results: "Compact Control Semantics" (a real `<button>` with `aria-pressed`/`aria-expanded`
+matching its visible label, never a clickable `<div>`), "Focus States" (visible ring on every
+interactive control, never `outline-none` without a replacement), and WCAG 2.2 AAA "Focus Not
+Obscured". Every new clickable element (readiness instrument buttons, blocker links, tab
+triggers) is a native `<button>`/`<a>` reusing the app's existing `focus-visible` ring token.
+
+## Task list information density
+Top result: "Color Only" again (recurring guideline, applies here too - readiness/status never
+color-only in list rows either).
+
+## Project cockpit dashboard layout
+Top results: "Fixed Positioning" (account for safe areas / other fixed elements), "Stacking
+Context", "Viewport Units" (`min-h-dvh`/`min-h-screen`, not bare `100vh`, on mobile). None of the
+new layout uses fixed positioning or a hardcoded viewport height, so no change needed - noted as
+verified-clean rather than skipped.
+
+## Icons (status/warning/success)
+Recommended library: Phosphor. Not adopted - see `REDESIGN-296.md` §2 for why (one visual family
+per surface; lucide already covers every semantic icon requested).
+
+## Stack: React
+Top results: profile before optimizing (React DevTools Profiler), colocate related files, keep
+components small/focused. No code changes driven directly by this search; consistent with
+existing patterns already in the codebase (feature-folder colocation under `components/tasks`,
+`components/projects`, etc.).
+
+## Stack: html-tailwind (chip/badge overflow)
+Top result: `flex flex-wrap gap-2` for a collection of chips; for a single label,
+`whitespace-nowrap` + `min-w-0 truncate` + `shrink-0` on any dismiss/icon control. Matches the
+existing `Badge`/`ReadinessBadge` implementation already in this codebase.
