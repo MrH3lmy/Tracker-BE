@@ -106,3 +106,33 @@ export function buildNotePayload(form: NoteFormState) {
     body: form.body,
   };
 }
+
+/** Sort options offered by the Notes workspace result toolbar (issue #299). */
+export const NOTE_SORT_OPTIONS: Array<{ value: NoteSortBy; label: string }> = [
+  { value: 'updatedAt', label: 'Last updated' },
+  { value: 'createdAt', label: 'Recently created' },
+  { value: 'title', label: 'Title' },
+  { value: 'displayOrder', label: 'Sticky order' },
+  { value: 'task', label: 'Task' },
+  { value: 'contentType', label: 'Content type' },
+];
+
+/**
+ * Short relative time for note meta lines ("40m ago"). Falls back to the absolute
+ * string `formatDate` produces for anything unparseable or older than a week, so a
+ * scanning user never sees "63 days ago" where a date is more useful.
+ */
+export function formatRelativeTime(value?: string): string {
+  if (!value) return 'Not available';
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return value;
+  const seconds = Math.round((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days <= 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
