@@ -421,7 +421,7 @@ describe('TasksPage - difficult data and responsive/accessibility contract', () 
     expect(status).toHaveTextContent('7 of 7 active tasks shown.');
 
     await user.click(screen.getByRole('button', { name: 'Blocked, 1 active task' }));
-    expect(screen.getByRole('status')).toHaveTextContent('1 of 7 active tasks shown. work state: Blocked.');
+    expect(screen.getByRole('status')).toHaveTextContent('1 of 7 active tasks shown. Work state: Blocked.');
   });
 });
 

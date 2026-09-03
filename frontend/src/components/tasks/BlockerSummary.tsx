@@ -29,17 +29,17 @@ export function BlockerSummary({ taskTitle, blockers, className }: BlockerSummar
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span className="inline-flex shrink-0 items-center gap-1 font-medium text-caution">
           <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
           Blocked by
         </span>
         <ul id={listId} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {visible.map((blocker) => (
-            <li key={blocker.id} className="min-w-0">
+            <li key={blocker.id} className="min-w-0 max-w-full">
               <Link
                 to={`/tasks/${blocker.id}`}
-                className="inline-flex max-w-[18rem] items-center gap-1 rounded-sm text-fg-muted underline decoration-dotted underline-offset-2 transition-colors duration-(--duration-fast) hover:text-fg"
+                className="inline-flex max-w-full items-center gap-1 rounded-sm text-fg-muted underline decoration-dotted underline-offset-2 transition-colors duration-(--duration-fast) hover:text-fg sm:max-w-[18rem]"
               >
                 <span className="shrink-0 font-mono">#{blocker.id}</span>
                 <span className="truncate">{blocker.title}</span>

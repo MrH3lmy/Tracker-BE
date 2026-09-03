@@ -266,8 +266,8 @@ export function TasksPage() {
 
   const resultSummary = useMemo(() => {
     const parts = [`${sortedFilteredTasks.length} of ${tasks.length} ${scopeLabel.toLowerCase()} task${tasks.length === 1 ? '' : 's'} shown`];
-    if (lens !== 'all') parts.push(`work state: ${TASK_LENS_LABEL[lens]}`);
-    if (signals.length > 0) parts.push(`signals: ${signals.map((signal) => TASK_SIGNAL_LABEL[signal]).join(', ')}`);
+    if (lens !== 'all') parts.push(`Work state: ${TASK_LENS_LABEL[lens]}`);
+    if (signals.length > 0) parts.push(`Signals: ${signals.map((signal) => TASK_SIGNAL_LABEL[signal]).join(', ')}`);
     if (activeFilterCount > 0) parts.push(`${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} or sort applied`);
     return `${parts.join('. ')}.`;
   }, [activeFilterCount, lens, scopeLabel, signals, sortedFilteredTasks.length, tasks.length]);
@@ -373,7 +373,7 @@ export function TasksPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold tracking-tight text-fg">Tasks</h2>
-          <p className="mt-1 text-sm text-fg-muted">What you can act on, what is blocked, and what needs attention.</p>
+          <p className="mt-1 hidden text-sm text-fg-muted sm:block">What you can act on, what is blocked, and what needs attention.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SectionTabs items={TASK_VIEW_TABS} ariaLabel="Task view" />
@@ -395,12 +395,13 @@ export function TasksPage() {
       />
 
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="relative min-w-0 flex-1 sm:max-w-xs" htmlFor="plannerTaskSearch">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="relative block w-full min-w-0 sm:w-64" htmlFor="plannerTaskSearch">
             <span className="sr-only">Search tasks</span>
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <Input id="plannerTaskSearch" type="search" className="pl-9" placeholder="Search tasks" value={search} onChange={(e) => setFilterParam('q', e.target.value, '')} />
           </label>
+          <div className="flex flex-wrap items-center gap-2">
           <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild>
               <Button aria-expanded={filtersOpen}>
@@ -433,7 +434,7 @@ export function TasksPage() {
             </PopoverContent>
           </Popover>
           <div className="flex items-center gap-2">
-            <label htmlFor="taskSortControl" className="whitespace-nowrap text-[13px] font-medium text-fg-muted">Sort by</label>
+            <label htmlFor="taskSortControl" className="sr-only whitespace-nowrap text-[13px] font-medium text-fg-muted lg:not-sr-only">Sort by</label>
             <div className="w-40">
               <Select
                 id="taskSortControl"
@@ -445,7 +446,8 @@ export function TasksPage() {
             </div>
           </div>
           <TaskSavedViews serializedFilters={serializedFilters} onApply={applySavedView} />
-          <div className="ms-auto">
+          </div>
+          <div className="shrink-0 sm:ms-auto sm:w-[21rem]">
             <SegmentedControl
               aria-label="Task status views"
               value={scope}

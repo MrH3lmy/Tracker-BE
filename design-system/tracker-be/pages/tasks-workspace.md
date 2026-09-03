@@ -59,9 +59,9 @@
 # Implementation notes (issue #304)
 
 Implementation: `pages/TasksPage.tsx` composed from `components/tasks/TaskWorkspaceRail.tsx`,
-`TaskToolbar.tsx`, `TaskListView.tsx`, `TaskRow.tsx`, `BlockerSummary.tsx`, `TaskStateChip.tsx`,
-`TaskListStates.tsx`, `TaskFilters.tsx`, `TaskCreateForm.tsx`, plus the pure helpers in
-`taskLenses.ts`.
+`TaskActiveFilters.tsx`, `TaskFilters.tsx`, `TaskSavedViews.tsx`, `TaskListView.tsx`,
+`TaskRow.tsx`, `BlockerSummary.tsx`, `TaskStateChip.tsx`, `TaskListStates.tsx` and
+`TaskCreateForm.tsx`, plus the pure helpers in `taskLenses.ts` and `taskSavedViews.ts`.
 
 Raw searches: `../research/tool-transcripts/05-tasks-workspace.md` (21 searches across `product`,
 `ux`, `icons`, `react`, `style`, `color`, `--stack react`, `--stack html-tailwind`, plus the two
@@ -93,20 +93,20 @@ transcript file.
 | 1 | `product` → **Productivity Tool**: *Dashboard Style: Drill-Down Analytics*, *Color Palette Focus: clear hierarchy + functional colors* | The page is a **drill-down**, not a spreadsheet: a state rail (counts) → a filtered list → `/tasks/:id`. Nothing on the page tries to be the task detail. |
 | 2 | `--page` override: **Max width 1400px**, **Content Density: High** | `max-w-[1400px]` (was `max-w-7xl` = 1280px); rows are 2-line compact with `divide-y`, no per-row card. |
 | 3 | `--page` override: *Avoid div soup*, *sequential heading levels* | The list is a real `<ul>`/`<li>`; the fake `role="table"`/`role="row"`/`role="cell"` grid is gone. Headings run `h2` (page) → `h3` (list region) with no skips. |
-| 4 | `ux` **Compact Control Semantics** [Critical]: *interactive chips need a native role, accessible name, state, keyboard operation and visible focus; don't reveal the only action on hover* | Every lens and every active-filter chip is a real `<button>` with `aria-pressed`. The hover-only notes link is gone — note count is now static row metadata and "Open linked notes" is a permanent menu item. |
+| 4 | `ux` **Compact Control Semantics** [Critical]: *interactive chips need a native role, accessible name, state, keyboard operation and visible focus; don't reveal the only action on hover* | Every lens and every active-filter chip is a real `<button>` with `aria-pressed`. The hover-only notes link is gone: "Open linked notes" is a permanent row-menu item, and the row prints a note count only when the API actually sends one. |
 | 5 | `ux` **Compact Label Semantics** [High]: *badges communicate state, chips represent values or actions; don't make every pill clickable* | State (`Ready`/`Blocked`/`Waiting`/`Overdue`/status/risk) renders as non-interactive `Badge` spans in rows. Only the rail and the active-filter row use interactive chips. |
 | 6 | `ux` **Color Only** [High] | `TaskStateChip` is always icon **+** word (`CheckCircle2` Ready / `AlertTriangle` Blocked / `Clock` Waiting). The left rail tint is redundant reinforcement, never the sole carrier. |
 | 7 | `ux` **Essential Text Truncation** [Critical]: *headings, actions and distinguishing names need complete access — wrap, stack, resize, or provide a visible full-detail path* | Task titles use `line-clamp-2` + `wrap-anywhere` (was a hard single-line `truncate`) and the title itself is the link to the full record. Action labels are never truncated. |
 | 8 | `ux` **Compact Label Overflow** [High] + `html-tailwind` **Compact label layout** [High]: *`min-w-0 whitespace-nowrap truncate` for one label, `shrink-0` controls, `flex flex-wrap gap-2` for collections; no hover-only tooltip* | Long project names truncate at `max-w-[10rem]` **and** carry an `sr-only` full value, so the whole name is available to screen readers and in the detail page rather than only in a `title` tooltip. The metadata line and both chip collections wrap. |
 | 9 | `ux` **Chip Collection Reflow** [High]: *wrap the collection or use an operable +n disclosure* | `BlockerSummary` shows the first blocker inline and an operable `+n more` `<button aria-expanded>`; the rail and filter chips wrap instead of clipping. |
-| 10 | `html-tailwind` **Hidden/shown utilities**: *`hidden md:block`* — **Don't: separate mobile/desktop components** | **This chose the responsive model.** One `TaskRow` at every width. Secondary metadata is revealed with `hidden sm:inline-flex` / `hidden lg:inline-flex`; nothing is a phone-only or desktop-only component, and no data is exclusive to one breakpoint. |
+| 10 | `html-tailwind` **Hidden/shown utilities**: *`hidden md:block`* — **Don't: separate mobile/desktop components** | **This chose the responsive model.** One `TaskRow` at every width. Secondary metadata is revealed with `hidden sm:contents` / `hidden lg:contents` wrappers; nothing is a phone-only or desktop-only component, and no data is exclusive to one breakpoint. |
 | 11 | `ux` **Table Handling**: *horizontal scroll **or** card layout* | Neither: the fixed grid is replaced by a flex row that reflows, so there is no horizontal scroll container at all and no duplicate card component to keep in sync. |
 | 12 | `ux` **Hover vs Tap** [High] + **Touch Target Size** [High] + `html-tailwind` **Touch targets** [High] | Complete is a permanent leading `min-h-11 min-w-11` toggle button; the overflow menu trigger is `h-11 w-11` below `sm`. No action appears on hover. |
-| 13 | `ux` **Contextual Live Badge Updates** [High]: *one atomic contextual status, not a bare number, not every badge a live region* | Exactly one `role="status" aria-atomic` region on the page: *"12 of 42 active tasks shown. Lens: Ready. 2 filters applied."* Counts inside chips are plain text. |
+| 13 | `ux` **Contextual Live Badge Updates** [High]: *one atomic contextual status, not a bare number, not every badge a live region* | Exactly one `role="status" aria-atomic` region on the page: *"12 of 42 active tasks shown. Work state: Ready. 2 filters or sort applied."* Counts inside chips are plain text. |
 | 14 | `ux` **Empty States** + **No Results** (*suggestions, not "0 results"*) + **Loading Indicators** (*stable skeleton, `aria-busy`*) + **Error Messages** (*`role=alert`*) | `TaskListStates` renders eight distinct states, each naming the next useful action; loading is a stable 5-row skeleton inside `aria-busy`; failure is `role="alert"` with a working **Try again** that calls `refetch()`. |
 | 15 | `ux` **Focusable Error Summary** [High] + **Error Placement** [High] | The create drawer gets a `role="alert" tabIndex={-1}` summary at the top of the form on failed submit; focus moves to it; each item is an anchor to its field; inline `aria-describedby` errors are retained. |
 | 16 | `ux` **Redundant Entry** / quick capture | `TaskCreateForm` is now essentials-first; blocked-reason, waiting-on and risk-reason appear **when the status/risk that requires them is selected**, and the remaining nine fields sit behind one *More details* disclosure. Validation rules are byte-for-byte the ones that were there. |
-| 17 | `react` **Memoized Components** / **Derived State** | `TaskRow` is `memo()`d; lens membership is computed once per task in a single pass (`classifyTask`) rather than re-filtering per lens. |
+| 17 | `react` **Memoized Components** [Medium] | `TaskRow` is `memo()`d and every page handler is `useCallback`-stable, so a leaf row does not re-render when unrelated page state changes. Rail counts are two linear passes over the scope (`countTaskLenses` / `countTaskSignals`), not one filter pass per lens. |
 | 18 | `icons` **icon-context-accessibility**: *keep one visual family per surface*; decorative icons `aria-hidden` | Kept `lucide-react` via `components/ui/icons.ts` — the same call made in `../REDESIGN-296.md` §2, for the guideline's own reason. Semantic set mirrors the returned Phosphor set (`check-circle`, `warning`, `clock`, `x-circle`). |
 | 19 | `color` **Productivity Tool** palette | Returned the committed palette verbatim (teal `#0D9488` / orange `#EA580C` / `#DC2626`). No token changes — one app-wide language, per the issue. |
 | 20 | `ux` **Sticky Navigation** / **Focus Not Obscured** | The rail + toolbar are **not** sticky. A sticky block here would sit over rows on short viewports and is the exact "persistent UI hides part of focus" case the dataset warns about; density gains did not justify it. |
@@ -174,14 +174,20 @@ export const taskWorkState = (task: TaskRecord): TaskWorkState => {
 
 Line 1 — `[complete toggle]` · **title** (`line-clamp-2`, links to `/tasks/:id`) · state chip ·
 `Overdue` · `Important`.
-Line 2 (metadata, `text-xs`, wraps, ordered by triage value) — `#id` · project · workflow status ·
-due date (`font-mono`) · estimate · effort · risk (only `HIGH`/`CRITICAL`) · subtask progress ·
-note count · follow-up date. Empty fields render **nothing** — no `—` placeholders.
+Line 2 (metadata, `text-xs`, wraps, ordered by triage value) — `#id` · project · due date
+(`font-mono`) · risk (only `HIGH`/`CRITICAL`) · the hold reason (`Waiting on …` / the manual
+blocked reason, when the task is not dependency-blocked) · workflow status · subtask progress ·
+estimate · effort · follow-up date · area · note count. Empty fields render **nothing** — no `—`
+placeholders. The workflow status badge is also suppressed when it would repeat the work-state
+chip word for word (a `WAITING` task in the Waiting work state).
 Line 3 — `BlockerSummary`, only on blocked rows.
 Nested `<ul>` — subtasks, indented with a rail, same component, same affordances.
 
-Breakpoints: `< sm` shows id/project/state/due/blockers; `sm` adds status, subtasks, estimate;
-`lg` adds effort, area, notes, follow-up. Same component, `hidden … :inline-flex` only.
+Breakpoints: `< sm` shows id/project/state/due/risk/hold-reason/blockers; `sm` adds status,
+subtask progress and estimate; `lg` adds effort, follow-up, area and the note count. Same
+component throughout — visibility is carried by `hidden sm:contents` / `hidden lg:contents`
+wrappers rather than by putting `hidden` on items that already set `display` themselves
+(`inline-flex`, `line-clamp-*`), which would make the outcome depend on stylesheet order.
 
 ## 6. Progressive disclosure
 
@@ -202,7 +208,13 @@ duplicate Task Detail inside the workspace, and everything it held is one click 
 `no overdue tasks` · `filtered-empty` (offers **Clear filters**) · `loading` (skeleton) ·
 `error` (`role="alert"` + **Try again**) · `empty Done` · `empty Archived`.
 
-## 8. Accessibility contract
+## 8. Visual evidence
+
+`docs/screenshots/issue-304/` — 23 captures from the implemented UI running against a seeded
+backend, plus the measured horizontal-overflow table for 320/375/414/768/1024/1440px in both
+themes (0px everywhere).
+
+## 9. Accessibility contract
 
 WCAG AA contrast (inherited tokens, unchanged) · visible focus on every control · state carried by
 icon + text, never colour alone · no hover-only action · `aria-pressed` on all lens/filter chips ·
@@ -210,14 +222,16 @@ icon + text, never colour alone · no hover-only action · `aria-pressed` on all
 `role="alert"` for errors · `min-h-11` touch targets · `prefers-reduced-motion` respected via the
 shared `--duration-*` tokens · no horizontal page overflow at 320/375/414/768/1024/1440.
 
-## 9. Backend contract gaps found (not changed here)
+## 10. Backend contract gaps found (not changed here)
 
 1. **No `projectName` on `TaskResponse`** — only `projectId`. The page resolves names from the
    already-cached `GET /api/v1/projects` (one query, no N+1). Adding `projectName` would remove a
    client-side join but is not required; recorded for a future backend issue.
 2. **No note count on `TaskResponse`** — `TaskRecord.noteCount`/`notesCount` are optional and this
-   endpoint never sends them, so the row shows a note affordance without a number. Not worth a
-   contract change on its own.
+   endpoint never sends them. Rather than print an identical "Notes" chip on every row for a
+   number the API does not have, the row shows a note count only when one is present and keeps
+   **Open linked notes** as a permanent row-menu action. Adding `noteCount` to `TaskResponse`
+   would make the chip meaningful; not worth a contract change on its own.
 3. **No server-side lens/filter/paging for tasks** — `/api/v1/tasks` returns the full scope, which
    is what makes honest client-side counts possible. Fine at current dataset sizes; a future
    server-side count endpoint would be needed before paginating.

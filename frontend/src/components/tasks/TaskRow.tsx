@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import { formatEnumLabel } from '../../lib/enumLabels';
 import { Badge, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, cn } from '../ui';
-import { CheckCircle2, Circle, FolderKanban, MoreHorizontal, StickyNote, Timer } from '../ui/icons';
+import { CheckCircle2, Circle, Clock, FolderKanban, MoreHorizontal, StickyNote, Timer } from '../ui/icons';
 import { BlockerSummary } from './BlockerSummary';
 import { TaskStateChip } from './TaskStateChip';
 import { WORK_STATE_LABEL, taskWorkState } from './taskLenses';
@@ -67,6 +67,7 @@ function TaskRowImpl({ task, depth, projectName, children, busy, onComplete, onS
   const highRisk = task.riskLevel === 'HIGH' || task.riskLevel === 'CRITICAL';
   const blockers = task.blocked ? task.blockers ?? [] : [];
   const statusOptions = TASK_STATUS_VALUES.filter((status) => status !== task.status);
+  const holdReason = task.waitingOn ? `Waiting on ${task.waitingOn}` : task.blockedReason || undefined;
 
   return (
     <li>
@@ -132,6 +133,12 @@ function TaskRowImpl({ task, depth, projectName, children, busy, onComplete, onS
               </Meta>
             )}
             {highRisk && <Badge variant={riskVariantByLevel[task.riskLevel ?? ''] ?? 'neutral'}>{formatEnumLabel(task.riskLevel)} risk</Badge>}
+            {blockers.length === 0 && holdReason && (
+              <Meta className="max-w-full">
+                <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{holdReason}</span>
+              </Meta>
+            )}
             <span className="hidden sm:contents">
               {showStatus && <Badge variant={taskStatusVariant(task.status)}>{statusLabel}</Badge>}
               {progress && (
@@ -149,14 +156,16 @@ function TaskRowImpl({ task, depth, projectName, children, busy, onComplete, onS
               {task.effort && <Meta>{formatEnumLabel(task.effort)}</Meta>}
               {task.followUpDate && <Meta className="font-mono">Follow-up {formatDate(task.followUpDate)}</Meta>}
               {task.area && <Meta>{formatEnumLabel(task.area)}</Meta>}
-              <Link
-                to={taskNotesHref(task.id)}
-                className="inline-flex items-center gap-1 rounded-sm text-fg-muted hover:text-fg"
-                aria-label={noteCount == null ? `Linked notes for ${task.title}` : `${noteCount} linked notes for ${task.title}`}
-              >
-                <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span aria-hidden>{noteCount == null ? 'Notes' : `Notes ${noteCount}`}</span>
-              </Link>
+              {noteCount != null && noteCount > 0 && (
+                <Link
+                  to={taskNotesHref(task.id)}
+                  className="inline-flex items-center gap-1 rounded-sm text-fg-muted hover:text-fg"
+                  aria-label={`${noteCount} linked notes for ${task.title}`}
+                >
+                  <StickyNote className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span aria-hidden>{noteCount}</span>
+                </Link>
+              )}
             </span>
           </div>
 
