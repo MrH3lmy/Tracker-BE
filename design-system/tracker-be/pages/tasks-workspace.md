@@ -120,6 +120,7 @@ Work state rail        (role=group)  All 42 · Ready 12 · Blocked 5 · Waiting 
 Signals                (role=group)  Overdue 3 · Follow-up 2 · Important 4
 ────────────────────────────────────────────────────────────────────────────────
 [ search ] [ Filters (n) ] [ Sort ▾ ] [ Views ▾ ]        [ Active | Done | Archived ]
+                                            (the rail above is Active-only - see below)
 [ chip: “api” × ] [ chip: Area WORK × ] [ chip: Project Atlas × ]      [ Clear all ]
 ────────────────────────────────────────────────────────────────────────────────
 h3  Active task list                         role=status: “12 of 42 … Lens: Ready”
@@ -140,6 +141,27 @@ h3  Active task list                         role=status: “12 of 42 … Lens: 
 
 Mixing them into one chip row would imply they are alternatives. They are not, and the dataset's
 "Compact Control Semantics" requires the pressed state to match the visible meaning.
+
+### Scope is a different axis from actionability
+
+Active / Done / Archived is **not** a fourth lens - it selects *which dataset* is on screen, and
+actionability only means something for work that is still open. A `DONE` or `CANCELLED` task is
+normally `ready=false`, so a Ready lens carried into Done empties the view and (worse) can render
+the "No tasks are ready to start" empty state while the user is explicitly looking at their
+completed work. The rule, added after the #306 review:
+
+- `readiness`, `overdue`, `followUp` and `important` are **cleared on every scope change**, so
+  returning to Active always lands on a defined state (All, no signals) rather than on whatever
+  was selected two scopes ago.
+- They are also **ignored at the point of derivation** whenever the scope is not Active
+  (`actionabilityApplies`), so a saved view or a hand-edited `?readiness=` URL cannot filter a
+  history scope either.
+- The work-state rail is **not rendered** outside Active: showing Ready/Blocked/Waiting counts for
+  historical tasks would be presenting a meaningless number, not a hidden control.
+- Search, status, project, area, effort, due-date range and sort **do** persist across scopes -
+  they are meaningful for history, and "find the thing I finished last week" is a real task.
+
+Locked in by five tests in `TasksPage.test.tsx`; four of them fail against the pre-review code.
 
 ### Count honesty
 

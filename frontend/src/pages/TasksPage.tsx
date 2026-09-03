@@ -38,6 +38,14 @@ const DEFAULT_SORT: TaskSortValue = 'position';
 /** Everything a saved view captures. Order matters only for readability. */
 const FILTER_PARAM_KEYS = ['q', 'readiness', 'overdue', 'followUp', 'important', 'status', 'project', 'area', 'effort', 'dueFrom', 'dueTo', 'sort'] as const;
 const POPOVER_FILTER_KEYS = ['status', 'project', 'area', 'effort', 'dueFrom', 'dueTo'] as const;
+/**
+ * Actionability is a property of *active* work only: a completed or cancelled task is normally
+ * `ready=false`, so carrying a Ready/Blocked/Waiting lens - or an Overdue/Follow-up/Important
+ * signal - into Done or Archived silently empties a history view and can even claim "No tasks are
+ * ready to start" while the user is explicitly looking at Done. These params are therefore cleared
+ * whenever the scope changes, and ignored outright while the scope is not Active.
+ */
+const ACTION_ONLY_PARAM_KEYS = ['readiness', 'overdue', 'followUp', 'important'] as const;
 const SORT_VALUES: TaskSortValue[] = ['position', 'priorityScore', 'dueDate', 'createdDate', 'effort', 'title'];
 const SORT_LABEL: Record<TaskSortValue, string> = {
   position: 'Board position',
@@ -146,8 +154,14 @@ export function TasksPage() {
   const effortFilter = filterValueFromParams(searchParams, 'effort');
   const dueFrom = dateValueFromParams(searchParams, 'dueFrom');
   const dueTo = dateValueFromParams(searchParams, 'dueTo');
-  const lens = lensFromParams(searchParams);
-  const signals = useMemo(() => signalsFromParams(searchParams), [searchParams]);
+  // Gated at the derivation point rather than only at the scope switch, so a saved view or a
+  // hand-edited URL carrying `readiness=` can never filter a history scope either.
+  const actionabilityApplies = scope === 'active';
+  const lens = actionabilityApplies ? lensFromParams(searchParams) : 'all';
+  const signals = useMemo(
+    () => (actionabilityApplies ? signalsFromParams(searchParams) : []),
+    [actionabilityApplies, searchParams],
+  );
   const sort = sortValueFromParams(searchParams);
   const createFormRef = useRef<TaskCreateFormHandle>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -180,6 +194,15 @@ export function TasksPage() {
       });
       return next;
     });
+  }, [setSearchParams]);
+
+  const changeScope = useCallback((next: TaskScope) => {
+    setScope(next);
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      ACTION_ONLY_PARAM_KEYS.forEach((key) => params.delete(key));
+      return params;
+    }, { replace: true });
   }, [setSearchParams]);
 
   const toggleSignal = useCallback((signal: TaskSignal) => {
@@ -384,6 +407,7 @@ export function TasksPage() {
         </div>
       </header>
 
+      {actionabilityApplies && (
       <TaskWorkspaceRail
         scopeLabel={scopeLabel.toLowerCase()}
         lens={lens}
@@ -393,6 +417,7 @@ export function TasksPage() {
         onToggleSignal={toggleSignal}
         signalCounts={signalCounts}
       />
+      )}
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -451,7 +476,7 @@ export function TasksPage() {
             <SegmentedControl
               aria-label="Task status views"
               value={scope}
-              onValueChange={setScope}
+              onValueChange={changeScope}
               options={[
                 { value: 'active', label: <>Active <span className="text-fg-subtle tabular-nums">{activeWorkTasks.length}</span></> },
                 { value: 'done', label: <>Done <span className="text-fg-subtle tabular-nums">{doneTasks.length}</span></> },

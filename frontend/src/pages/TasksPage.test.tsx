@@ -294,6 +294,82 @@ describe('TasksPage - scopes and navigation', () => {
   });
 });
 
+describe('TasksPage - actionability does not leak into Done / Archived', () => {
+  it('keeps completed tasks visible after switching from the Ready lens to Done', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Ready, 4 active tasks' }));
+    expect(screen.getByRole('button', { name: 'Ready, 4 active tasks' })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('tab', { name: /^Done/ }));
+
+    // A DONE task is ready=false, so a leaked Ready lens would empty the view entirely.
+    expect(await screen.findByRole('link', { name: 'Archive the old dashboards' })).toBeInTheDocument();
+    expect(screen.queryByText('No tasks are ready to start')).not.toBeInTheDocument();
+    // The actionability rail is meaningless for history and is not rendered there.
+    expect(screen.queryByRole('button', { name: /^Ready,/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /Work state/ })).not.toBeInTheDocument();
+  });
+
+  it('does not let a Blocked lens or an Overdue signal suppress the Archived scope', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Blocked, 1 active task' }));
+    await user.click(screen.getByRole('button', { name: 'Overdue, 1 active task' }));
+
+    await user.click(screen.getByRole('tab', { name: /^Archived/ }));
+
+    expect(await screen.findByRole('link', { name: 'Retire the pilot workspace' })).toBeInTheDocument();
+    expect(screen.queryByText('Nothing is blocked')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing overdue right now/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('1 of 1 archived task shown.');
+  });
+
+  it('lands back on a defined state (All, no signals) when returning to Active', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Ready, 4 active tasks' }));
+    await user.click(screen.getByRole('button', { name: 'Important, 1 active task' }));
+    await user.click(screen.getByRole('tab', { name: /^Done/ }));
+    await user.click(screen.getByRole('tab', { name: /^Active/ }));
+
+    expect(await screen.findByRole('button', { name: 'All, 7 active tasks' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Ready, 4 active tasks' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Important, 1 active task' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(taskList()).getByRole('link', { name: 'Chase the vendor SLA answer' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('7 of 7 active tasks shown.');
+  });
+
+  it('ignores a readiness param that arrives in the URL while a history scope is showing', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage('/tasks?readiness=ready&overdue=true');
+
+    await user.click(await screen.findByRole('tab', { name: /^Done/ }));
+
+    expect(await screen.findByRole('link', { name: 'Archive the old dashboards' })).toBeInTheDocument();
+  });
+
+  it('keeps generic search and filter state across a scope change', async () => {
+    mockFetch();
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole('link', { name: 'Wire the ingest retry path' });
+    await user.type(screen.getByLabelText('Search tasks'), 'dashboards');
+    await user.click(screen.getByRole('tab', { name: /^Done/ }));
+
+    expect(screen.getByRole('button', { name: 'Remove filter: Search: “dashboards”' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Archive the old dashboards' })).toBeInTheDocument();
+  });
+});
+
 describe('TasksPage - actions', () => {
   it('completes a task from the row and offers undo', async () => {
     mockFetch();
