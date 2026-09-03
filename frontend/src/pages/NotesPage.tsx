@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
 import { isQueryError } from "../apiClient";
-import { NoteActions } from "../components/notes/NoteActions";
-import { NoteCard } from "../components/notes/NoteCard";
 import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
-import { NotesToolbar } from "../components/notes/NotesToolbar";
-import { NotesHeader } from "../components/notes/NotesHeader";
-import { NotesResults } from "../components/notes/NotesResults";
+import { NotesContextBanner } from "../components/notes/NotesContextBanner";
+import { NotesResultToolbar } from "../components/notes/NotesResultToolbar";
+import { NotesResultView } from "../components/notes/NotesResultView";
+import { NotesSearchBar } from "../components/notes/NotesSearchBar";
 import { NotesState } from "../components/notes/NotesState";
-import { NotesTable } from "../components/notes/NotesTable";
-import { NotesSidebar } from "../components/notes/NotesSidebar";
+import { NotesWorkspaceHeader } from "../components/notes/NotesWorkspaceHeader";
+import { NotesWorkspaceNav, type NotesSavedView } from "../components/notes/NotesWorkspaceNav";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
 import { ScreenshotCropOverlay } from "../components/notes/ScreenshotCropOverlay";
 import { blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
 import { useNoteVersionHistory } from "../components/notes/useNoteVersionHistory";
 import { useNoteScreenshots } from "../components/notes/useNoteScreenshots";
+import { useNotesWorkspace } from "../components/notes/useNotesWorkspace";
+import { findSmartView } from "../components/notes/notesSmartViews";
+import { toNotesQueryFilters } from "../components/notes/notesFilters";
 import type {
   NoteAiAction,
   NoteAiGenerationRecord,
-  NoteContentType,
+  NoteBlockRecord,
   NoteRecord,
   NoteTemplateRecord,
-  NoteType,
 } from "../components/notes/noteTypes";
 import type { ProjectRecord } from "../components/projects/projectTypes";
 import {
@@ -29,11 +29,8 @@ import {
   EMPTY_FORM,
   formatDate,
   getStickyNoteNumber,
-  humanizeContentType,
   noteToForm,
   type NoteFormState,
-  type NoteSortBy,
-  type NotesViewMode,
 } from "../components/notes/notesPageHelpers";
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
@@ -48,22 +45,13 @@ import {
   useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
-import { Button, Card, Dialog, Field, Input, Select } from "../components/ui";
+import { Button, Dialog, Drawer, Field, Input, Select } from "../components/ui";
+import { PanelLeft } from "../components/ui/icons";
 
 const NOTES_PAGE_SIZE_STEP = 100;
 const NOTES_PAGE_SIZE_MAX = 200;
 
 const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
-const DEFAULT_NOTE_SAVED_VIEWS = [
-  { name: 'All notes', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-  { name: 'Recent', filters: {}, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-  { name: 'Screenshots', filters: { hasAttachments: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-  { name: 'Task notes', filters: { linkedTask: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-  { name: 'Untagged', filters: { untagged: true }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'table' as NotesViewMode },
-  { name: 'Decisions', filters: { tags: 'decision', tagMode: 'all' }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-  { name: 'Checklists', filters: { contentType: 'MARKDOWN', q: '- [ ]' }, sortField: 'updatedAt', sortDirection: 'desc' as const, viewType: 'list' as NotesViewMode },
-];
-
 
 interface TemplateVariableState {
   taskTitle: string;
@@ -80,7 +68,6 @@ const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
   { action: 'REWRITE', label: 'Rewrite' },
   { action: 'CREATE_TASK_PLAN', label: 'Create task plan' },
 ];
-
 
 interface ConvertTaskModalState {
   noteId: number;
@@ -106,28 +93,60 @@ function parseTags(value: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The Notes knowledge workspace (issue #299).
+ *
+ * The page is a shell: `useNotesWorkspace` owns discovery state (filters, smart view, sort,
+ * display mode, URL sync), `useNoteScreenshots` owns capture, `useNoteVersionHistory` owns
+ * history, and the composition below is navigation rail + knowledge explorer. What remains here
+ * is note mutation orchestration and the editor/conversion dialogs.
+ */
 export function NotesPage() {
-  const [searchParams] = useSearchParams();
-  const linkedTaskId = searchParams.get("taskId")?.trim() ?? "";
-  const [search, setSearch] = useState(() => searchParams.get("q")?.trim() ?? "");
-  const [viewMode, setViewMode] = useState<NotesViewMode>("list");
-  const [sortBy, setSortBy] = useState<NoteSortBy>("updatedAt");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [contentTypeFilter, setContentTypeFilter] = useState<
-    NoteContentType | "all"
-  >("all");
-  const [tagFilter, setTagFilter] = useState(() => searchParams.get("tag")?.trim() ?? "");
-  const [collectionFilter, setCollectionFilter] = useState("");
-  const [projectFilter, setProjectFilter] = useState(() => searchParams.get("projectId")?.trim() ?? "");
-  const [noteTypeFilter, setNoteTypeFilter] = useState<NoteType | "all">("all");
-  const [hasAttachmentsFilter, setHasAttachmentsFilter] = useState<"" | "true" | "false">("");
-  const [linkedTaskFilter, setLinkedTaskFilter] = useState<"" | "true" | "false">("");
-  const [untaggedFilter, setUntaggedFilter] = useState<"" | "true" | "false">("");
-  const [tagMode, setTagMode] = useState<"any" | "all">("any");
-  const [createdFrom, setCreatedFrom] = useState("");
-  const [createdTo, setCreatedTo] = useState("");
-  const [updatedFrom, setUpdatedFrom] = useState("");
-  const [updatedTo, setUpdatedTo] = useState("");
+  const templatesQuery = useNoteTemplatesQuery();
+  const collectionsQuery = useNoteCollectionsQuery();
+  const savedViewsQuery = useNoteSavedViewsQuery();
+  const settingsQuery = useSettingsQuery(true);
+  const tasksQuery = useTasksQuery("active");
+  const projectsQuery = useProjectsQuery();
+
+  const collections = useMemo(
+    () => (Array.isArray(collectionsQuery.data?.data) ? collectionsQuery.data.data : []),
+    [collectionsQuery.data],
+  );
+  const savedViews = useMemo<NotesSavedView[]>(
+    () => (Array.isArray(savedViewsQuery.data?.data) ? (savedViewsQuery.data.data as NotesSavedView[]) : []),
+    [savedViewsQuery.data],
+  );
+  const projects = useMemo<ProjectRecord[]>(
+    () => (Array.isArray(projectsQuery.data?.data) ? projectsQuery.data.data : []),
+    [projectsQuery.data],
+  );
+  const availableTasks = useMemo<TaskRecord[]>(
+    () => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []),
+    [tasksQuery.data],
+  );
+
+  const workspace = useNotesWorkspace({ collections, projects });
+  const {
+    linkedTaskId,
+    filters,
+    patchFilters,
+    searchInput,
+    setSearchInput,
+    smartViewId,
+    selectSmartView,
+    selectCollection,
+    applySavedView,
+    clearFilters,
+    currentSavedViewPayload,
+    viewMode,
+    setViewMode,
+    activeChips,
+    advancedFilterCount,
+    hasActiveFilters,
+    hasFiltersBeyondSmartView,
+  } = workspace;
+
   const [notesPageSize, setNotesPageSize] = useState(100);
   const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
   const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
@@ -136,6 +155,9 @@ export function NotesPage() {
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [isTemplateSectionOpen, setIsTemplateSectionOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [appliedSavedViewId, setAppliedSavedViewId] = useState<number | null>(null);
   const [templateVariables, setTemplateVariables] = useState<TemplateVariableState>({ taskTitle: '', date: new Date().toISOString().slice(0, 10), area: '', priority: '', dueDate: '' });
   const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
   const [aiReviewSuggestion, setAiReviewSuggestion] = useState<NoteAiGenerationRecord | null>(null);
@@ -143,37 +165,16 @@ export function NotesPage() {
   const noteFormTitleRef = useRef<HTMLHeadingElement | null>(null);
   const noteTitleInputRef = useRef<HTMLInputElement | null>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const wasCreateDrawerOpenRef = useRef(false);
 
-  const templatesQuery = useNoteTemplatesQuery();
-  const collectionsQuery = useNoteCollectionsQuery();
-  const savedViewsQuery = useNoteSavedViewsQuery();
-  const settingsQuery = useSettingsQuery(true);
   const aiGenerationsQuery = useNoteAiGenerationsQuery(editingNoteId ?? 0, editingNoteId !== null);
-  const notesQuery = useNotesQuery({
-    q: search,
-    contentType: contentTypeFilter,
-    taskId: linkedTaskId,
-    collectionId: collectionFilter,
-    projectId: projectFilter,
-    noteType: noteTypeFilter,
-    tags: tagFilter,
-    hasAttachments: hasAttachmentsFilter === "" ? "" : hasAttachmentsFilter === "true",
-    linkedTask: linkedTaskFilter === "" ? "" : linkedTaskFilter === "true",
-    untagged: untaggedFilter === "" ? "" : untaggedFilter === "true",
-    tagMode,
-    createdFrom,
-    createdTo,
-    updatedFrom,
-    updatedTo,
-    sortBy,
-    sortDirection,
-    size: notesPageSize,
-  });
-  const tasksQuery = useTasksQuery("active");
-  const projectsQuery = useProjectsQuery();
-  const { createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask, createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView } =
-    useNoteMutations();
+  const notesQuery = useNotesQuery(toNotesQueryFilters(filters, linkedTaskId, notesPageSize));
+  const {
+    createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask,
+    createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView,
+  } = useNoteMutations();
+
   const latestMutationResult = latestResult(
     createNote.data,
     createNoteFromTemplate.data,
@@ -184,41 +185,25 @@ export function NotesPage() {
     createTaskLink.data,
     deleteTaskLink.data,
   );
-  const availableTasks = useMemo<TaskRecord[]>(
-    () => (Array.isArray(tasksQuery.data?.data) ? tasksQuery.data.data : []),
-    [tasksQuery.data],
-  );
   const taskTitleById = useMemo(
     () => new Map(availableTasks.map((task) => [task.id, task.title])),
     [availableTasks],
-  );
-  const projects = useMemo<ProjectRecord[]>(
-    () => (Array.isArray(projectsQuery.data?.data) ? projectsQuery.data.data : []),
-    [projectsQuery.data],
   );
   const projectTitleById = useMemo(
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects],
   );
-  const collections = Array.isArray(collectionsQuery.data?.data)
-    ? collectionsQuery.data.data
-    : [];
-  const savedViews = Array.isArray(savedViewsQuery.data?.data)
-    ? savedViewsQuery.data.data
-    : [];
 
   const notes = useMemo<NoteRecord[]>(() => {
-    const records: NoteRecord[] = Array.isArray(notesQuery.data?.data)
-      ? notesQuery.data.data
-      : [];
+    const records: NoteRecord[] = Array.isArray(notesQuery.data?.data) ? notesQuery.data.data : [];
     if (!linkedTaskId) return records;
 
     return [...records].sort((first, second) => {
-      const orderDelta =
-        getStickyNoteNumber(first) - getStickyNoteNumber(second);
+      const orderDelta = getStickyNoteNumber(first) - getStickyNoteNumber(second);
       return orderDelta === 0 ? first.id - second.id : orderDelta;
     });
   }, [linkedTaskId, notesQuery.data]);
+
   const {
     versionHistoryNoteId,
     setVersionHistoryNoteId,
@@ -230,6 +215,7 @@ export function NotesPage() {
     openVersionHistory,
     restoreSelectedVersion,
   } = useNoteVersionHistory({ notes, restoreNoteVersion, setForm, setDraftBlocks, setEditingNoteId, formatDate });
+
   const notesQueryErrorMessage =
     notesQuery.data && !notesQuery.data.ok
       ? notesQuery.data.error?.message ??
@@ -237,30 +223,17 @@ export function NotesPage() {
           ? `Request failed with status ${notesQuery.data.status}.`
           : notesQuery.data.error?.details ?? "Request failed.")
       : undefined;
-  const hasActiveNoteFilters = Boolean(
-    search.trim() ||
-      contentTypeFilter !== "all" ||
-      tagFilter.trim() ||
-      collectionFilter ||
-      hasAttachmentsFilter ||
-      linkedTaskFilter ||
-      untaggedFilter ||
-      createdFrom ||
-      createdTo ||
-      updatedFrom ||
-      updatedTo,
-  );
-  const recentNotes = useMemo(() => [...notes].sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()).slice(0, 5), [notes]);
-  const taskLinkedNotes = useMemo(() => notes.filter((note) => note.taskId || (note.taskLinks?.length ?? 0) > 0).slice(0, 5), [notes]);
-  const archivedNotes = useMemo(() => notes.filter((note) => note.tags?.includes("archived")).slice(0, 5), [notes]);
+
   const isBusy =
-    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending || runNoteAiAction.isPending || restoreNoteVersion.isPending;
-  const screenshotNoteTaskId =
-    linkedTaskId || (editingNoteId === null ? form.taskId.trim() : "");
+    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending ||
+    convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending ||
+    runNoteAiAction.isPending || restoreNoteVersion.isPending;
+  const screenshotNoteTaskId = linkedTaskId || (editingNoteId === null ? form.taskId.trim() : "");
   const activeForm =
     editingNoteId === null && linkedTaskId && form.taskId.trim() === ""
       ? { ...form, taskId: linkedTaskId }
       : form;
+
   const {
     attachmentCaptions,
     setAttachmentCaptions,
@@ -299,6 +272,7 @@ export function NotesPage() {
     uploadScreenshot,
     refetchNotes: notesQuery.refetch,
   });
+
   const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
   const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
   const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
@@ -311,12 +285,11 @@ export function NotesPage() {
     [templatesQuery.data],
   );
   const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
-  const renderedTemplatePreview = selectedTemplate ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content) : '';
+  const renderedTemplatePreview = selectedTemplate
+    ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content)
+    : '';
   const canCreateFromTemplate = Boolean(selectedTemplate) && !isBusy;
-  const canSubmit =
-    activeForm.title.trim().length > 0 &&
-    effectiveBody.trim().length > 0 &&
-    !isBusy;
+  const canSubmit = activeForm.title.trim().length > 0 && effectiveBody.trim().length > 0 && !isBusy;
   const drawerNoteDate = useMemo(() => {
     if (editingNoteId === null) return new Date().toISOString().slice(0, 10);
     const noteDate = notes.find((note) => note.id === editingNoteId)?.createdAt;
@@ -324,49 +297,16 @@ export function NotesPage() {
       ? new Date(noteDate).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
   }, [editingNoteId, notes]);
-  const groupedTimelineNotes = useMemo(() => {
-    return notes.reduce<Record<string, NoteRecord[]>>((groups, note) => {
-      const rawDate = sortBy === "createdAt" ? note.createdAt : note.updatedAt || note.createdAt;
-      const key = rawDate && !Number.isNaN(new Date(rawDate).getTime())
-        ? new Date(rawDate).toLocaleDateString()
-        : "No date";
-      groups[key] = [...(groups[key] ?? []), note];
-      return groups;
-    }, {});
-  }, [notes, sortBy]);
 
-
-  const applySavedView = (view: { filters: Record<string, unknown>; sortField: string; sortDirection: string; viewType: string }) => {
-    const filters = view.filters ?? {};
-    setSearch(typeof filters.q === "string" ? filters.q : "");
-    setContentTypeFilter(typeof filters.contentType === "string" ? filters.contentType as NoteContentType : "all");
-    setTagFilter(typeof filters.tags === "string" ? filters.tags : "");
-    setCollectionFilter(filters.collectionId == null ? "" : String(filters.collectionId));
-    setHasAttachmentsFilter(typeof filters.hasAttachments === "boolean" ? String(filters.hasAttachments) as "true" | "false" : "");
-    setLinkedTaskFilter(typeof filters.linkedTask === "boolean" ? String(filters.linkedTask) as "true" | "false" : "");
-    setUntaggedFilter(typeof filters.untagged === "boolean" ? String(filters.untagged) as "true" | "false" : "");
-    setTagMode(filters.tagMode === "all" ? "all" : "any");
-    setCreatedFrom(typeof filters.createdFrom === "string" ? filters.createdFrom : "");
-    setCreatedTo(typeof filters.createdTo === "string" ? filters.createdTo : "");
-    setUpdatedFrom(typeof filters.updatedFrom === "string" ? filters.updatedFrom : "");
-    setUpdatedTo(typeof filters.updatedTo === "string" ? filters.updatedTo : "");
-    setSortBy((view.sortField || "updatedAt") as NoteSortBy);
-    setSortDirection(view.sortDirection === "asc" ? "asc" : "desc");
-    setViewMode((view.viewType || "list") as NotesViewMode);
-  };
+  const activeSmartView = findSmartView(smartViewId);
+  const activeProjectName = filters.projectId ? projectTitleById.get(Number(filters.projectId)) : undefined;
+  const linkedTaskTitle = linkedTaskId ? taskTitleById.get(Number(linkedTaskId)) : undefined;
 
   const saveCurrentView = () => {
     const name = window.prompt("Saved view name");
     if (!name?.trim()) return;
-    createSavedView.mutate({
-      name: name.trim(),
-      filters: { q: search, contentType: contentTypeFilter === "all" ? undefined : contentTypeFilter, tags: tagFilter, collectionId: collectionFilter || undefined, hasAttachments: hasAttachmentsFilter === "" ? undefined : hasAttachmentsFilter === "true", linkedTask: linkedTaskFilter === "" ? undefined : linkedTaskFilter === "true", untagged: untaggedFilter === "" ? undefined : untaggedFilter === "true", tagMode, createdFrom, createdTo, updatedFrom, updatedTo },
-      sortField: sortBy,
-      sortDirection,
-      viewType: viewMode,
-    });
+    createSavedView.mutate({ name: name.trim(), ...currentSavedViewPayload });
   };
-
 
   const openConvertTaskModal = (sourceText: string) => {
     if (editingNoteId === null) {
@@ -382,7 +322,7 @@ export function NotesPage() {
    * editor's client-only reconstruction) - passes `noteBlockId` so the backend's idempotent
    * (note, block) conversion applies (issue #296/#287). Free-text conversion above never sets it.
    */
-  const openConvertBlockModal = (note: NoteRecord, block: { id: number; content?: string | null }) => {
+  const openConvertBlockModal = (note: NoteRecord, block: NoteBlockRecord) => {
     const trimmed = (block.content ?? "").trim();
     setConvertTaskModal({ noteId: note.id, sourceText: trimmed, title: trimmed.slice(0, 255) || note.title, dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "", noteBlockId: block.id });
   };
@@ -403,7 +343,6 @@ export function NotesPage() {
       },
     }, { onSuccess: (result) => { if (result.ok) setConvertTaskModal(null); } });
   };
-
 
   const linkMentionedTask = (noteId: number, taskId: number, selectedText: string, linkType = "MENTION") => {
     createTaskLink.mutate({ noteId, body: { taskId, selectedText, linkType } });
@@ -435,14 +374,15 @@ export function NotesPage() {
     }, 0);
   }, []);
 
-  const resetForm = () => {
-    setForm({ ...emptyFormForTask(linkedTaskId), projectId: projectFilter });
+  const resetForm = useCallback(() => {
+    setForm({ ...emptyFormForTask(linkedTaskId), projectId: filters.projectId });
     setDraftBlocks(blocksFromBody(""));
     setShowRawBody(false);
     setEditingNoteId(null);
     setAiReviewSuggestion(null);
+    setIsTemplateSectionOpen(false);
     setIsCreateDrawerOpen(false);
-  };
+  }, [filters.projectId, linkedTaskId]);
 
   const openNewNoteEditor = () => {
     resetForm();
@@ -450,32 +390,22 @@ export function NotesPage() {
     focusNoteEditor();
   };
 
-  const clearNoteFilters = () => {
-    setSearch("");
-    setContentTypeFilter("all");
-    setTagFilter("");
-    setCollectionFilter("");
-    setProjectFilter("");
-    setNoteTypeFilter("all");
-    setHasAttachmentsFilter("");
-    setLinkedTaskFilter("");
-    setUntaggedFilter("");
-    setTagMode("any");
-    setCreatedFrom("");
-    setCreatedTo("");
-    setUpdatedFrom("");
-    setUpdatedTo("");
+  const openTemplateEditor = () => {
+    resetForm();
+    setIsTemplateSectionOpen(true);
+    setIsCreateDrawerOpen(true);
   };
 
-  const editNote = (note: NoteRecord) => {
+  const editNote = useCallback((note: NoteRecord) => {
     setEditingNoteId(note.id);
     setForm(noteToForm(note));
     setDraftBlocks(blocksFromBody(note.body ?? ""));
     setShowRawBody(false);
     setAiReviewSuggestion(null);
+    setIsTemplateSectionOpen(false);
     setIsCreateDrawerOpen(true);
     focusNoteEditor();
-  };
+  }, [focusNoteEditor]);
 
   const runAiActionForNote = (action: NoteAiAction) => {
     if (editingNoteId === null) {
@@ -500,7 +430,6 @@ export function NotesPage() {
     setAiReviewSuggestion(null);
   };
 
-
   const handleCreateFromTemplate = () => {
     if (!selectedTemplate || !canCreateFromTemplate) return;
     const linkedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
@@ -514,9 +443,7 @@ export function NotesPage() {
         taskTitle: templateVariables.taskTitle || linkedTask?.title || '',
       },
     }, {
-      onSuccess: (result) => {
-        if (result.ok) resetForm();
-      },
+      onSuccess: (result) => { if (result.ok) resetForm(); },
     });
   };
 
@@ -526,25 +453,14 @@ export function NotesPage() {
 
     const payload = { ...buildNotePayload(activeForm), body: effectiveBody };
     if (editingNoteId === null) {
-      createNote.mutate(payload, {
-        onSuccess: (result) => {
-          if (result.ok) resetForm();
-        },
-      });
+      createNote.mutate(payload, { onSuccess: (result) => { if (result.ok) resetForm(); } });
       return;
     }
 
-    updateNote.mutate(
-      { id: editingNoteId, body: payload },
-      {
-        onSuccess: (result) => {
-          if (result.ok) resetForm();
-        },
-      },
-    );
+    updateNote.mutate({ id: editingNoteId, body: payload }, { onSuccess: (result) => { if (result.ok) resetForm(); } });
   };
 
-  const copyBody = (note: NoteRecord) => {
+  const copyBody = useCallback((note: NoteRecord) => {
     if (!navigator.clipboard) return;
 
     void navigator.clipboard
@@ -552,15 +468,12 @@ export function NotesPage() {
       .then(() => {
         setCopiedNoteId(note.id);
         window.setTimeout(
-          () =>
-            setCopiedNoteId((current) =>
-              current === note.id ? null : current,
-            ),
+          () => setCopiedNoteId((current) => (current === note.id ? null : current)),
           1600,
         );
       })
       .catch(() => setCopiedNoteId(null));
-  };
+  }, []);
 
   useEffect(() => {
     if (isCreateDrawerOpen) {
@@ -574,234 +487,175 @@ export function NotesPage() {
     wasCreateDrawerOpenRef.current = isCreateDrawerOpen;
   }, [focusNoteEditor, isCreateDrawerOpen]);
 
+  const workspaceNav = (onNavigate?: () => void) => (
+    <NotesWorkspaceNav
+      smartViewId={smartViewId}
+      onSelectSmartView={(view) => { setAppliedSavedViewId(null); selectSmartView(view); }}
+      collections={collections}
+      collectionFilter={filters.collectionId}
+      onSelectCollection={(collectionId) => { setAppliedSavedViewId(null); selectCollection(collectionId); }}
+      savedViews={savedViews}
+      appliedSavedViewId={appliedSavedViewId}
+      onApplySavedView={(view) => { setAppliedSavedViewId(view.id); applySavedView(view); }}
+      onDeleteSavedView={(view) => {
+        if (window.confirm(`Delete saved view "${view.name}"?`)) deleteSavedView.mutate(view.id);
+      }}
+      onSaveCurrentView={saveCurrentView}
+      isSavingView={createSavedView.isPending}
+      onNavigate={onNavigate}
+    />
+  );
+
+  const isTruncated = !notesQuery.isLoading && notes.length >= notesPageSize;
+
   return (
-    <div className="flex flex-col gap-5" aria-busy={isBusy}>
-      <NotesHeader
+    <div className="flex flex-col gap-4" aria-busy={isBusy}>
+      <NotesWorkspaceHeader
         canCaptureAreaNote={Boolean(screenshotNoteTaskId)}
         isBusy={isBusy}
         isUploadPending={isUploadPending}
         isCapturePending={isCapturePending}
         isCreatingScreenshotNote={isCreatingScreenshotNote}
-        isLinkedTaskView={Boolean(linkedTaskId)}
         isReloading={notesQuery.isFetching}
         onCaptureAreaNote={() => void handleScreenshotNote()}
         onNewNote={openNewNoteEditor}
+        onNewFromTemplate={openTemplateEditor}
         onReload={() => void notesQuery.refetch()}
         newNoteButtonRef={newNoteButtonRef}
       />
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
-        <NotesSidebar
-          collectionFilter={collectionFilter}
-          setCollectionFilter={setCollectionFilter}
-          collections={collections}
-          savedViews={savedViews}
-          defaultSavedViews={DEFAULT_NOTE_SAVED_VIEWS}
-          applySavedView={applySavedView}
-          deleteSavedView={deleteSavedView}
-          saveCurrentView={saveCurrentView}
-          createSavedView={createSavedView}
-          recentNotes={recentNotes}
-          taskLinkedNotes={taskLinkedNotes}
-          archivedNotes={archivedNotes}
-          setEditingNoteId={(noteId) => { setEditingNoteId(noteId); setIsCreateDrawerOpen(true); focusNoteEditor(); }}
-          setForm={setForm}
-          setDraftBlocks={setDraftBlocks}
-        />
+      <NotesContextBanner
+        projectId={filters.projectId || undefined}
+        projectName={activeProjectName}
+        linkedTaskId={linkedTaskId || undefined}
+        linkedTaskTitle={linkedTaskTitle}
+        onClearProject={() => patchFilters({ projectId: "" })}
+      />
 
-      <section
-        className="min-w-0 overflow-hidden rounded-xl border border-line bg-card p-4 shadow-2xs sm:p-6"
-        aria-labelledby="notes-filters-title"
-      >
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 id="notes-filters-title" className="text-sm font-semibold text-fg">
-              {linkedTaskId
-                ? `Notes for task #${linkedTaskId}`
-                : "Browse notes"}
-            </h3>
-            <p className="mt-0.5 text-sm text-fg-muted">
-              {linkedTaskId
-                ? "Showing only notes linked to this task. Search and content-type filters still apply."
-                : "Search note titles and bodies, then narrow by content type or tag."}
-            </p>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[16rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+        <aside className="hidden min-w-0 rounded-xl border border-line bg-card p-3 lg:sticky lg:top-4 lg:block">
+          {workspaceNav()}
+        </aside>
+
+        <section className="flex min-w-0 flex-col gap-4" aria-label="Notes explorer">
+          <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-line bg-card p-4 sm:p-5">
+            <div className="lg:hidden">
+              <Button onClick={() => setIsMobileNavOpen(true)} aria-haspopup="dialog">
+                <PanelLeft className="h-4 w-4" aria-hidden />
+                Browse {activeSmartView ? `· ${activeSmartView.label}` : "collections"}
+              </Button>
+            </div>
+
+            <NotesSearchBar
+              searchInput={searchInput}
+              onSearchInputChange={setSearchInput}
+              filters={filters}
+              onPatchFilters={(patch) => { setAppliedSavedViewId(null); patchFilters(patch); }}
+              collections={collections}
+              projects={projects}
+              activeChips={activeChips}
+              advancedFilterCount={advancedFilterCount}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={() => { setAppliedSavedViewId(null); clearFilters(); }}
+              searchInputRef={searchInputRef}
+            />
           </div>
-        </div>
 
-        <NotesToolbar
-          search={search}
-          setSearch={setSearch}
-          tagFilter={tagFilter}
-          setTagFilter={setTagFilter}
-          collectionFilter={collectionFilter}
-          setCollectionFilter={setCollectionFilter}
-          collections={collections}
-          projectFilter={projectFilter}
-          setProjectFilter={setProjectFilter}
-          projects={projects}
-          noteTypeFilter={noteTypeFilter}
-          setNoteTypeFilter={setNoteTypeFilter}
-          contentTypeFilter={contentTypeFilter}
-          setContentTypeFilter={setContentTypeFilter}
-          hasAttachmentsFilter={hasAttachmentsFilter}
-          setHasAttachmentsFilter={setHasAttachmentsFilter}
-          linkedTaskFilter={linkedTaskFilter}
-          setLinkedTaskFilter={setLinkedTaskFilter}
-          untaggedFilter={untaggedFilter}
-          setUntaggedFilter={setUntaggedFilter}
-          tagMode={tagMode}
-          setTagMode={setTagMode}
-          createdFrom={createdFrom}
-          setCreatedFrom={setCreatedFrom}
-          createdTo={createdTo}
-          setCreatedTo={setCreatedTo}
-          updatedFrom={updatedFrom}
-          setUpdatedFrom={setUpdatedFrom}
-          updatedTo={updatedTo}
-          setUpdatedTo={setUpdatedTo}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          sortDirection={sortDirection}
-          setSortDirection={setSortDirection}
-        />
-
-        {screenshotNoteMessage ? (
-          <p
-            className={screenshotNoteMessage.kind === "error" ? "mt-3 text-sm text-critical" : "mt-3 text-sm text-fg-muted"}
-            role={screenshotNoteMessage.kind === "error" ? "alert" : "status"}
-          >
-            {screenshotNoteMessage.text}
-          </p>
-        ) : null}
-
-        <div className="mt-4">
-          <NotesState
-            isLoading={notesQuery.isLoading}
-            isError={isQueryError(notesQuery.data)}
-            isEmpty={!notesQuery.isLoading && notes.length === 0}
-            hasActiveFilters={hasActiveNoteFilters}
-            errorMessage={notesQueryErrorMessage}
-            onClearFilters={clearNoteFilters}
-            onNewNote={openNewNoteEditor}
-          />
-        </div>
-
-        <div className="mt-4">
-        <NoteVersionHistoryPanel
-          versionHistoryNoteId={versionHistoryNoteId}
-          versionHistoryNote={versionHistoryNote}
-          noteVersionsQuery={noteVersionsQuery}
-          noteVersions={noteVersions}
-          selectedVersion={selectedVersion}
-          setSelectedVersionId={setSelectedVersionId}
-          setVersionHistoryNoteId={setVersionHistoryNoteId}
-          restoreNoteVersion={restoreNoteVersion}
-          restoreSelectedVersion={restoreSelectedVersion}
-        />
-        </div>
-
-        <div className="mt-4">
-        <NotesResults viewMode={viewMode}>
-        {viewMode === "sticky" ? (
-          // note.positionX/positionY/width/height/zIndex are still written on
-          // create/edit (kept for backend/API compatibility and any future
-          // drag-to-reposition feature), but are no longer read for layout:
-          // there was never any drag interaction wired up for them, so a
-          // responsive masonry grid replaces the old absolute-position canvas.
-          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4" aria-label="Sticky note board">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                layout="tile"
-                onConvertBlock={openConvertBlockModal}
-                projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
-                eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Sticky note #{getStickyNoteNumber(note)}</p>}
-                subtitle={<p className="text-xs text-fg-muted">{note.collectionName ?? "No collection"} · Task {note.taskId ? taskTitleById.get(note.taskId) ?? `#${note.taskId}` : "none"} · Updated {formatDate(note.updatedAt)}</p>}
-                actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {viewMode === "list" ? (
-          <div className="flex flex-col gap-3" aria-label="Fast scanning notes list">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                layout="row"
-                onConvertBlock={openConvertBlockModal}
-                projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
-                subtitle={<p className="text-sm text-fg-muted">{note.collectionName ?? "No collection"} · {humanizeContentType(note.contentType)} · {note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · Updated {formatDate(note.updatedAt)}</p>}
-                actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="inline" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {viewMode === "table" ? (
-          <NotesTable
-            notes={notes}
-            taskTitleById={taskTitleById}
-            copiedNoteId={copiedNoteId}
-            onEdit={editNote}
-            onCopy={copyBody}
-            onVersionHistory={openVersionHistory}
-            onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)}
-            onScreenshotSubmit={handleScreenshotSubmit}
-            screenshotMessages={screenshotMessages}
-            attachmentCaptions={attachmentCaptions}
-            onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))}
-            screenshotInputRef={(noteId, element) => setScreenshotFileInput(noteId, element)}
-            isUploadPending={isUploadPending}
-            isCapturePending={isCapturePending}
-            capturingNoteId={capturingNoteId}
-          />
-        ) : null}
-
-        {viewMode === "timeline" ? (
-          <div className="flex flex-col gap-4" aria-label="Notes timeline">
-            {Object.entries(groupedTimelineNotes).map(([date, dateNotes]) => (
-              <Card key={date} aria-label={`Notes from ${date}`}>
-                <h3 className="text-sm font-semibold text-fg">{date}</h3>
-                <div className="mt-3 flex flex-col gap-3">
-                  {dateNotes.map((note) => (
-                    <NoteCard
-                      key={note.id}
-                      note={note}
-                      layout="row"
-                      onConvertBlock={openConvertBlockModal}
-                      projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
-                      eyebrow={<p className="text-xs font-semibold tracking-wide text-fg-subtle uppercase">Created {formatDate(note.createdAt)} · Updated {formatDate(note.updatedAt)}</p>}
-                      subtitle={<p className="text-sm text-fg-muted">{note.taskId ? taskTitleById.get(note.taskId) ?? `Task #${note.taskId}` : "No task"} · {humanizeContentType(note.contentType)}</p>}
-                      actions={<NoteActions note={note} copied={copiedNoteId === note.id} onEdit={editNote} onCopy={copyBody} onVersionHistory={openVersionHistory} screenshotMode="compact" onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)} onScreenshotSubmit={handleScreenshotSubmit} screenshotMessage={screenshotMessages[note.id]} attachmentCaption={attachmentCaptions[note.id] ?? ""} onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))} screenshotInputRef={(element) => setScreenshotFileInput(note.id, element)} isUploadPending={isUploadPending} isCapturePending={isCapturePending} isCapturing={capturingNoteId === note.id} />}
-                    />
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : null}
-        </NotesResults>
-
-        {!notesQuery.isLoading && notes.length >= notesPageSize && notesPageSize < NOTES_PAGE_SIZE_MAX ? (
-          <div className="mt-4 flex justify-center">
-            <Button
-              onClick={() => setNotesPageSize((current) => Math.min(current + NOTES_PAGE_SIZE_STEP, NOTES_PAGE_SIZE_MAX))}
-              disabled={notesQuery.isFetching}
+          {screenshotNoteMessage ? (
+            <p
+              className={screenshotNoteMessage.kind === "error" ? "text-sm text-critical" : "text-sm text-fg-muted"}
+              role={screenshotNoteMessage.kind === "error" ? "alert" : "status"}
             >
-              {notesQuery.isFetching ? "Loading..." : "Load more notes"}
-            </Button>
+              {screenshotNoteMessage.text}
+            </p>
+          ) : null}
+
+          <NoteVersionHistoryPanel
+            versionHistoryNoteId={versionHistoryNoteId}
+            versionHistoryNote={versionHistoryNote}
+            noteVersionsQuery={noteVersionsQuery}
+            noteVersions={noteVersions}
+            selectedVersion={selectedVersion}
+            setSelectedVersionId={setSelectedVersionId}
+            setVersionHistoryNoteId={setVersionHistoryNoteId}
+            restoreNoteVersion={restoreNoteVersion}
+            restoreSelectedVersion={restoreSelectedVersion}
+          />
+
+          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-card p-4 sm:p-5">
+            <h3 className="sr-only">Note results</h3>
+            <NotesResultToolbar
+              loadedCount={notes.length}
+              isTruncated={isTruncated}
+              isFetching={notesQuery.isFetching && !notesQuery.isLoading}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              sortBy={filters.sortBy}
+              onSortByChange={(sortBy) => patchFilters({ sortBy })}
+              sortDirection={filters.sortDirection}
+              onSortDirectionChange={(sortDirection) => patchFilters({ sortDirection })}
+            />
+
+            <NotesState
+              isLoading={notesQuery.isLoading}
+              isError={isQueryError(notesQuery.data)}
+              isEmpty={!notesQuery.isLoading && notes.length === 0}
+              hasActiveFilters={hasActiveFilters}
+              hasFiltersBeyondSmartView={hasFiltersBeyondSmartView}
+              errorMessage={notesQueryErrorMessage}
+              smartView={activeSmartView}
+              onClearFilters={clearFilters}
+              onNewNote={openNewNoteEditor}
+              onRetry={() => void notesQuery.refetch()}
+              isRetrying={notesQuery.isFetching}
+            />
+
+            {notes.length > 0 ? (
+              <NotesResultView
+                viewMode={viewMode}
+                notes={notes}
+                projectTitleById={projectTitleById}
+                taskTitleById={taskTitleById}
+                copiedNoteId={copiedNoteId}
+                sortBy={filters.sortBy}
+                onEdit={editNote}
+                onCopy={copyBody}
+                onVersionHistory={openVersionHistory}
+                onConvertBlock={openConvertBlockModal}
+                onTakeScreenshot={(selectedNote) => void handleTakeScreenshot(selectedNote)}
+                onScreenshotSubmit={handleScreenshotSubmit}
+                screenshotMessages={screenshotMessages}
+                attachmentCaptions={attachmentCaptions}
+                onAttachmentCaptionChange={(noteId, caption) => setAttachmentCaptions((current) => ({ ...current, [noteId]: caption }))}
+                screenshotInputRef={(noteId, element) => setScreenshotFileInput(noteId, element)}
+                isUploadPending={isUploadPending}
+                isCapturePending={isCapturePending}
+                capturingNoteId={capturingNoteId}
+              />
+            ) : null}
+
+            {isTruncated && notesPageSize < NOTES_PAGE_SIZE_MAX ? (
+              <div className="flex justify-center">
+                <Button
+                  onClick={() => setNotesPageSize((current) => Math.min(current + NOTES_PAGE_SIZE_STEP, NOTES_PAGE_SIZE_MAX))}
+                  disabled={notesQuery.isFetching}
+                >
+                  {notesQuery.isFetching ? "Loading..." : "Load more notes"}
+                </Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        </div>
-
-      </section>
-
+        </section>
       </div>
+
+      <Drawer
+        open={isMobileNavOpen}
+        onOpenChange={setIsMobileNavOpen}
+        title="Browse notes"
+        description="Smart views, collections and saved views."
+      >
+        {workspaceNav(() => setIsMobileNavOpen(false))}
+      </Drawer>
 
       <CreateNoteDrawer
         isOpen={isCreateDrawerOpen}
@@ -823,6 +677,8 @@ export function NotesPage() {
         setTemplateVariables={setTemplateVariables}
         selectedTemplate={selectedTemplate}
         renderedTemplatePreview={renderedTemplatePreview}
+        isTemplateSectionOpen={isTemplateSectionOpen}
+        setIsTemplateSectionOpen={setIsTemplateSectionOpen}
         handleSubmit={handleSubmit}
         activeForm={activeForm}
         noteDate={drawerNoteDate}
@@ -850,6 +706,10 @@ export function NotesPage() {
         pendingClipboardImages={pendingClipboardImages}
         latestMutationResult={latestMutationResult}
         onConvertToTask={openConvertTaskModal}
+        onOpenVersionHistory={() => {
+          const note = notes.find((candidate) => candidate.id === editingNoteId);
+          if (note) openVersionHistory(note);
+        }}
         linkMentionedTask={linkMentionedTask}
       />
 
