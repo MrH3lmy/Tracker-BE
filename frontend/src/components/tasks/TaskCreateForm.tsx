@@ -1,10 +1,12 @@
-import { forwardRef, useImperativeHandle, useReducer, useState, useRef } from 'react';
+import { forwardRef, useEffect, useId, useImperativeHandle, useReducer, useState, useRef } from 'react';
 import { isTaskStatus, TASK_STATUS_VALUES } from '../../validation/taskStatus';
 import { DAY_OF_WEEK_VALUES, RECURRENCE_FREQUENCY_VALUES, isRecurrenceFrequency, type DayOfWeekValue, type RecurrenceFrequency } from '../../validation/recurrence';
 import { AREA_VALUES, EFFORT_VALUES, RISK_LEVEL_VALUES } from './taskUtils';
 import type { CreateTaskPayload, RecurrenceRuleRecord, RiskLevel, TaskRecord } from './taskTypes';
 import type { ProjectRecord } from '../projects/projectTypes';
-import { Button, Checkbox, Field, Input, Select, Textarea } from '../ui';
+import { Button, Checkbox, Collapsible, Field, Input, Select, Textarea } from '../ui';
+import { AlertTriangle } from '../ui/icons';
+import { formatEnumLabel } from '../../lib/enumLabels';
 import { useAnnouncement } from '../../announcementContext';
 
 const formatAnnualDate = (month: string, day: string): string | undefined => {
@@ -144,16 +146,41 @@ const toOptionalNumber = (value: string) => {
 };
 
 interface TaskCreateFormFieldErrors {
+  title?: string;
   blockedReason?: string;
   waitingOn?: string;
   followUpDate?: string;
   riskReason?: string;
 }
 
+type ErrorField = keyof TaskCreateFormFieldErrors;
+
+/** Field order used by the error summary, so its links read in visual order. */
+const ERROR_FIELD_ORDER: ErrorField[] = ['title', 'blockedReason', 'waitingOn', 'followUpDate', 'riskReason'];
+
+const ERROR_FIELD_INPUT_ID: Record<ErrorField, string> = {
+  title: 'taskTitle',
+  blockedReason: 'taskBlockedReason',
+  waitingOn: 'taskWaitingOn',
+  followUpDate: 'taskFollowUpDate',
+  riskReason: 'taskRiskReason',
+};
+
+const ERROR_FIELD_LABEL: Record<ErrorField, string> = {
+  title: 'Title',
+  blockedReason: 'Blocked reason',
+  waitingOn: 'Waiting on',
+  followUpDate: 'Follow-up date',
+  riskReason: 'Risk reason',
+};
+
 // Mirrors the backend's cross-field validation (CreateTaskRequest/UpdateTaskRequest @AssertTrue
 // rules) so the form catches these before submit instead of surfacing a confusing 400.
 const getFieldErrors = (state: TaskCreateFormState): TaskCreateFormFieldErrors => {
   const errors: TaskCreateFormFieldErrors = {};
+  if (!state.title.trim()) {
+    errors.title = 'Enter a task title.';
+  }
   if (state.status === 'BLOCKED' && !state.blockedReason.trim()) {
     errors.blockedReason = 'Required when status is Blocked.';
   }
@@ -191,8 +218,27 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
   const [form, dispatch] = useReducer(reducer, initialValue, mapRecordToFormState);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const errorSummaryRef = useRef<HTMLDivElement>(null);
   const { announce } = useAnnouncement();
   const fieldErrors = getFieldErrors(form);
+  const summaryId = useId();
+  const errorEntries = submitAttempted
+    ? ERROR_FIELD_ORDER.filter((field) => fieldErrors[field]).map((field) => ({ field, message: fieldErrors[field] as string }))
+    : [];
+  const showError = (field: ErrorField) => (submitAttempted ? fieldErrors[field] : undefined);
+
+  // Cross-field requirements reveal their own inputs, so the capture form stays short until the
+  // status/risk that needs them is chosen. In edit mode an already-populated value keeps its field
+  // visible even if the status no longer requires it.
+  const showBlockedReason = form.status === 'BLOCKED' || Boolean(form.blockedReason);
+  const showWaitingOn = form.status === 'WAITING' || Boolean(form.waitingOn);
+  const showRiskReason = form.riskLevel === 'HIGH' || form.riskLevel === 'CRITICAL' || Boolean(form.riskReason);
+
+  // "Focusable Error Summary" (skill `ux`, High): move focus to the summary after a failed submit,
+  // link each item to its field, and keep the inline errors.
+  useEffect(() => {
+    if (errorEntries.length > 0) errorSummaryRef.current?.focus();
+  }, [errorEntries.length]);
 
   useImperativeHandle(ref, () => ({
     focusTitle: () => titleRef.current?.focus(),
@@ -203,13 +249,9 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
   const setField = (field: keyof TaskCreateFormState, value: string | boolean) => dispatch({ type: 'field', field, value });
 
   const submitForm = () => {
-    if (!form.title.trim()) {
-      onInvalidTitle();
-      titleRef.current?.focus();
-      return;
-    }
     if (Object.keys(fieldErrors).length > 0) {
       setSubmitAttempted(true);
+      if (fieldErrors.title) onInvalidTitle();
       announce(Object.values(fieldErrors).join(' '));
       return;
     }
@@ -242,14 +284,46 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
       followUpDate: form.followUpDate || undefined,
       status: form.status || undefined,
       recurrence,
-    }, () => dispatch({ type: 'reset', initialState: emptyState }));
+    }, () => { setSubmitAttempted(false); dispatch({ type: 'reset', initialState: emptyState }); });
   };
 
   return (
     <div className="flex flex-col gap-4">
+      {errorEntries.length > 0 && (
+        <div
+          ref={errorSummaryRef}
+          role="alert"
+          tabIndex={-1}
+          aria-labelledby={`${summaryId}-title`}
+          className="flex flex-col gap-1.5 rounded-lg border border-critical/40 bg-critical-soft p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-critical/40"
+        >
+          <p id={`${summaryId}-title`} className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+            <AlertTriangle className="h-4 w-4 text-critical" aria-hidden />
+            {errorEntries.length === 1 ? 'There is a problem' : `There are ${errorEntries.length} problems`}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {errorEntries.map(({ field, message }) => (
+              <li key={field}>
+                <a href={`#${ERROR_FIELD_INPUT_ID[field]}`} className="text-sm text-critical underline underline-offset-2">
+                  {ERROR_FIELD_LABEL[field]}: {message}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
-        <Field label="Title" htmlFor="taskTitle">
-          <Input id="taskTitle" ref={titleRef} placeholder="Draft launch checklist" value={form.title} onChange={(e) => setField('title', e.target.value)} disabled={busy} aria-invalid={!form.title.trim()} />
+        <Field label="Title" htmlFor="taskTitle" error={showError('title')}>
+          <Input
+            id="taskTitle"
+            ref={titleRef}
+            placeholder="Draft launch checklist"
+            value={form.title}
+            onChange={(e) => setField('title', e.target.value)}
+            disabled={busy}
+            aria-invalid={Boolean(showError('title'))}
+          />
         </Field>
         <Field label="Description" htmlFor="taskDescription">
           <Textarea id="taskDescription" placeholder="Add context, acceptance criteria, or notes" value={form.description} onChange={(e) => setField('description', e.target.value)} disabled={busy} rows={3} className="min-h-0" />
@@ -260,6 +334,9 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
               <option value="">(no status)</option>
               {TASK_STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
+          </Field>
+          <Field label="Due date" htmlFor="taskDueDate">
+            <Input id="taskDueDate" type="date" value={form.dueDate} min={form.startDate || undefined} onChange={(e) => setField('dueDate', e.target.value)} disabled={busy} />
           </Field>
           <Field label="Parent task" htmlFor="taskParentTask">
             <Select id="taskParentTask" value={form.parentTaskId} onChange={(e) => setField('parentTaskId', e.target.value)} disabled={busy}>
@@ -275,57 +352,39 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
               </Select>
             </Field>
           )}
-          <Field label="Start date" htmlFor="taskStartDate">
-            <Input id="taskStartDate" type="date" value={form.startDate} max={form.dueDate || undefined} onChange={(e) => setField('startDate', e.target.value)} disabled={busy} />
-          </Field>
-          <Field label="Due date" htmlFor="taskDueDate">
-            <Input id="taskDueDate" type="date" value={form.dueDate} min={form.startDate || undefined} onChange={(e) => setField('dueDate', e.target.value)} disabled={busy} />
-          </Field>
-          <Field label="Estimated minutes" htmlFor="taskEstimatedMinutes">
-            <Input id="taskEstimatedMinutes" type="number" min="0" step="15" placeholder="120" value={form.estimatedMinutes} onChange={(e) => setField('estimatedMinutes', e.target.value)} disabled={busy} />
-          </Field>
-          <Field label="Actual minutes" htmlFor="taskActualMinutes">
-            <Input id="taskActualMinutes" type="number" min="0" step="15" placeholder="90" value={form.actualMinutes} onChange={(e) => setField('actualMinutes', e.target.value)} disabled={busy} />
-          </Field>
-          <Field label="Area" htmlFor="taskArea">
-            <Select id="taskArea" value={form.area} onChange={(e) => setField('area', e.target.value)} disabled={busy}>
-              <option value="">(default personal)</option>
-              {AREA_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
-            </Select>
-          </Field>
           <Field label="Effort" htmlFor="taskEffort">
             <Select id="taskEffort" value={form.effort} onChange={(e) => setField('effort', e.target.value)} disabled={busy}>
               <option value="">(default medium)</option>
-              {EFFORT_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+              {EFFORT_VALUES.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}
             </Select>
           </Field>
           <Field label="Risk level" htmlFor="taskRiskLevel">
             <Select id="taskRiskLevel" value={form.riskLevel} onChange={(e) => setField('riskLevel', e.target.value as '' | RiskLevel)} disabled={busy}>
               <option value="">(default low)</option>
-              {RISK_LEVEL_VALUES.map((level) => <option key={level} value={level}>{level}</option>)}
+              {RISK_LEVEL_VALUES.map((level) => <option key={level} value={level}>{formatEnumLabel(level)}</option>)}
             </Select>
           </Field>
-          <Field label="Follow-up date" htmlFor="taskFollowUpDate" error={submitAttempted ? fieldErrors.followUpDate : undefined}>
-            <Input id="taskFollowUpDate" type="date" value={form.followUpDate} min={form.startDate || undefined} onChange={(e) => setField('followUpDate', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.followUpDate)} />
+          <Field label="Follow-up date" htmlFor="taskFollowUpDate" error={showError('followUpDate')}>
+            <Input id="taskFollowUpDate" type="date" value={form.followUpDate} min={form.startDate || undefined} onChange={(e) => setField('followUpDate', e.target.value)} disabled={busy} aria-invalid={Boolean(showError('followUpDate'))} />
           </Field>
         </div>
-        <Field label="Risk reason" htmlFor="taskRiskReason" error={submitAttempted ? fieldErrors.riskReason : undefined}>
-          <Input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={form.riskReason} onChange={(e) => setField('riskReason', e.target.value)} disabled={busy} maxLength={500} aria-invalid={submitAttempted && Boolean(fieldErrors.riskReason)} />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Track" htmlFor="taskTrack">
-            <Input id="taskTrack" placeholder="Product, marketing, migration" value={form.track} onChange={(e) => setField('track', e.target.value)} disabled={busy} maxLength={120} />
+
+        {showBlockedReason && (
+          <Field label="Blocked reason" htmlFor="taskBlockedReason" error={showError('blockedReason')} hint="Required while the status is Blocked.">
+            <Input id="taskBlockedReason" placeholder="Why this task is blocked" value={form.blockedReason} onChange={(e) => setField('blockedReason', e.target.value)} disabled={busy} aria-invalid={Boolean(showError('blockedReason'))} />
           </Field>
-          <Field label="Phase" htmlFor="taskPhase">
-            <Input id="taskPhase" placeholder="Discovery, build, launch" value={form.phase} onChange={(e) => setField('phase', e.target.value)} disabled={busy} maxLength={120} />
+        )}
+        {showWaitingOn && (
+          <Field label="Waiting on" htmlFor="taskWaitingOn" error={showError('waitingOn')} hint="Required while the status is Waiting, together with a follow-up date.">
+            <Input id="taskWaitingOn" placeholder="Person, vendor, or event" value={form.waitingOn} onChange={(e) => setField('waitingOn', e.target.value)} disabled={busy} aria-invalid={Boolean(showError('waitingOn'))} />
           </Field>
-          <Field label="Blocked reason" htmlFor="taskBlockedReason" error={submitAttempted ? fieldErrors.blockedReason : undefined}>
-            <Input id="taskBlockedReason" placeholder="Why this task is blocked" value={form.blockedReason} onChange={(e) => setField('blockedReason', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.blockedReason)} />
+        )}
+        {showRiskReason && (
+          <Field label="Risk reason" htmlFor="taskRiskReason" error={showError('riskReason')} hint="Required for High and Critical risk.">
+            <Input id="taskRiskReason" placeholder="Dependency, uncertainty, or schedule concern" value={form.riskReason} onChange={(e) => setField('riskReason', e.target.value)} disabled={busy} maxLength={500} aria-invalid={Boolean(showError('riskReason'))} />
           </Field>
-          <Field label="Waiting on" htmlFor="taskWaitingOn" error={submitAttempted ? fieldErrors.waitingOn : undefined}>
-            <Input id="taskWaitingOn" placeholder="Person, vendor, or event" value={form.waitingOn} onChange={(e) => setField('waitingOn', e.target.value)} disabled={busy} aria-invalid={submitAttempted && Boolean(fieldErrors.waitingOn)} />
-          </Field>
-        </div>
+        )}
+
         <Checkbox
           id="taskImportant"
           label="Mark as important"
@@ -333,60 +392,95 @@ export const TaskCreateForm = forwardRef<TaskCreateFormHandle, TaskCreateFormPro
           onChange={(e) => setField('important', e.target.checked)}
           disabled={busy}
         />
-        <div className="flex flex-col gap-3 border-t border-line pt-4">
-          <Field label="Repeats" htmlFor="taskRecurrenceFrequency">
-            <Select
-              id="taskRecurrenceFrequency"
-              value={form.recurrenceFrequency}
-              onChange={(e) => { const next = e.target.value; setField('recurrenceFrequency', isRecurrenceFrequency(next) ? next : ''); }}
-              disabled={busy}
-            >
-              <option value="">Does not repeat</option>
-              {RECURRENCE_FREQUENCY_VALUES.map((freq) => <option key={freq} value={freq}>{freq}</option>)}
-            </Select>
-          </Field>
 
-          {form.recurrenceFrequency && (
+        {/*
+          Quick capture first: scheduling, effort accounting, classification and recurrence are one
+          disclosure away rather than 25 flat fields. Values entered here survive collapsing - the
+          form state lives in the reducer, not in the DOM.
+        */}
+        <Collapsible title="More details" defaultOpen={mode === 'edit'}>
+          <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Every" htmlFor="taskRecurrenceInterval">
-                <Input id="taskRecurrenceInterval" type="number" min="1" step="1" value={form.recurrenceInterval} onChange={(e) => setField('recurrenceInterval', e.target.value)} disabled={busy} />
+              <Field label="Start date" htmlFor="taskStartDate">
+                <Input id="taskStartDate" type="date" value={form.startDate} max={form.dueDate || undefined} onChange={(e) => setField('startDate', e.target.value)} disabled={busy} />
+              </Field>
+              <Field label="Area" htmlFor="taskArea">
+                <Select id="taskArea" value={form.area} onChange={(e) => setField('area', e.target.value)} disabled={busy}>
+                  <option value="">(default personal)</option>
+                  {AREA_VALUES.map((value) => <option key={value} value={value}>{formatEnumLabel(value)}</option>)}
+                </Select>
+              </Field>
+              <Field label="Estimated minutes" htmlFor="taskEstimatedMinutes">
+                <Input id="taskEstimatedMinutes" type="number" min="0" step="15" placeholder="120" value={form.estimatedMinutes} onChange={(e) => setField('estimatedMinutes', e.target.value)} disabled={busy} />
+              </Field>
+              <Field label="Actual minutes" htmlFor="taskActualMinutes">
+                <Input id="taskActualMinutes" type="number" min="0" step="15" placeholder="90" value={form.actualMinutes} onChange={(e) => setField('actualMinutes', e.target.value)} disabled={busy} />
+              </Field>
+              <Field label="Track" htmlFor="taskTrack">
+                <Input id="taskTrack" placeholder="Product, marketing, migration" value={form.track} onChange={(e) => setField('track', e.target.value)} disabled={busy} maxLength={120} />
+              </Field>
+              <Field label="Phase" htmlFor="taskPhase">
+                <Input id="taskPhase" placeholder="Discovery, build, launch" value={form.phase} onChange={(e) => setField('phase', e.target.value)} disabled={busy} maxLength={120} />
+              </Field>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-line pt-4">
+              <Field label="Repeats" htmlFor="taskRecurrenceFrequency">
+                <Select
+                  id="taskRecurrenceFrequency"
+                  value={form.recurrenceFrequency}
+                  onChange={(e) => { const next = e.target.value; setField('recurrenceFrequency', isRecurrenceFrequency(next) ? next : ''); }}
+                  disabled={busy}
+                >
+                  <option value="">Does not repeat</option>
+                  {RECURRENCE_FREQUENCY_VALUES.map((freq) => <option key={freq} value={freq}>{formatEnumLabel(freq)}</option>)}
+                </Select>
               </Field>
 
-              {form.recurrenceFrequency === 'WEEKLY' && (
-                <div className="col-span-2 flex flex-wrap gap-3" role="group" aria-label="Days of week">
-                  {DAY_OF_WEEK_VALUES.map((day) => (
-                    <Checkbox
-                      key={day}
-                      id={`taskRecurrenceDay-${day}`}
-                      label={day.slice(0, 3)}
-                      checked={form.recurrenceDaysOfWeek.includes(day)}
-                      onChange={() => dispatch({ type: 'toggleDay', day })}
-                      disabled={busy}
-                    />
-                  ))}
+              {form.recurrenceFrequency && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Every" htmlFor="taskRecurrenceInterval">
+                    <Input id="taskRecurrenceInterval" type="number" min="1" step="1" value={form.recurrenceInterval} onChange={(e) => setField('recurrenceInterval', e.target.value)} disabled={busy} />
+                  </Field>
+
+                  {form.recurrenceFrequency === 'WEEKLY' && (
+                    <div className="col-span-2 flex flex-wrap gap-3" role="group" aria-label="Days of week">
+                      {DAY_OF_WEEK_VALUES.map((day) => (
+                        <Checkbox
+                          key={day}
+                          id={`taskRecurrenceDay-${day}`}
+                          label={day.slice(0, 3)}
+                          checked={form.recurrenceDaysOfWeek.includes(day)}
+                          onChange={() => dispatch({ type: 'toggleDay', day })}
+                          disabled={busy}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {form.recurrenceFrequency === 'MONTHLY' && (
+                    <Field label="Day of month" htmlFor="taskRecurrenceDayOfMonth">
+                      <Input id="taskRecurrenceDayOfMonth" type="number" min="1" max="31" value={form.recurrenceDayOfMonth} onChange={(e) => setField('recurrenceDayOfMonth', e.target.value)} disabled={busy} />
+                    </Field>
+                  )}
+
+                  {form.recurrenceFrequency === 'YEARLY' && (
+                    <>
+                      <Field label="Month" htmlFor="taskRecurrenceAnnualMonth">
+                        <Input id="taskRecurrenceAnnualMonth" type="number" min="1" max="12" value={form.recurrenceAnnualMonth} onChange={(e) => setField('recurrenceAnnualMonth', e.target.value)} disabled={busy} />
+                      </Field>
+                      <Field label="Day" htmlFor="taskRecurrenceAnnualDay">
+                        <Input id="taskRecurrenceAnnualDay" type="number" min="1" max="31" value={form.recurrenceAnnualDay} onChange={(e) => setField('recurrenceAnnualDay', e.target.value)} disabled={busy} />
+                      </Field>
+                    </>
+                  )}
                 </div>
               )}
-
-              {form.recurrenceFrequency === 'MONTHLY' && (
-                <Field label="Day of month" htmlFor="taskRecurrenceDayOfMonth">
-                  <Input id="taskRecurrenceDayOfMonth" type="number" min="1" max="31" value={form.recurrenceDayOfMonth} onChange={(e) => setField('recurrenceDayOfMonth', e.target.value)} disabled={busy} />
-                </Field>
-              )}
-
-              {form.recurrenceFrequency === 'YEARLY' && (
-                <>
-                  <Field label="Month" htmlFor="taskRecurrenceAnnualMonth">
-                    <Input id="taskRecurrenceAnnualMonth" type="number" min="1" max="12" value={form.recurrenceAnnualMonth} onChange={(e) => setField('recurrenceAnnualMonth', e.target.value)} disabled={busy} />
-                  </Field>
-                  <Field label="Day" htmlFor="taskRecurrenceAnnualDay">
-                    <Input id="taskRecurrenceAnnualDay" type="number" min="1" max="31" value={form.recurrenceAnnualDay} onChange={(e) => setField('recurrenceAnnualDay', e.target.value)} disabled={busy} />
-                  </Field>
-                </>
-              )}
             </div>
-          )}
-        </div>
+          </div>
+        </Collapsible>
       </div>
+
       <div className="flex justify-end gap-2 border-t border-line pt-4">
         <Button variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
         <Button variant="primary" onClick={submitForm} disabled={busy}>
