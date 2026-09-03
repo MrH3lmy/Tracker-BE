@@ -49,7 +49,7 @@ export function NotesContextBanner({
 
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         {projectId ? (
-          <Link to={`/projects/${projectId}`} className="text-sm font-medium text-brand hover:underline">
+          <Link to={`/tasks/projects/${projectId}`} className="text-sm font-medium text-brand hover:underline">
             Open project
           </Link>
         ) : null}

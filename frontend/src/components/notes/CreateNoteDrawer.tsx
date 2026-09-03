@@ -110,7 +110,7 @@ export function CreateNoteDrawer({
             {!canSubmit ? (
               <span className="text-xs text-fg-subtle">A title and some content are needed before saving.</span>
             ) : (
-              <span className="text-xs text-fg-subtle">{isNew ? "Ready to save" : "Unsaved changes are kept until you save"}</span>
+              <span className="text-xs text-fg-subtle">{isNew ? "Ready to save" : `Editing note #${editingNoteId}`}</span>
             )}
           </div>
           <Button onClick={onClose} disabled={isBusy}>Cancel</Button>

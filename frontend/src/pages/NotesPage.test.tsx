@@ -361,7 +361,9 @@ describe('NotesPage - context and capture (issue #299)', () => {
     const banner = await screen.findByLabelText('Notes context');
     expect(await within(banner).findByText('Checkout revamp')).toBeInTheDocument();
     expect(within(banner).getByText('Showing notes that belong to this project.')).toBeInTheDocument();
-    expect(within(banner).getByRole('link', { name: 'Open project' })).toHaveAttribute('href', '/projects/1');
+    // The project detail route is /tasks/projects/:id - asserting the real route, not a
+    // convenient-looking one, is the point of this assertion.
+    expect(within(banner).getByRole('link', { name: 'Open project' })).toHaveAttribute('href', '/tasks/projects/1');
     await waitFor(() => expect(lastNoteListRequest(fetchMock)).toContain('projectId=1'));
   });
 
