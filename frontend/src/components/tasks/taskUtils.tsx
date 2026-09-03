@@ -18,6 +18,15 @@ export const formatDate = (value?: string) => {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 };
 
+/** Minutes as a compact duration: 45 -> "45m", 90 -> "1h 30m". Returns undefined when unset. */
+export const formatMinutes = (minutes?: number) => {
+  if (minutes === undefined || minutes === null || !Number.isFinite(minutes)) return undefined;
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+};
+
 export const isOverdue = (task: TaskRecord) => {
   if (task.overdue) return true;
   if (!task.dueDate || task.status === 'DONE' || task.status === 'CANCELLED') return false;
