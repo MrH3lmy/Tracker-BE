@@ -20,7 +20,7 @@ export function NoteVersionHistoryPanel({ versionHistoryNoteId, versionHistoryNo
   if (versionHistoryNoteId === null) return null;
 
   return (
-    <Card aria-label="Version history">
+    <Card role="region" aria-label="Version history">
       <CardHeader
         title={versionHistoryNote?.title ?? `Note #${versionHistoryNoteId}`}
         description="Version history"

@@ -251,3 +251,106 @@ No backend change. Every filter the new IA uses (`q`, `tag`, `tagMode`, `collect
 `sortBy`, `sortDirection`, `page`, `size`) is already a `GET /api/v1/notes` request parameter, and
 `NoteResponse.blocks` (added by #296) already carries what the action-item signal needs. The one
 contract gap found in #296 was fixed there and is not re-litigated here.
+
+---
+
+# Part 2 — The note page editor (`/notes/:id`)
+
+Added after the #300 review: the library IA above was accepted, the drawer editor was not. A note
+is now a first-class editable page. Same visual language — teal/orange, Fira Sans/Fira Code, flat
+surfaces, lucide icons, Tracker components. Notion-like *interaction quality*, not a Notion clone.
+
+## 8. Research run for the editor
+
+Transcript: `../research/tool-transcripts/06-note-page-editor-299.md` (17 searches). The three
+results that actually shaped the design:
+
+| Tool result | Applied as |
+|---|---|
+| `ux` Accessibility → **Dragging Movements** (High): *"Add buttons, menus or tap-to-move controls and retain keyboard operation. Don't make dragging the only way to reorder"* | The drag handle is a convenience. Every reorder is also a `Move up`/`Move down` command in the block menu, which is keyboard reachable. Dragging is never the only path. |
+| `ux` Interaction → **Compact Control Semantics** (Critical): *"Prefer a button and expose pressed or selected state. Don't use a clickable div **or reveal the only action on hover**"* | Gutter controls (insert, drag, block menu) fade in on hover/focus but are always in the DOM, always focusable, and every action they offer also lives in the block menu. Opacity-only reveal, so nothing reflows. |
+| `ux` Layout → **Content Jumping** (High) and Typography → **Text Reflow and Spacing** (Critical): *"content-driven height; don't clip text in fixed-height boxes"* | Blocks are auto-growing textareas — no fixed-height boxes, no inner scrollbars. The save indicator sits in a fixed-width slot so `Saving… → Saved` cannot reflow the header. |
+
+Also applied: **Hover vs Tap** (don't rely on hover for important actions), **Input Labels** (the
+title has an `sr-only` label; every block has one naming its type and position), **Focus States**,
+**Touch Target Size**, **Back Button** (the `?return=` contract below).
+
+Two icon queries returned **no match** for a drag handle. Per SKILL.md's zero-result rule this is
+recorded as *no verified match*: lucide `GripVertical` was chosen from the app's existing family as
+a documented fallback, not presented as a tool recommendation.
+
+## 9. Why textareas, not `contentEditable`
+
+The backend stores each block's content as **plain text** (`note_blocks.content`), and the note's
+`body` as a flat string. There is no inline-span model anywhere in the schema. A `contentEditable`
+surface would let users apply bold/italic/links that **cannot be persisted** — the classic lossy
+rich-text trap. So each block is a borderless auto-growing `<textarea>`: visually identical to a
+Notion block, exact round-trip with what the API can actually store, and reliable caret semantics
+for the Enter/Backspace model.
+
+**Inline formatting is therefore deliberately not shipped.** A selection toolbar offering bold and
+italic would either silently discard formatting on reload or smuggle markdown into `PLAIN_TEXT`
+notes. Block-level transforms (`Turn into` heading/bullet/checklist/quote/code) *are* offered,
+because those persist as `note_blocks.type`. Real inline formatting needs a backend rich-text model
+and is a separate proposal, not something to fake here.
+
+## 10. Keyboard model
+
+| Key | Behaviour |
+|---|---|
+| `Enter` | Splits at the caret; text after the caret becomes a new block and takes focus. Lists continue their own type; everything else drops to a paragraph. On an already-empty list/checklist/quote block it **exits the list** instead of stacking empty items. Shift+Enter and Enter inside a code block insert a newline. |
+| `Backspace` at offset 0 | Merges into the previous block and restores the caret to the join point. A decorated empty block first reverts to a paragraph (one press to undo the type, a second to remove). The first block is never removed — the document always has somewhere to type. |
+| `ArrowUp` / `ArrowDown` | At the first/last position, moves to the adjacent block. |
+| `/` | Opens the command palette anchored to the block. While open it consumes `ArrowUp`, `ArrowDown`, `Enter`, `Tab`, `Escape`. The caret never leaves the text field — the palette is a controlled `listbox` driven from the field's key handler, with the highlight owned by the block. |
+
+## 11. Autosave and version history
+
+Answers to the review's seven questions, and the design that follows from them:
+
+- **Every update creates a version?** No — `shouldCreateVersion` already debounced. But title,
+  content-type, tag, or ≥120-char body changes bypassed the debounce and always snapshotted.
+- **Would naive autosave flood history?** Yes — typing a title is "major" on every keystroke
+  batch, so a 20-minute session would mint 50+ versions.
+- **Atomic with blocks?** Now yes: `blocks` is a field on `UpdateNoteRequest`, so note and blocks
+  commit in one transaction rather than two racing requests.
+- **Overlapping saves / optimistic concurrency / stale responses / failure?** No `@Version`, no
+  ETag; last-write-wins. Handled client-side, see below.
+
+**Client:** 900 ms debounce · strictly one request in flight (a save during a save is queued as a
+single latest snapshot, never a second concurrent request) · every save carries the local revision
+it was built from, and a response may only mark *that* revision clean · the editor adopts **block
+ids only** from a response, never content, so an in-flight save cannot clobber what was typed
+while it was open · `Saved` appears only after a confirmed 2xx · failure is a persistent
+`role="alert"` with Retry and the document stays dirty · pending work is flushed before the Back
+link navigates, and `beforeunload` warns.
+
+**Server:** autosaves send `autosave: true`, which makes the version rule use *only* the existing
+2-minute debounce. Explicit saves, restores and templates keep today's behaviour exactly. Content
+is saved every time; only snapshot frequency changes — so history keeps representing meaningful
+recoverable states instead of keystrokes.
+
+**Known limit, stated rather than papered over:** this protects one editor against its own races.
+Two devices editing the same note concurrently remain last-write-wins. Real optimistic locking
+would need a schema migration and 409 UX — a bigger change than this issue should carry.
+
+**Restore is not a save, and must not be treated as one.** `mutate()` returns before the request
+is sent, so re-hydrating straight after it reads back the *pre-restore* note and pins it as the
+editor's baseline — the page then shows the old document even though the restore succeeded. The
+rule: await the restore, await the note refetch, and only then change `hydrationKey`. A failed
+restore changes nothing on screen and surfaces the server's own message in a `role="alert"`. The
+re-hydration that follows a successful restore arrives with a new baseline key, so autosave adopts
+it as clean rather than saving it straight back.
+
+## 12. Navigation contract
+
+Opening a note from the library carries the live filter query string as `?return=`. The Back link
+flushes any pending save and returns to `/notes?<that query>` — same smart view, same project,
+same search. `/notes/new` creates the record on the first edit and `replace()`s the URL to the real
+id, so no dead `/notes/new` entry sits between the library and the note in history.
+
+## 13. Mobile
+
+No permanent sidebar. Title and content take the full width. Properties collapse to a single
+wrapping line and expand in place. Gutter controls appear for the focused block (touch = focus),
+and every action they offer is also in the block menu, which is a normal tap target. Verified at
+375 / 768 / 1440 in light and dark with zero horizontal page overflow.

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { isQueryError } from "../apiClient";
-import { CreateNoteDrawer } from "../components/notes/CreateNoteDrawer";
+import { ConvertNoteToTaskDialog } from "../components/notes/ConvertNoteToTaskDialog";
+import { emptyConvertDraft, type ConvertTaskDraft } from "../components/notes/convertTaskDraft";
 import { NotesContextBanner } from "../components/notes/NotesContextBanner";
 import { NotesResultToolbar } from "../components/notes/NotesResultToolbar";
 import { NotesResultView } from "../components/notes/NotesResultView";
@@ -10,102 +12,40 @@ import { NotesWorkspaceHeader } from "../components/notes/NotesWorkspaceHeader";
 import { NotesWorkspaceNav, type NotesSavedView } from "../components/notes/NotesWorkspaceNav";
 import { NoteVersionHistoryPanel } from "../components/notes/NoteVersionHistoryPanel";
 import { ScreenshotCropOverlay } from "../components/notes/ScreenshotCropOverlay";
-import { blocksFromBody, bodyFromBlocks, type DraftNoteBlock } from "../components/notes/NoteBlockEditor";
 import { useNoteVersionHistory } from "../components/notes/useNoteVersionHistory";
 import { useNoteScreenshots } from "../components/notes/useNoteScreenshots";
 import { useNotesWorkspace } from "../components/notes/useNotesWorkspace";
 import { findSmartView } from "../components/notes/notesSmartViews";
 import { toNotesQueryFilters } from "../components/notes/notesFilters";
-import type {
-  NoteAiAction,
-  NoteAiGenerationRecord,
-  NoteBlockRecord,
-  NoteRecord,
-  NoteTemplateRecord,
-} from "../components/notes/noteTypes";
+import type { NoteBlockRecord, NoteRecord } from "../components/notes/noteTypes";
 import type { ProjectRecord } from "../components/projects/projectTypes";
-import {
-  buildNotePayload,
-  EMPTY_FORM,
-  formatDate,
-  getStickyNoteNumber,
-  noteToForm,
-  type NoteFormState,
-} from "../components/notes/notesPageHelpers";
+import { EMPTY_FORM, formatDate, getStickyNoteNumber, type NoteFormState } from "../components/notes/notesPageHelpers";
 import type { TaskRecord } from "../components/tasks/taskTypes";
 import {
-  latestResult,
   useNoteCollectionsQuery,
-  useNoteAiGenerationsQuery,
   useNoteMutations,
-  useNoteTemplatesQuery,
   useNoteSavedViewsQuery,
   useNotesQuery,
   useProjectsQuery,
-  useSettingsQuery,
   useTasksQuery,
 } from "../hooks/useApiQueries";
-import { Button, Dialog, Drawer, Field, Input, Select } from "../components/ui";
+import { Button, Drawer } from "../components/ui";
 import { PanelLeft } from "../components/ui/icons";
 
 const NOTES_PAGE_SIZE_STEP = 100;
 const NOTES_PAGE_SIZE_MAX = 200;
 
-const TEMPLATE_VARIABLE_KEYS = ['taskTitle', 'date', 'area', 'priority', 'dueDate'] as const;
-
-interface TemplateVariableState {
-  taskTitle: string;
-  date: string;
-  area: string;
-  priority: string;
-  dueDate: string;
-}
-
-const AI_NOTE_ACTIONS: Array<{ action: NoteAiAction; label: string }> = [
-  { action: 'SUMMARIZE', label: 'Summarize' },
-  { action: 'EXTRACT_TASKS', label: 'Extract tasks' },
-  { action: 'EXTRACT_DECISIONS', label: 'Extract decisions' },
-  { action: 'REWRITE', label: 'Rewrite' },
-  { action: 'CREATE_TASK_PLAN', label: 'Create task plan' },
-];
-
-interface ConvertTaskModalState {
-  noteId: number;
-  sourceText: string;
-  title: string;
-  dueDate: string;
-  status: string;
-  area: string;
-  effort: string;
-  parentTaskId: string;
-  /** Set only when converting a persisted structured action item (issue #296) - see openConvertBlockModal. */
-  noteBlockId?: number;
-}
-
-function emptyFormForTask(taskId: string): NoteFormState {
-  return { ...EMPTY_FORM, taskId };
-}
-
-function parseTags(value: string): string[] {
-  return value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
 /**
- * The Notes knowledge workspace (issue #299).
+ * The Notes knowledge library (issue #299).
  *
- * The page is a shell: `useNotesWorkspace` owns discovery state (filters, smart view, sort,
- * display mode, URL sync), `useNoteScreenshots` owns capture, `useNoteVersionHistory` owns
- * history, and the composition below is navigation rail + knowledge explorer. What remains here
- * is note mutation orchestration and the editor/conversion dialogs.
+ * Discovery only: `useNotesWorkspace` owns filters, smart views, sort and URL sync, and every note
+ * opens as a page at `/notes/:id` rather than in a drawer. The current filter query string rides
+ * along as `?return=`, so Back from a note lands on exactly this view again.
  */
 export function NotesPage() {
-  const templatesQuery = useNoteTemplatesQuery();
+  const navigate = useNavigate();
   const collectionsQuery = useNoteCollectionsQuery();
   const savedViewsQuery = useNoteSavedViewsQuery();
-  const settingsQuery = useSettingsQuery(true);
   const tasksQuery = useTasksQuery("active");
   const projectsQuery = useProjectsQuery();
 
@@ -126,78 +66,40 @@ export function NotesPage() {
     [tasksQuery.data],
   );
 
-  const workspace = useNotesWorkspace({ collections, projects });
   const {
-    linkedTaskId,
-    filters,
-    patchFilters,
-    searchInput,
-    setSearchInput,
-    smartViewId,
-    selectSmartView,
-    selectCollection,
-    applySavedView,
-    clearFilters,
-    currentSavedViewPayload,
-    viewMode,
-    setViewMode,
-    activeChips,
-    advancedFilterCount,
-    hasActiveFilters,
-    hasFiltersBeyondSmartView,
-  } = workspace;
+    linkedTaskId, filters, patchFilters, searchInput, setSearchInput, smartViewId, selectSmartView,
+    selectCollection, applySavedView, clearFilters, currentSavedViewPayload, viewMode, setViewMode,
+    activeChips, advancedFilterCount, hasActiveFilters, hasFiltersBeyondSmartView,
+  } = useNotesWorkspace({ collections, projects });
 
   const [notesPageSize, setNotesPageSize] = useState(100);
-  const [form, setForm] = useState<NoteFormState>(EMPTY_FORM);
-  const [draftBlocks, setDraftBlocks] = useState<DraftNoteBlock[]>(() => blocksFromBody(""));
-  const [showRawBody, setShowRawBody] = useState(false);
-  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
-  const [isTemplateSectionOpen, setIsTemplateSectionOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [appliedSavedViewId, setAppliedSavedViewId] = useState<number | null>(null);
-  const [templateVariables, setTemplateVariables] = useState<TemplateVariableState>({ taskTitle: '', date: new Date().toISOString().slice(0, 10), area: '', priority: '', dueDate: '' });
-  const [convertTaskModal, setConvertTaskModal] = useState<ConvertTaskModalState | null>(null);
-  const [aiReviewSuggestion, setAiReviewSuggestion] = useState<NoteAiGenerationRecord | null>(null);
+  const [convertDraft, setConvertDraft] = useState<ConvertTaskDraft | null>(null);
+  /**
+   * Not an editor. `useNoteScreenshots` needs a note-shaped draft to build a "capture area" note
+   * from, plus a target id when attaching to an existing note's row. Normal editing lives on the
+   * note page at /notes/:id.
+   */
+  const [captureDraft, setCaptureDraft] = useState<NoteFormState>(EMPTY_FORM);
+  const [captureTargetNoteId, setCaptureTargetNoteId] = useState<number | null>(null);
   const noteBodyRef = useRef<HTMLTextAreaElement | null>(null);
-  const noteFormTitleRef = useRef<HTMLHeadingElement | null>(null);
-  const noteTitleInputRef = useRef<HTMLInputElement | null>(null);
   const newNoteButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const wasCreateDrawerOpenRef = useRef(false);
 
-  const aiGenerationsQuery = useNoteAiGenerationsQuery(editingNoteId ?? 0, editingNoteId !== null);
   const notesQuery = useNotesQuery(toNotesQueryFilters(filters, linkedTaskId, notesPageSize));
   const {
-    createNote, createNoteFromTemplate, updateNote, deleteNote, uploadScreenshot, convertNoteToTask,
-    createTaskLink, deleteTaskLink, restoreNoteVersion, runNoteAiAction, createSavedView, deleteSavedView,
+    createNote, updateNote, deleteNote, uploadScreenshot, convertNoteToTask,
+    createTaskLink, deleteTaskLink, restoreNoteVersion, createSavedView, deleteSavedView,
   } = useNoteMutations();
 
-  const latestMutationResult = latestResult(
-    createNote.data,
-    createNoteFromTemplate.data,
-    updateNote.data,
-    deleteNote.data,
-    uploadScreenshot.data,
-    convertNoteToTask.data,
-    createTaskLink.data,
-    deleteTaskLink.data,
-  );
-  const taskTitleById = useMemo(
-    () => new Map(availableTasks.map((task) => [task.id, task.title])),
-    [availableTasks],
-  );
-  const projectTitleById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.name])),
-    [projects],
-  );
+  const taskTitleById = useMemo(() => new Map(availableTasks.map((task) => [task.id, task.title])), [availableTasks]);
+  const projectTitleById = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 
   const notes = useMemo<NoteRecord[]>(() => {
     const records: NoteRecord[] = Array.isArray(notesQuery.data?.data) ? notesQuery.data.data : [];
     if (!linkedTaskId) return records;
-
     return [...records].sort((first, second) => {
       const orderDelta = getStickyNoteNumber(first) - getStickyNoteNumber(second);
       return orderDelta === 0 ? first.id - second.id : orderDelta;
@@ -205,65 +107,39 @@ export function NotesPage() {
   }, [linkedTaskId, notesQuery.data]);
 
   const {
-    versionHistoryNoteId,
-    setVersionHistoryNoteId,
-    setSelectedVersionId,
-    noteVersionsQuery,
-    noteVersions,
-    selectedVersion,
-    versionHistoryNote,
-    openVersionHistory,
-    restoreSelectedVersion,
-  } = useNoteVersionHistory({ notes, restoreNoteVersion, setForm, setDraftBlocks, setEditingNoteId, formatDate });
+    versionHistoryNoteId, setVersionHistoryNoteId, setSelectedVersionId, noteVersionsQuery,
+    noteVersions, selectedVersion, versionHistoryNote, openVersionHistory, restoreSelectedVersion,
+  } = useNoteVersionHistory({
+    notes,
+    restoreNoteVersion,
+    setForm: setCaptureDraft,
+    setDraftBlocks: () => {},
+    setEditingNoteId: setCaptureTargetNoteId,
+    formatDate,
+  });
 
   const notesQueryErrorMessage =
     notesQuery.data && !notesQuery.data.ok
       ? notesQuery.data.error?.message ??
-        (notesQuery.data.status
-          ? `Request failed with status ${notesQuery.data.status}.`
-          : notesQuery.data.error?.details ?? "Request failed.")
+        (notesQuery.data.status ? `Request failed with status ${notesQuery.data.status}.` : notesQuery.data.error?.details ?? "Request failed.")
       : undefined;
 
   const isBusy =
-    createNote.isPending || createNoteFromTemplate.isPending || updateNote.isPending || deleteNote.isPending ||
-    convertNoteToTask.isPending || createTaskLink.isPending || deleteTaskLink.isPending ||
-    runNoteAiAction.isPending || restoreNoteVersion.isPending;
-  const screenshotNoteTaskId = linkedTaskId || (editingNoteId === null ? form.taskId.trim() : "");
-  const activeForm =
-    editingNoteId === null && linkedTaskId && form.taskId.trim() === ""
-      ? { ...form, taskId: linkedTaskId }
-      : form;
+    createNote.isPending || updateNote.isPending || deleteNote.isPending || convertNoteToTask.isPending ||
+    createTaskLink.isPending || deleteTaskLink.isPending || restoreNoteVersion.isPending;
+  const screenshotNoteTaskId = linkedTaskId || captureDraft.taskId.trim();
 
   const {
-    attachmentCaptions,
-    setAttachmentCaptions,
-    screenshotMessages,
-    screenshotNoteMessage,
-    clipboardImageMessage,
-    setClipboardImageMessage,
-    pendingClipboardImages,
-    capturingNoteId,
-    isCreatingScreenshotNote,
-    cropOverlay,
-    setScreenshotFileInput,
-    cropImageRef,
-    isUploadPending,
-    isCapturePending,
-    handleBodyPaste,
-    handleScreenshotNote,
-    handleTakeScreenshot,
-    handleScreenshotSubmit,
-    cancelCropOverlay,
-    confirmCropOverlay,
-    handleCropPointerDown,
-    handleCropPointerMove,
-    handleCropPointerUp,
-    getNormalizedSelection,
+    attachmentCaptions, setAttachmentCaptions, screenshotMessages, screenshotNoteMessage,
+    pendingClipboardImages, capturingNoteId, isCreatingScreenshotNote, cropOverlay,
+    setScreenshotFileInput, cropImageRef, isUploadPending, isCapturePending, handleScreenshotNote,
+    handleTakeScreenshot, handleScreenshotSubmit, cancelCropOverlay, confirmCropOverlay,
+    handleCropPointerDown, handleCropPointerMove, handleCropPointerUp, getNormalizedSelection,
   } = useNoteScreenshots({
-    activeForm,
-    setForm,
-    editingNoteId,
-    setEditingNoteId,
+    activeForm: linkedTaskId && captureDraft.taskId.trim() === "" ? { ...captureDraft, taskId: linkedTaskId } : captureDraft,
+    setForm: setCaptureDraft,
+    editingNoteId: captureTargetNoteId,
+    setEditingNoteId: setCaptureTargetNoteId,
     isBusy,
     screenshotNoteTaskId,
     noteBodyRef,
@@ -273,34 +149,37 @@ export function NotesPage() {
     refetchNotes: notesQuery.refetch,
   });
 
-  const effectiveBody = bodyFromBlocks(draftBlocks) || activeForm.body;
-  const settings = settingsQuery.data?.data as Record<string, unknown> | undefined;
-  const aiFeaturesEnabled = settings?.aiFeaturesEnabled === true;
-  const aiGenerations = useMemo<NoteAiGenerationRecord[]>(
-    () => (Array.isArray(aiGenerationsQuery.data?.data) ? aiGenerationsQuery.data.data : []),
-    [aiGenerationsQuery.data],
-  );
-  const templates = useMemo<NoteTemplateRecord[]>(
-    () => (Array.isArray(templatesQuery.data?.data) ? templatesQuery.data.data : []),
-    [templatesQuery.data],
-  );
-  const selectedTemplate = templates.find((template) => String(template.id) === selectedTemplateId) ?? null;
-  const renderedTemplatePreview = selectedTemplate
-    ? TEMPLATE_VARIABLE_KEYS.reduce((content, key) => content.replaceAll(`{{${key}}}`, templateVariables[key]), selectedTemplate.content)
-    : '';
-  const canCreateFromTemplate = Boolean(selectedTemplate) && !isBusy;
-  const canSubmit = activeForm.title.trim().length > 0 && effectiveBody.trim().length > 0 && !isBusy;
-  const drawerNoteDate = useMemo(() => {
-    if (editingNoteId === null) return new Date().toISOString().slice(0, 10);
-    const noteDate = notes.find((note) => note.id === editingNoteId)?.createdAt;
-    return noteDate && !Number.isNaN(new Date(noteDate).getTime())
-      ? new Date(noteDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
-  }, [editingNoteId, notes]);
-
   const activeSmartView = findSmartView(smartViewId);
   const activeProjectName = filters.projectId ? projectTitleById.get(Number(filters.projectId)) : undefined;
   const linkedTaskTitle = linkedTaskId ? taskTitleById.get(Number(linkedTaskId)) : undefined;
+
+  /** The library view a note page should return to - keeps filters, search and smart view. */
+  const returnQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (smartViewId && smartViewId !== "all") params.set("view", smartViewId);
+    if (filters.q.trim()) params.set("q", filters.q.trim());
+    if (filters.projectId) params.set("projectId", filters.projectId);
+    if (filters.collectionId) params.set("collectionId", filters.collectionId);
+    if (filters.noteType !== "all") params.set("type", filters.noteType);
+    if (linkedTaskId) params.set("taskId", linkedTaskId);
+    return params.toString();
+  }, [filters.collectionId, filters.noteType, filters.projectId, filters.q, linkedTaskId, smartViewId]);
+
+  const openNote = useCallback(
+    (note: NoteRecord) => {
+      navigate(`/notes/${note.id}${returnQuery ? `?return=${encodeURIComponent(returnQuery)}` : ""}`);
+    },
+    [navigate, returnQuery],
+  );
+
+  const openNewNote = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filters.projectId) params.set("projectId", filters.projectId);
+    if (linkedTaskId) params.set("taskId", linkedTaskId);
+    if (returnQuery) params.set("return", returnQuery);
+    const query = params.toString();
+    navigate(`/notes/new${query ? `?${query}` : ""}`);
+  }, [filters.projectId, linkedTaskId, navigate, returnQuery]);
 
   const saveCurrentView = () => {
     const name = window.prompt("Saved view name");
@@ -308,184 +187,24 @@ export function NotesPage() {
     createSavedView.mutate({ name: name.trim(), ...currentSavedViewPayload });
   };
 
-  const openConvertTaskModal = (sourceText: string) => {
-    if (editingNoteId === null) {
-      setClipboardImageMessage({ kind: "error", text: "Save the note before converting note content into a task." });
-      return;
-    }
-    const trimmed = sourceText.trim();
-    setConvertTaskModal({ noteId: editingNoteId, sourceText: trimmed, title: trimmed.slice(0, 255), dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "" });
-  };
-
   /**
-   * Converts a persisted structured action item (a real `NoteBlock` row, not the draft block
-   * editor's client-only reconstruction) - passes `noteBlockId` so the backend's idempotent
-   * (note, block) conversion applies (issue #296/#287). Free-text conversion above never sets it.
+   * Converting a persisted structured action item from a result card - passes the real
+   * `noteBlockId` so the backend's idempotent (note, block) conversion applies (issues #287/#296).
    */
   const openConvertBlockModal = (note: NoteRecord, block: NoteBlockRecord) => {
-    const trimmed = (block.content ?? "").trim();
-    setConvertTaskModal({ noteId: note.id, sourceText: trimmed, title: trimmed.slice(0, 255) || note.title, dueDate: "", status: "", area: "PERSONAL", effort: "MEDIUM", parentTaskId: "", noteBlockId: block.id });
-  };
-
-  const submitConvertTask = () => {
-    if (!convertTaskModal) return;
-    convertNoteToTask.mutate({
-      noteId: convertTaskModal.noteId,
-      body: {
-        title: convertTaskModal.title,
-        selectedText: convertTaskModal.sourceText,
-        dueDate: convertTaskModal.dueDate || null,
-        status: convertTaskModal.status || null,
-        area: convertTaskModal.area || null,
-        effort: convertTaskModal.effort || null,
-        parentTaskId: convertTaskModal.parentTaskId ? Number(convertTaskModal.parentTaskId) : null,
-        noteBlockId: convertTaskModal.noteBlockId ?? null,
-      },
-    }, { onSuccess: (result) => { if (result.ok) setConvertTaskModal(null); } });
-  };
-
-  const linkMentionedTask = (noteId: number, taskId: number, selectedText: string, linkType = "MENTION") => {
-    createTaskLink.mutate({ noteId, body: { taskId, selectedText, linkType } });
-  };
-
-  const handleTaskMentionShortcut = () => {
-    if (editingNoteId === null) {
-      setClipboardImageMessage({ kind: "error", text: "Save the note before linking task mentions." });
-      return;
-    }
-
-    const textarea = noteBodyRef.current;
-    const selected = textarea && textarea.selectionStart !== textarea.selectionEnd
-      ? activeForm.body.slice(textarea.selectionStart, textarea.selectionEnd)
-      : "";
-    const firstTask = availableTasks.find((task) => String(task.id) === activeForm.taskId) ?? availableTasks[0];
-    if (!firstTask) {
-      setClipboardImageMessage({ kind: "error", text: "Create or load a task before adding a task mention." });
-      return;
-    }
-
-    linkMentionedTask(editingNoteId, firstTask.id, selected || `@task ${firstTask.title}`);
-  };
-
-  const focusNoteEditor = useCallback(() => {
-    window.setTimeout(() => {
-      const target = noteTitleInputRef.current ?? noteFormTitleRef.current;
-      target?.focus({ preventScroll: true });
-    }, 0);
-  }, []);
-
-  const resetForm = useCallback(() => {
-    setForm({ ...emptyFormForTask(linkedTaskId), projectId: filters.projectId });
-    setDraftBlocks(blocksFromBody(""));
-    setShowRawBody(false);
-    setEditingNoteId(null);
-    setAiReviewSuggestion(null);
-    setIsTemplateSectionOpen(false);
-    setIsCreateDrawerOpen(false);
-  }, [filters.projectId, linkedTaskId]);
-
-  const openNewNoteEditor = () => {
-    resetForm();
-    setIsCreateDrawerOpen(true);
-    focusNoteEditor();
-  };
-
-  const openTemplateEditor = () => {
-    resetForm();
-    setIsTemplateSectionOpen(true);
-    setIsCreateDrawerOpen(true);
-  };
-
-  const editNote = useCallback((note: NoteRecord) => {
-    setEditingNoteId(note.id);
-    setForm(noteToForm(note));
-    setDraftBlocks(blocksFromBody(note.body ?? ""));
-    setShowRawBody(false);
-    setAiReviewSuggestion(null);
-    setIsTemplateSectionOpen(false);
-    setIsCreateDrawerOpen(true);
-    focusNoteEditor();
-  }, [focusNoteEditor]);
-
-  const runAiActionForNote = (action: NoteAiAction) => {
-    if (editingNoteId === null) {
-      setClipboardImageMessage({ kind: "error", text: "Save the note before running AI actions." });
-      return;
-    }
-    if (!aiFeaturesEnabled) {
-      setClipboardImageMessage({ kind: "error", text: "AI features are disabled in settings for offline or privacy-sensitive use." });
-      return;
-    }
-    runNoteAiAction.mutate({ noteId: editingNoteId, action }, {
-      onSuccess: (result) => { if (result.ok) setAiReviewSuggestion(result.data); },
-    });
-  };
-
-  const appendAiSuggestionToBody = () => {
-    if (!aiReviewSuggestion) return;
-    const addition = `\n\n---\nAI-generated ${aiReviewSuggestion.action.toLowerCase().replaceAll("_", " ")} (${formatDate(aiReviewSuggestion.createdAt)})\n${aiReviewSuggestion.generatedContent}`;
-    const nextBody = `${activeForm.body}${addition}`;
-    setForm((current) => ({ ...current, body: nextBody }));
-    setDraftBlocks(blocksFromBody(nextBody));
-    setAiReviewSuggestion(null);
-  };
-
-  const handleCreateFromTemplate = () => {
-    if (!selectedTemplate || !canCreateFromTemplate) return;
-    const linkedTask = availableTasks.find((task) => String(task.id) === activeForm.taskId);
-    createNoteFromTemplate.mutate({
-      templateId: selectedTemplate.id,
-      title: renderedTemplatePreview.split('\n')[0]?.replace(/^#+\s*/, '') || selectedTemplate.name,
-      taskId: activeForm.taskId.trim() ? Number(activeForm.taskId.trim()) : null,
-      tags: parseTags(activeForm.tags),
-      variables: {
-        ...templateVariables,
-        taskTitle: templateVariables.taskTitle || linkedTask?.title || '',
-      },
-    }, {
-      onSuccess: (result) => { if (result.ok) resetForm(); },
-    });
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!canSubmit) return;
-
-    const payload = { ...buildNotePayload(activeForm), body: effectiveBody };
-    if (editingNoteId === null) {
-      createNote.mutate(payload, { onSuccess: (result) => { if (result.ok) resetForm(); } });
-      return;
-    }
-
-    updateNote.mutate({ id: editingNoteId, body: payload }, { onSuccess: (result) => { if (result.ok) resetForm(); } });
+    setConvertDraft(emptyConvertDraft(note.id, block.content ?? note.title, block.id));
   };
 
   const copyBody = useCallback((note: NoteRecord) => {
     if (!navigator.clipboard) return;
-
     void navigator.clipboard
       .writeText(note.body)
       .then(() => {
         setCopiedNoteId(note.id);
-        window.setTimeout(
-          () => setCopiedNoteId((current) => (current === note.id ? null : current)),
-          1600,
-        );
+        window.setTimeout(() => setCopiedNoteId((current) => (current === note.id ? null : current)), 1600);
       })
       .catch(() => setCopiedNoteId(null));
   }, []);
-
-  useEffect(() => {
-    if (isCreateDrawerOpen) {
-      focusNoteEditor();
-    } else if (wasCreateDrawerOpenRef.current) {
-      window.setTimeout(() => {
-        newNoteButtonRef.current?.focus({ preventScroll: true });
-      }, 0);
-    }
-
-    wasCreateDrawerOpenRef.current = isCreateDrawerOpen;
-  }, [focusNoteEditor, isCreateDrawerOpen]);
 
   const workspaceNav = (onNavigate?: () => void) => (
     <NotesWorkspaceNav
@@ -497,9 +216,7 @@ export function NotesPage() {
       savedViews={savedViews}
       appliedSavedViewId={appliedSavedViewId}
       onApplySavedView={(view) => { setAppliedSavedViewId(view.id); applySavedView(view); }}
-      onDeleteSavedView={(view) => {
-        if (window.confirm(`Delete saved view "${view.name}"?`)) deleteSavedView.mutate(view.id);
-      }}
+      onDeleteSavedView={(view) => { if (window.confirm(`Delete saved view "${view.name}"?`)) deleteSavedView.mutate(view.id); }}
       onSaveCurrentView={saveCurrentView}
       isSavingView={createSavedView.isPending}
       onNavigate={onNavigate}
@@ -518,8 +235,8 @@ export function NotesPage() {
         isCreatingScreenshotNote={isCreatingScreenshotNote}
         isReloading={notesQuery.isFetching}
         onCaptureAreaNote={() => void handleScreenshotNote()}
-        onNewNote={openNewNoteEditor}
-        onNewFromTemplate={openTemplateEditor}
+        onNewNote={openNewNote}
+        onNewFromTemplate={openNewNote}
         onReload={() => void notesQuery.refetch()}
         newNoteButtonRef={newNoteButtonRef}
       />
@@ -569,6 +286,11 @@ export function NotesPage() {
               {screenshotNoteMessage.text}
             </p>
           ) : null}
+          {pendingClipboardImages.length > 0 ? (
+            <p className="text-sm text-fg-muted" role="status">
+              {pendingClipboardImages.length} pasted screenshot(s) waiting to upload.
+            </p>
+          ) : null}
 
           <NoteVersionHistoryPanel
             versionHistoryNoteId={versionHistoryNoteId}
@@ -605,7 +327,7 @@ export function NotesPage() {
               errorMessage={notesQueryErrorMessage}
               smartView={activeSmartView}
               onClearFilters={clearFilters}
-              onNewNote={openNewNoteEditor}
+              onNewNote={openNewNote}
               onRetry={() => void notesQuery.refetch()}
               isRetrying={notesQuery.isFetching}
             />
@@ -618,7 +340,7 @@ export function NotesPage() {
                 taskTitleById={taskTitleById}
                 copiedNoteId={copiedNoteId}
                 sortBy={filters.sortBy}
-                onEdit={editNote}
+                onOpen={openNote}
                 onCopy={copyBody}
                 onVersionHistory={openVersionHistory}
                 onConvertBlock={openConvertBlockModal}
@@ -657,119 +379,32 @@ export function NotesPage() {
         {workspaceNav(() => setIsMobileNavOpen(false))}
       </Drawer>
 
-      <CreateNoteDrawer
-        isOpen={isCreateDrawerOpen}
-        onClose={resetForm}
-        editingNoteId={editingNoteId}
-        isBusy={isBusy}
-        canSubmit={canSubmit}
-        noteFormTitleRef={noteFormTitleRef}
-        noteTitleInputRef={noteTitleInputRef}
-        canCreateFromTemplate={canCreateFromTemplate}
-        handleCreateFromTemplate={handleCreateFromTemplate}
-        isCreateFromTemplatePending={createNoteFromTemplate.isPending}
-        templatesQueryIsLoading={templatesQuery.isLoading}
-        templates={templates}
-        selectedTemplateId={selectedTemplateId}
-        setSelectedTemplateId={setSelectedTemplateId}
-        templateVariableKeys={TEMPLATE_VARIABLE_KEYS}
-        templateVariables={templateVariables}
-        setTemplateVariables={setTemplateVariables}
-        selectedTemplate={selectedTemplate}
-        renderedTemplatePreview={renderedTemplatePreview}
-        isTemplateSectionOpen={isTemplateSectionOpen}
-        setIsTemplateSectionOpen={setIsTemplateSectionOpen}
-        handleSubmit={handleSubmit}
-        activeForm={activeForm}
-        noteDate={drawerNoteDate}
-        setForm={setForm}
+      <ConvertNoteToTaskDialog
+        draft={convertDraft}
+        onChange={setConvertDraft}
+        onClose={() => setConvertDraft(null)}
+        isPending={convertNoteToTask.isPending}
         availableTasks={availableTasks}
-        collections={collections}
-        draftBlocks={draftBlocks}
-        setDraftBlocks={setDraftBlocks}
-        handleTaskMentionShortcut={handleTaskMentionShortcut}
-        aiFeaturesEnabled={aiFeaturesEnabled}
-        aiNoteActions={AI_NOTE_ACTIONS}
-        runAiActionForNote={runAiActionForNote}
-        aiReviewSuggestion={aiReviewSuggestion}
-        setAiReviewSuggestion={setAiReviewSuggestion}
-        appendAiSuggestionToBody={appendAiSuggestionToBody}
-        aiGenerations={aiGenerations}
-        showRawBody={showRawBody}
-        setShowRawBody={setShowRawBody}
-        noteBodyRef={noteBodyRef}
-        handleBodyPaste={handleBodyPaste}
-        notes={notes}
-        projects={projects}
-        deleteTaskLink={deleteTaskLink}
-        clipboardImageMessage={clipboardImageMessage}
-        pendingClipboardImages={pendingClipboardImages}
-        latestMutationResult={latestMutationResult}
-        onConvertToTask={openConvertTaskModal}
-        onOpenVersionHistory={() => {
-          const note = notes.find((candidate) => candidate.id === editingNoteId);
-          if (note) openVersionHistory(note);
+        onSubmit={() => {
+          if (!convertDraft) return;
+          convertNoteToTask.mutate(
+            {
+              noteId: convertDraft.noteId,
+              body: {
+                title: convertDraft.title,
+                selectedText: convertDraft.sourceText,
+                dueDate: convertDraft.dueDate || null,
+                status: convertDraft.status || null,
+                area: convertDraft.area || null,
+                effort: convertDraft.effort || null,
+                parentTaskId: convertDraft.parentTaskId ? Number(convertDraft.parentTaskId) : null,
+                noteBlockId: convertDraft.noteBlockId ?? null,
+              },
+            },
+            { onSuccess: (result) => { if (result.ok) setConvertDraft(null); } },
+          );
         }}
-        linkMentionedTask={linkMentionedTask}
       />
-
-      <Dialog
-        open={Boolean(convertTaskModal)}
-        onOpenChange={(open) => { if (!open) setConvertTaskModal(null); }}
-        title="Convert to task"
-        footer={
-          <Button variant="primary" disabled={!convertTaskModal?.title.trim() || convertNoteToTask.isPending} onClick={submitConvertTask}>
-            Create linked task
-          </Button>
-        }
-      >
-        {convertTaskModal ? (
-          <div className="flex flex-col gap-3">
-            {convertTaskModal.noteBlockId ? (
-              <p className="text-sm text-fg-muted">Converting this action item — it can only become one task, even if you convert it again.</p>
-            ) : null}
-            <Field label="Title" htmlFor="convertTaskTitle">
-              <Input id="convertTaskTitle" value={convertTaskModal.title} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, title: event.target.value } : current)} />
-            </Field>
-            <Field label="Due date" htmlFor="convertTaskDueDate">
-              <Input id="convertTaskDueDate" type="date" value={convertTaskModal.dueDate} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, dueDate: event.target.value } : current)} />
-            </Field>
-            <Field label="Status" htmlFor="convertTaskStatus">
-              <Select id="convertTaskStatus" value={convertTaskModal.status} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, status: event.target.value } : current)}>
-                <option value="">Backlog</option>
-                <option value="NOT_STARTED">Not started</option>
-                <option value="IN_PROGRESS">In progress</option>
-                <option value="BLOCKED">Blocked</option>
-                <option value="WAITING">Waiting</option>
-              </Select>
-            </Field>
-            <Field label="Area" htmlFor="convertTaskArea">
-              <Select id="convertTaskArea" value={convertTaskModal.area} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, area: event.target.value } : current)}>
-                <option value="PERSONAL">Personal</option>
-                <option value="WORK">Work</option>
-                <option value="STUDY">Study</option>
-                <option value="HEALTH">Health</option>
-                <option value="FAMILY">Family</option>
-              </Select>
-            </Field>
-            <Field label="Effort" htmlFor="convertTaskEffort">
-              <Select id="convertTaskEffort" value={convertTaskModal.effort} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, effort: event.target.value } : current)}>
-                <option value="QUICK">Quick</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="DEEP_WORK">Deep work</option>
-                <option value="LARGE">Large</option>
-              </Select>
-            </Field>
-            <Field label="Linked task parent" htmlFor="convertTaskParentId">
-              <Select id="convertTaskParentId" value={convertTaskModal.parentTaskId} onChange={(event) => setConvertTaskModal((current) => current ? { ...current, parentTaskId: event.target.value } : current)}>
-                <option value="">No parent</option>
-                {availableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-              </Select>
-            </Field>
-            <p className="text-sm text-fg-muted">Created from note text: {convertTaskModal.sourceText.slice(0, 160)}</p>
-          </div>
-        ) : null}
-      </Dialog>
 
       <ScreenshotCropOverlay
         cropOverlay={cropOverlay}

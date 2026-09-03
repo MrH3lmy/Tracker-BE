@@ -167,7 +167,10 @@ class NoteControllerApiTest {
     }
 
     @Test
-    void createNoteReturnsValidationErrorsForBlankTitleAndBody() throws Exception {
+    void createNoteReturnsValidationErrorForBlankTitle() throws Exception {
+        // A blank *body* is no longer an error: the note page editor creates the record on the
+        // user's first edit, which is routinely a title before any content exists (issue #299
+        // follow-up). A blank title still is - a note needs an identity.
         String payload = """
                 {"title":"   ","body":""}
                 """;
@@ -179,8 +182,17 @@ class NoteControllerApiTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.message").value(containsString("title is required")))
-                .andExpect(jsonPath("$.message").value(containsString("body is required")))
                 .andExpect(jsonPath("$.path").value("/api/v1/notes"));
+    }
+
+    @Test
+    void createNoteReturnsValidationErrorWhenBodyIsMissingEntirely() throws Exception {
+        // Relaxing @NotBlank to @NotNull must not silently make body optional.
+        mockMvc.perform(post("/api/v1/notes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Has a title\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("body is required")));
     }
 
 

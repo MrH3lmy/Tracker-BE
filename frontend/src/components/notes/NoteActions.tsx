@@ -12,7 +12,7 @@ interface ScreenshotMessage {
 interface NoteActionsProps {
   note: NoteRecord;
   copied: boolean;
-  onEdit: (note: NoteRecord) => void;
+  onOpen: (note: NoteRecord) => void;
   onCopy: (note: NoteRecord) => void;
   onVersionHistory: (note: NoteRecord) => void;
   onTakeScreenshot?: (note: NoteRecord) => void;
@@ -109,7 +109,7 @@ function ScreenshotFormFields({
 export function NoteActions({
   note,
   copied,
-  onEdit,
+  onOpen,
   onCopy,
   onVersionHistory,
   onTakeScreenshot,
@@ -157,7 +157,7 @@ export function NoteActions({
             </Button>
           </MenuTrigger>
           <MenuContent aria-label={`Actions for ${note.title}`}>
-            <MenuItem onSelect={() => onEdit(note)}>Edit</MenuItem>
+            <MenuItem onSelect={() => onOpen(note)}>Open note</MenuItem>
             <MenuItem onSelect={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</MenuItem>
             <MenuItem onSelect={() => onVersionHistory(note)}>Version history</MenuItem>
             {canAttachScreenshot && screenshotMode === "compact" ? (
@@ -167,7 +167,7 @@ export function NoteActions({
         </Menu>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          <Button onClick={() => onEdit(note)}>Edit</Button>
+          <Button onClick={() => onOpen(note)}>Open note</Button>
           <Button onClick={() => onCopy(note)}>{copied ? "Copied" : "Copy"}</Button>
           <Button onClick={() => onVersionHistory(note)}>Version history</Button>
           {canAttachScreenshot && screenshotMode === "compact" ? (

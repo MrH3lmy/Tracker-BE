@@ -21,6 +21,7 @@ import com.taskpriority.model.Task;
 import com.taskpriority.model.Tag;
 import com.taskpriority.notes.api.CreateNoteRequest;
 import com.taskpriority.notes.api.CreateNoteTaskLinkRequest;
+import com.taskpriority.notes.api.NoteBlockInput;
 import com.taskpriority.notes.api.NoteBlockResponse;
 import com.taskpriority.notes.api.NoteTaskLinkResponse;
 import com.taskpriority.notes.api.NoteVersionResponse;
@@ -63,6 +64,7 @@ import java.time.Duration;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -289,7 +291,9 @@ public class NoteService {
         NoteContentType contentType = request.contentType() == null ? NoteContentType.PLAIN_TEXT : request.contentType();
 
         Note note = getNote(id);
-        createVersionBeforeEdit(userId, note, request.title(), request.body(), request.contentType(), request.tags(), "note-update");
+        boolean autosave = Boolean.TRUE.equals(request.autosave());
+        boolean snapshotted = createVersionBeforeEdit(userId, note, request.title(), request.body(), request.contentType(), request.tags(), autosave,
+                autosave ? "note-autosave" : "note-update");
         note.setTitle(request.title().trim());
         note.setBody(formatBody(request.body(), contentType));
         note.setContentType(contentType);
@@ -308,11 +312,69 @@ public class NoteService {
         note.setZIndex(defaultZero(request.zIndex()));
         note.setTags(resolveTags(userId, request.tags()));
         Note saved = noteRepository.save(note);
-        if (saved.getProjectId() != null) {
+        if (request.blocks() != null) {
+            applyBlockDiff(userId, saved, request.blocks());
+        }
+        // Autosave fires every few hundred milliseconds while someone is writing. Recording an
+        // activity event per request would bury the project timeline under one row per keystroke
+        // batch and grow project_activity without bound, so autosaves reuse the same coalescing
+        // boundary as version history: an event is recorded only when this edit also took a
+        // snapshot. A deliberate save always records, exactly as before.
+        if (saved.getProjectId() != null && (!autosave || snapshotted)) {
             activityService.record(saved.getProjectId(), ActivityEventType.NOTE_UPDATED, ActivityEntityType.NOTE,
                     saved.getId(), "Updated note: " + saved.getTitle(), null);
         }
         return toResponse(saved);
+    }
+
+    /**
+     * Persists the editor's block list against {@code note_blocks} as an id-preserving diff
+     * (issue #299 follow-up): a block that comes back with its id is updated in place, a block
+     * with no id is inserted, and only blocks the client actually dropped are deleted.
+     *
+     * <p>The id preservation is a correctness requirement, not an optimisation.
+     * {@code note_task_links.note_block_id} is {@code ON DELETE CASCADE} (V14) and carries the
+     * unique {@code ACTION_ITEM_CONVERSION} index from V53, so the delete-all-then-reinsert shape
+     * used by {@link #restoreBlocks} would drop every structured action's task link on each save
+     * and break the idempotency guarantee from issues #287/#296. Positions are assigned from list
+     * order so the stored order can never disagree with what the client rendered.
+     */
+    private void applyBlockDiff(Long userId, Note note, List<NoteBlockInput> inputs) {
+        List<NoteBlock> existing = noteBlockRepository.findByUserIdAndNoteIdOrderByPositionAscIdAsc(userId, note.getId());
+        Map<Long, NoteBlock> existingById = existing.stream().collect(Collectors.toMap(NoteBlock::getId, block -> block));
+        Set<Long> retained = new HashSet<>();
+
+        int position = 0;
+        for (NoteBlockInput input : inputs) {
+            NoteBlock block;
+            if (input.id() != null && !retained.add(input.id())) {
+                // Defence in depth for the id-preservation invariant: two entries claiming the
+                // same row would update one entity twice and strand the other, cascade-deleting
+                // its ACTION_ITEM_CONVERSION link (V14/V53).
+                throw new IllegalArgumentException("Block with id " + input.id() + " appears more than once in the same update");
+            }
+            if (input.id() == null) {
+                block = new NoteBlock();
+                block.setUserId(userId);
+                block.setNote(note);
+            } else {
+                block = existingById.get(input.id());
+                if (block == null) {
+                    throw new ResourceNotFoundException("Block with id " + input.id() + " not found for note " + note.getId());
+                }
+            }
+            block.setType(input.type().trim());
+            block.setContent(input.content());
+            block.setChecked(input.checked());
+            block.setMetadata(input.metadata());
+            block.setPosition(position++);
+            noteBlockRepository.save(block);
+        }
+
+        List<NoteBlock> removed = existing.stream().filter(block -> !retained.contains(block.getId())).toList();
+        if (!removed.isEmpty()) {
+            noteBlockRepository.deleteAll(removed);
+        }
     }
 
 
@@ -484,17 +546,31 @@ public class NoteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Version with id " + versionId + " not found for note " + noteId));
     }
 
-    private void createVersionBeforeEdit(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, String reason) {
-        if (shouldCreateVersion(userId, note, nextTitle, nextBody, nextContentType, nextTags)) {
+    /** @return true when a version snapshot was actually taken for this edit. */
+    private boolean createVersionBeforeEdit(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, boolean autosave, String reason) {
+        if (shouldCreateVersion(userId, note, nextTitle, nextBody, nextContentType, nextTags, autosave)) {
             createSnapshot(userId, note, reason);
+            return true;
         }
+        return false;
     }
 
-    private boolean shouldCreateVersion(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags) {
-        boolean major = !java.util.Objects.equals(note.getTitle(), nextTitle == null ? null : nextTitle.trim())
+    /**
+     * An explicit save keeps the original rule: any "major" change (title, content type, tags, or
+     * a body length swing of {@value #MAJOR_EDIT_BODY_DELTA}) snapshots immediately, and anything
+     * smaller snapshots once the {@link #VERSION_DEBOUNCE} window has passed.
+     *
+     * <p>An autosave (issue #299 follow-up) skips the major fast-path and relies on the debounce
+     * alone. Typing a title is a "major" change on *every* keystroke batch, so a Notion-style
+     * editor saving continuously would otherwise mint a version per debounce tick and bury the
+     * meaningful states version history exists to recover. Content is still saved every time -
+     * only snapshot frequency changes.
+     */
+    private boolean shouldCreateVersion(Long userId, Note note, String nextTitle, String nextBody, NoteContentType nextContentType, List<String> nextTags, boolean autosave) {
+        boolean major = !autosave && (!java.util.Objects.equals(note.getTitle(), nextTitle == null ? null : nextTitle.trim())
                 || !java.util.Objects.equals(note.getContentType(), nextContentType == null ? NoteContentType.PLAIN_TEXT : nextContentType)
                 || Math.abs((note.getBody() == null ? 0 : note.getBody().length()) - (nextBody == null ? 0 : nextBody.length())) >= MAJOR_EDIT_BODY_DELTA
-                || !normalizeTags(nextTags).equals(note.getTags().stream().map(Tag::getName).sorted().toList());
+                || !normalizeTags(nextTags).equals(note.getTags().stream().map(Tag::getName).sorted().toList()));
         if (major) return true;
         return noteVersionRepository.findTopByUserIdAndNoteIdOrderByCreatedAtDescIdDesc(userId, note.getId())
                 .map(version -> Duration.between(version.getCreatedAt(), LocalDateTime.now()).compareTo(VERSION_DEBOUNCE) >= 0)

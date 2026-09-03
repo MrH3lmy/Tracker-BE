@@ -15,7 +15,7 @@ interface NotesTableProps {
   taskTitleById: Map<number, string>;
   projectTitleById?: Map<number, string>;
   copiedNoteId: number | null;
-  onEdit: (note: NoteRecord) => void;
+  onOpen: (note: NoteRecord) => void;
   onCopy: (note: NoteRecord) => void;
   onVersionHistory: (note: NoteRecord) => void;
   onTakeScreenshot: (note: NoteRecord) => void;
@@ -40,7 +40,7 @@ export function NotesTable({
   taskTitleById,
   projectTitleById,
   copiedNoteId,
-  onEdit,
+  onOpen,
   onCopy,
   onVersionHistory,
   onTakeScreenshot,
@@ -72,7 +72,9 @@ export function NotesTable({
         <TableBody>
           {notes.map((note) => (
             <TableRow key={note.id}>
-              <TableCell className="max-w-[22rem] truncate font-medium" title={note.title}>{note.title}</TableCell>
+              <TableCell className="max-w-[22rem] truncate font-medium">
+                <button type="button" className="truncate text-left text-brand hover:underline" title={note.title} onClick={() => onOpen(note)}>{note.title}</button>
+              </TableCell>
               <TableCell><NoteTypeBadge noteType={note.noteType ?? "GENERAL"} /></TableCell>
               <TableCell className="max-w-[12rem] truncate text-fg-muted">
                 {note.projectId ? projectTitleById?.get(note.projectId) ?? `#${note.projectId}` : "—"}
@@ -85,7 +87,7 @@ export function NotesTable({
                 <NoteActions
                   note={note}
                   copied={copiedNoteId === note.id}
-                  onEdit={onEdit}
+                  onOpen={onOpen}
                   onCopy={onCopy}
                   onVersionHistory={onVersionHistory}
                   screenshotMode="compact"

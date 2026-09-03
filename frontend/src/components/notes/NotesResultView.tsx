@@ -17,7 +17,8 @@ export interface NotesResultViewProps {
   taskTitleById: Map<number, string>;
   copiedNoteId: number | null;
   sortBy: string;
-  onEdit: (note: NoteRecord) => void;
+  /** Opens the note as a page at /notes/:id - the only normal editing path. */
+  onOpen: (note: NoteRecord) => void;
   onCopy: (note: NoteRecord) => void;
   onVersionHistory: (note: NoteRecord) => void;
   onConvertBlock: (note: NoteRecord, block: NoteBlockRecord) => void;
@@ -55,7 +56,7 @@ export function NotesResultView(props: NotesResultViewProps) {
     taskTitleById,
     copiedNoteId,
     sortBy,
-    onEdit,
+    onOpen,
     onCopy,
     onVersionHistory,
     onConvertBlock,
@@ -82,7 +83,7 @@ export function NotesResultView(props: NotesResultViewProps) {
     <NoteActions
       note={note}
       copied={copiedNoteId === note.id}
-      onEdit={onEdit}
+      onOpen={onOpen}
       onCopy={onCopy}
       onVersionHistory={onVersionHistory}
       screenshotMode="compact"
@@ -109,6 +110,7 @@ export function NotesResultView(props: NotesResultViewProps) {
       onConvertBlock={onConvertBlock}
       projectName={note.projectId ? projectTitleById.get(note.projectId) : undefined}
       linkedTaskTitle={linkedTaskTitle(note)}
+      onOpen={() => onOpen(note)}
       actions={renderActions(note)}
     />
   );
@@ -144,7 +146,7 @@ export function NotesResultView(props: NotesResultViewProps) {
           taskTitleById={taskTitleById}
           projectTitleById={projectTitleById}
           copiedNoteId={copiedNoteId}
-          onEdit={onEdit}
+          onOpen={onOpen}
           onCopy={onCopy}
           onVersionHistory={onVersionHistory}
           onTakeScreenshot={onTakeScreenshot}
