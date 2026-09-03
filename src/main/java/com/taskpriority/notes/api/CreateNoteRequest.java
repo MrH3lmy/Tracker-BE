@@ -3,6 +3,7 @@ package com.taskpriority.notes.api;
 import com.taskpriority.model.NoteContentType;
 import com.taskpriority.model.NoteType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -13,7 +14,11 @@ public record CreateNoteRequest(
         @Size(max = 255, message = "must be at most 255 characters")
         String title,
 
-        @NotBlank(message = "is required")
+        // Not @NotBlank, matching UpdateNoteRequest: the note page editor creates the record on
+        // the user's first edit, which is very often a title-only or property-only change while
+        // the document is still empty. Rejecting that would make a perfectly normal first edit
+        // fail. Title stays required.
+        @NotNull(message = "is required")
         String body,
 
         NoteContentType contentType,

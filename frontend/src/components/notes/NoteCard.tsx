@@ -22,6 +22,8 @@ interface NoteCardProps {
   projectName?: string;
   /** Resolved linked-task title, shown as an action signal when the note points at a task. */
   linkedTaskTitle?: string;
+  /** Opens the note as a page. When omitted (project tabs) the title renders as plain text. */
+  onOpen?: () => void;
 }
 
 /** Code content types keep the terminal chrome; prose types get a plain clamped excerpt. */
@@ -184,6 +186,7 @@ function NoteCardComponent({
   onConvertBlock,
   projectName,
   linkedTaskTitle,
+  onOpen,
 }: NoteCardProps) {
   const accent = resolveNoteAccent(note, layout);
   const isTile = layout === "tile";
@@ -208,8 +211,17 @@ function NoteCardComponent({
     >
       {eyebrow}
 
-      {/* 1. Identity - never single-line truncated: the title is what the note *is*. */}
-      <h4 className="text-[15px] leading-snug font-semibold break-words text-fg">{note.title}</h4>
+      {/* 1. Identity - never single-line truncated: the title is what the note *is*, and it is
+          the primary way into the note's page. */}
+      <h4 className="text-[15px] leading-snug font-semibold break-words text-fg">
+        {onOpen ? (
+          <button type="button" onClick={onOpen} className="text-left hover:text-brand hover:underline">
+            {note.title}
+          </button>
+        ) : (
+          note.title
+        )}
+      </h4>
 
       {/* 2. Context: type, project, freshness - text and icon, not a wall of coloured badges. */}
       <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-fg-muted">

@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotesPage } from './NotesPage';
 
@@ -44,12 +44,22 @@ function baseFetchImpl(overrides: Record<string, () => Promise<Response>> = {}) 
   });
 }
 
+/** Renders the current location so navigation out of the library can be asserted. */
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+}
+
 function renderPage(initialEntry = '/notes') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialEntry]}>
-        <NotesPage />
+        <Routes>
+          <Route path="/notes" element={<NotesPage />} />
+          <Route path="/notes/:id" element={<LocationProbe />} />
+        </Routes>
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -72,20 +82,15 @@ afterEach(() => {
 });
 
 describe('NotesPage - typed/project notes', () => {
-  it('offers a project selector and a note type selector when creating a note', async () => {
+  it('sends "New note" to the page editor rather than opening a drawer', async () => {
     mockFetch(baseFetchImpl());
     const user = userEvent.setup();
     renderPage();
 
     await user.click(await screen.findByRole('button', { name: 'New note' }));
 
-    const projectSelect = screen.getByLabelText('Project (optional)') as HTMLSelectElement;
-    expect(within(projectSelect).getByText('Checkout revamp')).toBeInTheDocument();
-
-    const noteTypeSelect = screen.getByLabelText('Note type') as HTMLSelectElement;
-    expect(within(noteTypeSelect).getByText('Meeting')).toBeInTheDocument();
-    expect(within(noteTypeSelect).getByText('Decision')).toBeInTheDocument();
-    expect(noteTypeSelect.value).toBe('GENERAL');
+    expect(screen.getAllByTestId('location')[0]).toHaveTextContent('/notes/new');
+    expect(screen.queryByLabelText('Project (optional)')).not.toBeInTheDocument();
   });
 
   it('shows the note type badge for a non-general project note in the list', async () => {
@@ -389,36 +394,31 @@ describe('NotesPage - context and capture (issue #299)', () => {
     });
   });
 
-  it('opens the editor writing-first: a title box, the body, then organize metadata', async () => {
+  it('opens a note as a page, carrying the library filters in ?return=', async () => {
     mockFetch(baseFetchImpl());
     const user = userEvent.setup();
-    renderPage();
+    renderPage('/notes?projectId=1&type=MEETING&q=paci');
+
+    await user.click(await screen.findByRole('button', { name: 'Sprint planning notes' }));
+
+    const location = screen.getAllByTestId('location')[0].textContent ?? '';
+    expect(location).toContain('/notes/1');
+    const returnParam = decodeURIComponent(new URLSearchParams(location.split('?')[1]).get('return') ?? '');
+    expect(returnParam).toContain('projectId=1');
+    expect(returnParam).toContain('type=MEETING');
+    expect(returnParam).toContain('q=paci');
+  });
+
+  it('carries the project context into a new note created from a filtered library', async () => {
+    mockFetch(baseFetchImpl());
+    const user = userEvent.setup();
+    renderPage('/notes?projectId=1');
 
     await user.click(await screen.findByRole('button', { name: 'New note' }));
 
-    const title = screen.getByLabelText('Title');
-    expect(title).toHaveAttribute('placeholder', 'What is this note about?');
-    // Metadata is present but below the writing surface, not gating it.
-    expect(screen.getByLabelText('Project (optional)')).toBeInTheDocument();
-    // Template and raw body stay collapsed until asked for.
-    expect(screen.queryByLabelText('Template')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Raw note body')).not.toBeInTheDocument();
-  });
-
-  it('reaches the template picker in one step from the capture menu', async () => {
-    mockFetch(baseFetchImpl({
-      '/api/v1/note-templates': () => jsonResponse([
-        { id: 5, name: 'Meeting notes', description: 'Agenda and actions', category: 'Meeting', content: '# {{taskTitle}}' },
-      ]),
-    }));
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.click(await screen.findByRole('button', { name: /Capture/ }));
-    await user.click(await screen.findByRole('menuitem', { name: 'New from template' }));
-
-    const templateSelect = await screen.findByLabelText('Template');
-    expect(within(templateSelect).getByText('Meeting · Meeting notes')).toBeInTheDocument();
+    const location = screen.getAllByTestId('location')[0].textContent ?? '';
+    expect(location).toContain('/notes/new');
+    expect(location).toContain('projectId=1');
   });
 
   it('exposes the same navigation on mobile through an intentional sheet', async () => {

@@ -68,6 +68,7 @@ type MoveTaskContext = { previousActive?: ApiCallResult<unknown> };
 export const queryKeys = {
   tasks: (tab: TaskTab) => ['tasks', tab] as const,
   taskBlockers: ['tasks', 'blockers'] as const,
+  note: (id: number) => ['notes', 'detail', id] as const,
   noteTemplates: ['note-templates'] as const,
   noteCollections: ['note-collections'] as const,
   noteSavedViews: ['note-saved-views'] as const,
@@ -143,6 +144,11 @@ export const useNotesQuery = (filters: NotesQueryFilters = {}) => useQuery({
     const query = params.toString();
     return apiJson<NoteRecord[]>('GET', `/api/v1/notes${query ? `?${query}` : ''}`);
   },
+});
+export const useNoteQuery = (id: number, enabled = true) => useQuery({
+  queryKey: queryKeys.note(id),
+  queryFn: () => apiJson<NoteRecord>('GET', `/api/v1/notes/${id}`),
+  enabled: enabled && Number.isFinite(id) && id > 0,
 });
 export const useNoteTemplatesQuery = () => useQuery({ queryKey: queryKeys.noteTemplates, queryFn: () => apiJson<NoteTemplateRecord[]>('GET', '/api/v1/note-templates') });
 export const useNoteCollectionsQuery = () => useQuery({ queryKey: queryKeys.noteCollections, queryFn: () => apiJson<NoteCollectionRecord[]>('GET', '/api/v1/note-collections') });

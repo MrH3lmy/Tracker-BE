@@ -9,6 +9,7 @@ import { HabitsPage } from '../pages/HabitsPage';
 import { ImportPage } from '../pages/ImportPage';
 import { InsightsPage } from '../pages/InsightsPage';
 import { MatrixPage } from '../pages/MatrixPage';
+import { NotePage } from '../pages/NotePage';
 import { NotesPage } from '../pages/NotesPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { PlanningPage } from '../pages/PlanningPage';
@@ -76,6 +77,7 @@ export const developerRoutes: AppRoute[] = [
 // Routes that render via the router but do not appear as sidebar tabs.
 export const detailRoutes: AppRoute[] = [
   { label: 'Project Detail', path: '/tasks/projects/:id', element: <ProjectDetailPage /> },
+  { label: 'Note Page', path: '/notes/:id', element: <NotePage /> },
   { label: 'Task Detail', path: '/tasks/:id', element: <TaskDetailPage /> },
   { label: 'Habit Analysis', path: '/habits/analysis', element: <HabitAnalysisPage /> },
   { label: 'Weekly Review', path: '/weekly-review', element: <WeeklyReviewPage /> },
