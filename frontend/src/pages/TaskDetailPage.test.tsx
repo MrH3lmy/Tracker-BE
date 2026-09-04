@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -62,7 +62,11 @@ describe('TaskDetailPage - readiness and blocker navigation', () => {
 
     expect(await screen.findByText('Implement checkout API')).toBeInTheDocument();
     expect(screen.getByText('Finalize payment contract')).toBeInTheDocument();
-    expect(screen.getByText('Blocked')).toBeInTheDocument();
+
+    // Readiness is stated as its own region, in words rather than a colour.
+    const readiness = screen.getByRole('region', { name: 'Readiness' });
+    expect(within(readiness).getByText(/Blocked/)).toBeInTheDocument();
+    expect(within(readiness).getByText(/waiting on work that is not finished/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: /Implement checkout API/ }));
 
