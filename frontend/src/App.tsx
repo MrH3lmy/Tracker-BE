@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { appRoutes, appTabs, developerTabs, legacyRedirects, type AppRoute } from './router/routes';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { appRoutes, developerTabs, legacyRedirects, type AppRoute } from './router/routes';
 import { useHabitMutations, useHabitsQuery, useSettingsQuery } from './hooks/useApiQueries';
 import { useHabitReminders } from './hooks/useHabitReminders';
 import type { HabitRecord } from './components/habits/habitTypes';
@@ -13,6 +13,8 @@ import { QuickCaptureContext, type QuickCaptureContextValue } from './quickCaptu
 import { QuickCaptureModal } from './components/quickCapture/QuickCaptureModal';
 import { FocusTimerWidget } from './components/focus/FocusTimerWidget';
 import { NotificationInbox } from './components/notifications/NotificationInbox';
+import { AppShell } from './components/shell/AppShell';
+import { pathMatchesRoute } from './components/shell/navigation';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import {
@@ -24,27 +26,8 @@ import {
   readThemeFromSettings,
 } from './theme';
 import { readHabitReminderStyle } from './validation/settings';
-import { Badge, Button, cn } from './components/ui';
-import {
-  AlertTriangle,
-  Calendar,
-  Check,
-  ChevronsLeft,
-  Clock,
-  Flame,
-  Import,
-  LayoutDashboard,
-  ListTodo,
-  Loader2,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Settings,
-  StickyNote,
-  TrendingUp,
-  Wrench,
-  X,
-} from './components/ui/icons';
+import { Button } from './components/ui';
+import { Check, Clock, Loader2, X } from './components/ui/icons';
 
 const UNAUTHENTICATED_PATHS = new Set(['/login', '/register']);
 
@@ -59,88 +42,51 @@ const readStoredSidebarCollapsed = () => {
   }
 };
 
-const pathMatchesRoute = (pathname: string, routePath: string) => pathname === routePath || pathname.startsWith(`${routePath}/`);
-
 const routeIsDeveloperRoute = ({ path }: AppRoute) => developerTabs.some((tab) => pathMatchesRoute(path, tab.path));
 
-type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
-
-const navIcons: Record<string, IconComponent> = {
-  Today: LayoutDashboard,
-  Tasks: ListTodo,
-  Habits: Flame,
-  Notes: StickyNote,
-  Calendar: Calendar,
-  Insights: TrendingUp,
-  Search,
-  Settings: Settings,
-  Import: Import,
-  'Error Playground': AlertTriangle,
-  'Developer Tools': Wrench,
-};
-
-function SidebarItem({ label, path, collapsed = false, onClick }: { label: string; path: string; collapsed?: boolean; onClick?: () => void }) {
-  const Icon = navIcons[label] ?? LayoutDashboard;
-  return (
-    <NavLink
-      to={path}
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-(--duration-fast)',
-          collapsed && 'justify-center px-0',
-          isActive ? 'bg-brand-soft text-brand' : 'text-fg-muted hover:bg-inset hover:text-fg',
-        )
-      }
-    >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-      <span className={cn(collapsed && 'sr-only')}>{label}</span>
-    </NavLink>
-  );
-}
-
-function DeveloperNavSection({ isActive, collapsed, tabs }: { isActive: boolean; collapsed: boolean; tabs: typeof developerTabs }) {
-  if (tabs.length === 0) return null;
-
-  return (
-    <details className="group" open={isActive}>
-      <summary className={cn(
-        'flex cursor-pointer list-none items-center gap-1 rounded-md px-2.5 py-2 text-xs font-semibold tracking-wide text-fg-subtle uppercase select-none hover:text-fg-muted [&::-webkit-details-marker]:hidden',
-        collapsed && 'justify-center px-0',
-      )}>
-        <span className={cn(collapsed && 'sr-only')}>Developer</span>
-        {collapsed && <Wrench className="h-4 w-4" aria-hidden />}
-      </summary>
-      <nav className="mt-1 flex flex-col gap-0.5" aria-label="Developer and admin navigation">
-        {tabs.map(({ label, path }) => (
-          <SidebarItem key={path} label={label} path={path} collapsed={collapsed} />
-        ))}
-      </nav>
-    </details>
-  );
-}
-
-function HabitReminderToasts({ habits, onCheckIn, onDismiss }: { habits: HabitRecord[]; onCheckIn: (id: number) => void; onDismiss: (id: number) => void }) {
+function HabitReminderToasts({
+  habits,
+  onCheckIn,
+  onDismiss,
+}: {
+  habits: HabitRecord[];
+  onCheckIn: (id: number) => void;
+  onDismiss: (id: number) => void;
+}) {
   if (habits.length === 0) return null;
 
   return (
-    <div className="fixed right-4 bottom-4 z-(--z-toast) flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2" role="region" aria-label="Habit reminders">
+    <div
+      className="fixed right-4 bottom-[calc(var(--shell-tabbar-h)+env(safe-area-inset-bottom)+5.5rem)] z-(--z-toast) flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 md:bottom-4"
+      role="region"
+      aria-label="Habit reminders"
+    >
       {habits.map((habit) => (
-        <div
-          key={habit.id}
-          className="flex items-start gap-3 rounded-xl border border-line bg-glass p-3.5 shadow-lg backdrop-blur-(--blur-panel)"
-        >
+        <div key={habit.id} className="flex items-start gap-3 rounded-lg border border-line bg-card p-3.5 shadow-lg">
           <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-fg">{habit.title}</p>
             <p className="text-xs text-fg-muted">Reminder: time to check in</p>
           </div>
           <div className="flex shrink-0 gap-1">
-            <Button variant="primary" size="sm" iconOnly aria-label={`Check in ${habit.title}`} title="Check in" onClick={() => onCheckIn(habit.id)}>
+            <Button
+              variant="primary"
+              size="sm"
+              iconOnly
+              aria-label={`Check in ${habit.title}`}
+              title="Check in"
+              onClick={() => onCheckIn(habit.id)}
+            >
               <Check className="h-4 w-4" aria-hidden />
             </Button>
-            <Button variant="ghost" size="sm" iconOnly aria-label={`Dismiss reminder for ${habit.title}`} title="Dismiss" onClick={() => onDismiss(habit.id)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label={`Dismiss reminder for ${habit.title}`}
+              title="Dismiss"
+              onClick={() => onDismiss(habit.id)}
+            >
               <X className="h-4 w-4" aria-hidden />
             </Button>
           </div>
@@ -158,10 +104,10 @@ export default function App() {
   );
 }
 
-// Splits unauthenticated routes (login/register, no sidebar shell, no
-// authenticated data fetching) from the authenticated app. Kept outside
-// routes.tsx/appTabs since those drive the sidebar's tab list, which
-// login/register must never appear in.
+// Splits unauthenticated routes (login/register, no shell, no authenticated
+// data fetching) from the authenticated app. Kept outside routes.tsx since
+// those entries drive the shell's navigation, which login/register must never
+// appear in.
 function AppRoot() {
   const location = useLocation();
 
@@ -177,58 +123,10 @@ function AppRoot() {
   return <AuthenticatedApp />;
 }
 
-const MOBILE_TAB_ITEMS: { label: string; path: string; icon: IconComponent }[] = [
-  { label: 'Today', path: '/today', icon: LayoutDashboard },
-  { label: 'Tasks', path: '/tasks', icon: ListTodo },
-  { label: 'Habits', path: '/habits', icon: Flame },
-];
-
-function MobileBottomNav({ onQuickAdd, onToggleMore, isMoreOpen }: { onQuickAdd: () => void; onToggleMore: () => void; isMoreOpen: boolean }) {
-  const [firstTab, secondTab, thirdTab] = MOBILE_TAB_ITEMS;
-  const tabClassName = ({ isActive }: { isActive: boolean }) =>
-    cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isActive ? 'text-brand' : 'text-fg-muted');
-
-  return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-stretch justify-around border-t border-line bg-card px-1 py-1.5 lg:hidden"
-      aria-label="Mobile primary navigation"
-    >
-      <NavLink to={firstTab.path} className={tabClassName}>
-        <firstTab.icon className="h-5 w-5" aria-hidden />
-        {firstTab.label}
-      </NavLink>
-      <NavLink to={secondTab.path} className={tabClassName}>
-        <secondTab.icon className="h-5 w-5" aria-hidden />
-        {secondTab.label}
-      </NavLink>
-      <button type="button" onClick={onQuickAdd} className="flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium text-fg-muted">
-        <span className="-mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-brand text-brand-fg" aria-hidden>
-          <Plus className="h-4 w-4" />
-        </span>
-        Quick add
-      </button>
-      <NavLink to={thirdTab.path} className={tabClassName}>
-        <thirdTab.icon className="h-5 w-5" aria-hidden />
-        {thirdTab.label}
-      </NavLink>
-      <button
-        type="button"
-        onClick={onToggleMore}
-        aria-controls="mobile-navigation"
-        aria-expanded={isMoreOpen}
-        className={cn('flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium', isMoreOpen ? 'text-brand' : 'text-fg-muted')}
-      >
-        <MoreHorizontal className="h-5 w-5" aria-hidden />
-        More
-      </button>
-    </nav>
-  );
-}
-
 function AuthenticatedApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
   const [quickCaptureInitialDate, setQuickCaptureInitialDate] = useState<string | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readStoredSidebarCollapsed);
@@ -265,7 +163,7 @@ function AuthenticatedApp() {
     try {
       window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed));
     } catch {
-      // Ignore storage failures so the desktop sidebar toggle still works in-memory.
+      // Ignore storage failures so the sidebar toggle still works in-memory.
     }
   }, [isSidebarCollapsed]);
 
@@ -280,7 +178,10 @@ function AuthenticatedApp() {
   }, [setTheme, settingsQuery.data, theme]);
 
   const themeContextValue = useMemo(() => ({ theme, setTheme }), [setTheme, theme]);
-  const announcementContextValue = useMemo(() => ({ message: announcement, announce: setAnnouncement }), [announcement]);
+  const announcementContextValue = useMemo(
+    () => ({ message: announcement, announce: setAnnouncement }),
+    [announcement],
+  );
   const dismissUndoToast = useCallback(() => {
     window.clearTimeout(undoToastTimeoutRef.current);
     setUndoToast(null);
@@ -314,16 +215,33 @@ function AuthenticatedApp() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-  const visibleDeveloperTabs = isDevMode ? developerTabs : [];
+
+  // Close the mobile sheet on navigation so it never lingers over the page the
+  // user just chose, including on browser back/forward (`back-stack-integrity`).
+  // Adjusted during render rather than in an effect so the sheet is never
+  // painted over the new route for a frame.
+  const [sheetPathname, setSheetPathname] = useState(location.pathname);
+  if (sheetPathname !== location.pathname) {
+    setSheetPathname(location.pathname);
+    setIsMoreSheetOpen(false);
+  }
+
   const visibleAppRoutes = isDevMode ? appRoutes : appRoutes.filter((route) => !routeIsDeveloperRoute(route));
-  const isDeveloperRouteActive = visibleDeveloperTabs.some(({ path }) => pathMatchesRoute(location.pathname, path));
   const routeOwnsPageLayout = location.pathname.startsWith('/tasks');
-  const hideGlobalQuickAdd = routeOwnsPageLayout || location.pathname.startsWith('/habits');
-  const activeRouteLabel = [...appTabs, ...visibleDeveloperTabs].find(({ path }) => pathMatchesRoute(location.pathname, path))?.label ?? 'Today';
+  // Surfaces that already offer their own prominent create action suppress the
+  // shell's, so the two never sit side by side in the same viewport.
+  const hideGlobalQuickAdd =
+    routeOwnsPageLayout ||
+    location.pathname.startsWith('/habits') ||
+    location.pathname.startsWith('/today');
 
   if (isAuthLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center gap-2 bg-canvas text-fg-muted" role="status" aria-live="polite">
+      <div
+        className="flex min-h-dvh items-center justify-center gap-2 bg-canvas text-fg-muted"
+        role="status"
+        aria-live="polite"
+      >
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
         <span>Restoring your session...</span>
       </div>
@@ -338,139 +256,68 @@ function AuthenticatedApp() {
     <ThemeContext.Provider value={themeContextValue}>
       <AnnouncementContext.Provider value={announcementContextValue}>
         <UndoToastContext.Provider value={undoToastContextValue}>
-        <QuickCaptureContext.Provider value={quickCaptureContextValue}>
-          <a
-            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-toast) focus:rounded-md focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-fg"
-            href="#task-tracker-main"
-          >
-            Skip to content
-          </a>
-          <div className="flex min-h-screen bg-canvas text-fg">
-          <aside
-            className={cn(
-              'sticky top-0 z-(--z-sticky) hidden h-screen shrink-0 flex-col border-r border-line bg-card px-3 py-4 lg:flex',
-              isSidebarCollapsed ? 'w-16' : 'w-60',
-            )}
-            aria-label="Primary navigation"
-          >
-            <div className={cn('mb-6 flex items-center gap-2.5 px-1.5', isSidebarCollapsed && 'flex-col gap-2 px-0')}>
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-sm font-semibold text-brand-fg"
-                aria-hidden="true"
-              >
-                T
-              </span>
-              {!isSidebarCollapsed && <h1 className="truncate text-[15px] font-semibold tracking-tight">Tracker</h1>}
-              <Button
-                variant="ghost"
-                size="sm"
-                iconOnly
-                className={cn('text-fg-subtle', !isSidebarCollapsed && 'ml-auto')}
-                aria-expanded={!isSidebarCollapsed}
-                aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
-              >
-                <ChevronsLeft className={cn('h-4 w-4 transition-transform duration-(--duration-base)', isSidebarCollapsed && 'rotate-180')} aria-hidden />
-              </Button>
-            </div>
-            <nav className="flex flex-col gap-0.5" aria-label="Primary app navigation">
-              {appTabs.map(({ label, path }) => (
-                <SidebarItem key={path} label={label} path={path} collapsed={isSidebarCollapsed} />
-              ))}
-            </nav>
-            <div className="mt-auto pt-4">
-              <DeveloperNavSection isActive={isDeveloperRouteActive} collapsed={isSidebarCollapsed} tabs={visibleDeveloperTabs} />
-            </div>
-          </aside>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-(--z-sticky) flex h-14 shrink-0 items-center gap-3 border-b border-line bg-card px-4 sm:px-6">
-              <h2 className="truncate text-[15px] font-semibold tracking-tight">{activeRouteLabel}</h2>
-              <div className="ml-auto flex items-center gap-2">
-                {!hideGlobalQuickAdd && (
-                  <button
-                    type="button"
-                    onClick={() => setIsQuickCaptureOpen(true)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[13px] font-medium text-brand-fg hover:bg-brand-hover"
-                    title="Quick add (Ctrl+K)"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden />
-                    Quick add
-                  </button>
-                )}
-                {user && <NotificationInbox />}
-                {user && (
-                  <div className="flex items-center gap-2 border-l border-line pl-2">
-                    <span className="hidden max-w-[10rem] truncate text-xs text-fg-muted sm:inline" title={user.email}>
-                      {user.displayName || user.email}
-                    </span>
-                    {user.tier === 'PREMIUM' && <Badge variant="brand">Premium</Badge>}
-                    <Button variant="ghost" size="sm" onClick={() => void logout()}>
-                      Log out
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </header>
-
-            <nav
-              id="mobile-navigation"
-              className={cn('flex-col gap-0.5 border-b border-line bg-card p-3 lg:hidden', isMobileMenuOpen ? 'flex' : 'hidden')}
-              aria-label="Mobile navigation"
-            >
-              {appTabs.map(({ label, path }) => (
-                <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
-              ))}
-              {visibleDeveloperTabs.map(({ label, path }) => (
-                <SidebarItem key={path} label={label} path={path} onClick={() => setIsMobileMenuOpen(false)} />
-              ))}
-            </nav>
-
-            <main
-              id="task-tracker-main"
-              className={cn('min-w-0 flex-1 pb-20 focus:outline-none lg:pb-0', !routeOwnsPageLayout && 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6')}
-              tabIndex={-1}
+          <QuickCaptureContext.Provider value={quickCaptureContextValue}>
+            <AppShell
+              user={user}
+              onLogout={() => void logout()}
+              includeDeveloper={isDevMode}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+              isMoreSheetOpen={isMoreSheetOpen}
+              onMoreSheetOpenChange={setIsMoreSheetOpen}
+              onQuickAdd={hideGlobalQuickAdd ? undefined : () => setIsQuickCaptureOpen(true)}
+              notificationSlot={user ? <NotificationInbox /> : undefined}
+              announce={setAnnouncement}
+              announcement={announcement}
+              routeOwnsPageLayout={routeOwnsPageLayout}
             >
               <Routes>
                 <Route path="/" element={<Navigate to="/today" replace />} />
-                {visibleAppRoutes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}
+                {visibleAppRoutes.map((route) => (
+                  <Route key={route.path} path={route.path} element={route.element} />
+                ))}
                 {legacyRedirects.map(({ from, to }) => (
                   <Route key={`legacy-${from}`} path={from} element={<Navigate to={to} replace />} />
                 ))}
-                {!isDevMode && developerTabs.map(({ path }) => (
-                  <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/today" replace />} />
-                ))}
+                {!isDevMode &&
+                  developerTabs.map(({ path }) => (
+                    <Route key={`redirect-${path}`} path={`${path}/*`} element={<Navigate to="/today" replace />} />
+                  ))}
               </Routes>
-            </main>
-            <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
-          </div>
-        </div>
-        <HabitReminderToasts
-          habits={dueHabits}
-          onCheckIn={(id) => { checkInHabit.mutate(id); dismissReminder(id); }}
-          onDismiss={dismissReminder}
-        />
-        <MobileBottomNav
-          onQuickAdd={openQuickCapture}
-          onToggleMore={() => setIsMobileMenuOpen((open) => !open)}
-          isMoreOpen={isMobileMenuOpen}
-        />
-        <FocusTimerWidget />
-        {undoToast && (
-          <div className="fixed inset-x-0 bottom-20 z-(--z-toast) flex justify-center px-4 lg:bottom-6" role="status" aria-live="polite">
-            <div className="flex items-center gap-3 rounded-lg border border-line-strong bg-card px-4 py-3 shadow-lg">
-              <span className="text-sm text-fg">{undoToast.message}</span>
-              <Button size="sm" variant="ghost" onClick={handleUndoClick}>Undo</Button>
-            </div>
-          </div>
-        )}
-        <QuickCaptureModal
-          open={isQuickCaptureOpen}
-          onOpenChange={(next) => { setIsQuickCaptureOpen(next); if (!next) setQuickCaptureInitialDate(undefined); }}
-          initialDate={quickCaptureInitialDate}
-        />
-        </QuickCaptureContext.Provider>
+            </AppShell>
+
+            <HabitReminderToasts
+              habits={dueHabits}
+              onCheckIn={(id) => {
+                checkInHabit.mutate(id);
+                dismissReminder(id);
+              }}
+              onDismiss={dismissReminder}
+            />
+            <FocusTimerWidget />
+            {undoToast && (
+              <div
+                className="fixed inset-x-0 bottom-[calc(var(--shell-tabbar-h)+env(safe-area-inset-bottom)+1rem)] z-(--z-toast) flex justify-center px-4 md:bottom-6"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-3 rounded-lg border border-line-control bg-card px-4 py-3 shadow-lg">
+                  <span className="text-sm text-fg">{undoToast.message}</span>
+                  <Button size="sm" variant="ghost" onClick={handleUndoClick}>
+                    Undo
+                  </Button>
+                </div>
+              </div>
+            )}
+            <QuickCaptureModal
+              open={isQuickCaptureOpen}
+              onOpenChange={(next) => {
+                setIsQuickCaptureOpen(next);
+                if (!next) setQuickCaptureInitialDate(undefined);
+              }}
+              initialDate={quickCaptureInitialDate}
+            />
+          </QuickCaptureContext.Provider>
         </UndoToastContext.Provider>
       </AnnouncementContext.Provider>
     </ThemeContext.Provider>

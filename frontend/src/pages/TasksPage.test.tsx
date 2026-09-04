@@ -286,11 +286,14 @@ describe('TasksPage - scopes and navigation', () => {
     mockFetch();
     renderPage();
 
-    const nav = await screen.findByRole('tablist', { name: 'Task view' });
-    expect(within(nav).getByRole('tab', { name: 'List' })).toHaveAttribute('href', '/tasks');
-    expect(within(nav).getByRole('tab', { name: 'Board' })).toHaveAttribute('href', '/tasks/board');
-    expect(within(nav).getByRole('tab', { name: 'Matrix' })).toHaveAttribute('href', '/tasks/matrix');
-    expect(within(nav).getByRole('tab', { name: 'Projects' })).toHaveAttribute('href', '/tasks/projects');
+    // Section views are links that change the URL, not in-page tabs, so they
+    // expose link semantics rather than role="tab" (see SectionTabs).
+    const nav = await screen.findByRole('navigation', { name: 'Task view' });
+    expect(within(nav).getByRole('link', { name: 'List' })).toHaveAttribute('href', '/tasks');
+    expect(within(nav).getByRole('link', { name: 'Board' })).toHaveAttribute('href', '/tasks/board');
+    expect(within(nav).getByRole('link', { name: 'Matrix' })).toHaveAttribute('href', '/tasks/matrix');
+    expect(within(nav).getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/tasks/projects');
+    expect(within(nav).queryByRole('tab')).toBeNull();
   });
 });
 

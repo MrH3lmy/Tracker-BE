@@ -1,12 +1,17 @@
 export const THEME_SETTING_KEY = 'ui.theme';
 export const THEME_STORAGE_KEY = 'tracker.theme';
 
+/**
+ * Every theme is the same neutral chrome carrying a different accent hue --
+ * the accent marks action and state, it does not tint the workspace. See
+ * design-system/tracker-v2/MASTER.md ("Chrome is neutral").
+ */
 export const THEME_OPTIONS = [
-  { value: 'light', label: 'Light Modern', description: 'Bright, neutral workspace with a clean blue accent.' },
-  { value: 'dark', label: 'Midnight Pro', description: 'Low-glare dark workspace for focused, dim-room work.' },
-  { value: 'aurora', label: 'Aurora', description: 'Dark with a vivid teal-and-violet glow.' },
-  { value: 'ocean', label: 'Ocean Breeze', description: 'Light with a cool, ocean-blue accent.' },
-  { value: 'forest', label: 'Forest', description: 'Light with an earthy green accent.' },
+  { value: 'light', label: 'Daylight', description: 'Neutral light workspace with a blue action accent.' },
+  { value: 'dark', label: 'Midnight', description: 'Neutral dark workspace with a blue action accent.' },
+  { value: 'aurora', label: 'Aurora', description: 'Neutral dark workspace with a violet action accent.' },
+  { value: 'ocean', label: 'Ocean', description: 'Neutral light workspace with a deep-cyan action accent.' },
+  { value: 'forest', label: 'Forest', description: 'Neutral light workspace with a green action accent.' },
 ] as const;
 
 export type AppTheme = (typeof THEME_OPTIONS)[number]['value'];

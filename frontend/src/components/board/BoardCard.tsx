@@ -27,7 +27,7 @@ export function BoardCard({ task }: BoardCardProps) {
       {...listeners}
       className={cn(
         'flex cursor-grab flex-col gap-2 rounded-lg border border-line bg-card p-3 shadow-2xs transition-shadow duration-(--duration-fast) active:cursor-grabbing',
-        isDragging && 'z-10 scale-[1.02] shadow-(--shadow-glow-brand-lg)',
+        isDragging && 'z-10 scale-[1.02] shadow-lg',
         task.important && 'border-l-2 border-l-caution',
         overdue && 'border-l-2 border-l-critical',
       )}

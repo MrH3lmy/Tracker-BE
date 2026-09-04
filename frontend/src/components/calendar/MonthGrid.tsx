@@ -45,7 +45,7 @@ function TaskChip({ task, dateKey, onTaskClick, disabled }: { task: MonthGridTas
       className={cn(
         'truncate rounded bg-inset px-1 py-0.5 text-left text-[11px] text-fg hover:bg-brand-soft hover:text-brand',
         task.id !== undefined && !disabled && 'cursor-grab active:cursor-grabbing',
-        isDragging && 'z-10 opacity-60 shadow-(--shadow-glow-brand-lg)',
+        isDragging && 'z-10 opacity-60 shadow-lg',
       )}
       aria-roledescription={!disabled && task.id !== undefined ? 'draggable task' : undefined}
     >

@@ -1,221 +1,236 @@
 /*
- * Typography (UI UX Pro Max "Dashboard Data" pairing - Fira Sans body / Fira Code for
- * tabular/numeric emphasis): a deliberate departure from the previous Inter-everywhere
- * system, chosen for the "technical, precise, dashboard" mood the design-system search
- * returned for this product type. See design-system/tracker-be/MASTER.md.
+ * Tracker v2 -- "Neutral Workbench" design foundation.
+ *
+ * Source of truth: design-system/tracker-v2/MASTER.md
+ * Research transcripts: design-system/tracker-v2/research/
+ * Contrast verifier: design-system/tracker-v2/research/contrast-check.py
+ *
+ * This file supersedes the tracker-be ("Cockpit") token set. That system is
+ * retained unchanged under design-system/tracker-be/ as historical reference
+ * only -- none of its values survive here.
+ *
+ * Typography: Inter, one family, weight variations ("Minimal Swiss" pairing --
+ * the UI UX Pro Max typography domain returns Inter three separate times as the
+ * top match for dashboards / admin panels / system UI). Tabular figures come
+ * from Inter's own `tnum` feature via .tabular-nums rather than a second family,
+ * which collapses the previous two-family Fira Sans + Fira Code UI system into
+ * one. Fira Code survives for *code content* only -- a content font, not chrome.
  */
-@import "@fontsource/fira-sans/400.css";
-@import "@fontsource/fira-sans/500.css";
-@import "@fontsource/fira-sans/600.css";
-@import "@fontsource/fira-sans/700.css";
+@import "@fontsource-variable/inter";
 @import "@fontsource-variable/fira-code";
 @import "tailwindcss";
 
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="aurora"], [data-theme="aurora"] *));
 
 /*
- * Design token system. Semantic values live on unlayered [data-theme]
- * blocks so they always win the cascade and switch with the theme; the
- * @theme inline block below maps them into Tailwind utility names
- * (bg-canvas, text-fg-muted, border-line, bg-brand, ...).
+ * ---------------------------------------------------------------------------
+ * The governing rule of this foundation:
+ *
+ *     CHROME IS NEUTRAL. COLOUR MEANS STATE OR ACTION, NEVER DECORATION.
+ *
+ * The previous system spent its colour budget tinting the chrome itself (a teal
+ * canvas, teal borders, teal insets). In an information-dense tracker that
+ * budget belongs to *state* -- overdue, blocked, at-risk, streak health,
+ * priority. So every theme below is the SAME neutral slate chrome carrying a
+ * different accent hue, rather than five differently-tinted worlds.
+ *
+ * Semantic values live on unlayered [data-theme] blocks so they always win the
+ * cascade and switch with the theme; the @theme inline block maps them into
+ * Tailwind utility names (bg-canvas, text-fg-muted, border-line, ...).
+ *
+ * Every foreground/background pair below is verified by
+ * design-system/tracker-v2/research/contrast-check.py: text >= 4.5:1 (WCAG 2.2
+ * AA 1.4.3), control boundaries and the focus ring >= 3:1 (1.4.11).
+ * ---------------------------------------------------------------------------
  */
 
-/*
- * "Cockpit" palette (UI UX Pro Max --design-system, product type "Productivity Tool":
- * teal primary + orange functional accent). Deliberately different hue family from the
- * previous blue Light Modern / Midnight Pro theme - see design-system/tracker-be/MASTER.md
- * for the search transcript and design-system-tool-output/ for the raw tool output.
- * Every text/background pair below is verified >=4.5:1 (script in that same folder).
- */
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --app-canvas: #f0fdfa;
+  --app-canvas: #f8fafc;
   --app-card: #ffffff;
   --app-glass: #ffffff;
-  --app-inset: #e6f7f4;
+  --app-inset: #f1f5f9;
   --app-raised: #ffffff;
-  --app-scrim: rgb(15 23 42 / 0.4);
-  --app-fg: #134e4a;
+  --app-scrim: rgb(15 23 42 / 0.45);
+  --app-fg: #0f172a;
   --app-fg-muted: #475569;
-  --app-fg-subtle: #64837e;
-  --app-line: #b9e4dc;
-  --app-line-strong: #7fd0c2;
-  --app-brand: #0f766e;
-  --app-brand-hover: #115e59;
-  --app-brand-soft: #ccfbf1;
+  --app-fg-subtle: #64748b;
+  /* Decorative divider. Deliberately exempt from 1.4.11 -- it separates, it
+     does not identify a control. */
+  --app-line: #e2e8f0;
+  --app-line-strong: #cbd5e1;
+  /* Boundary of anything operable (input, checkbox, select, bordered button).
+     >= 3:1 on canvas/card/inset. In a flat system the border IS the affordance,
+     so this is a separate token, not an alias of --app-line. */
+  --app-line-control: #7c8ba1;
+  --app-brand: #2563eb;
+  --app-brand-hover: #1d4ed8;
+  --app-brand-soft: #eff6ff;
   --app-brand-fg: #ffffff;
-  --app-positive: #047857;
-  --app-positive-soft: #d1fae5;
-  --app-caution: #9a3412;
-  --app-caution-soft: #ffedd5;
-  --app-critical: #b91c1c;
-  --app-critical-soft: #fee2e2;
+  --app-positive: #15803d;
+  --app-positive-soft: #f0fdf4;
+  --app-caution: #b45309;
+  --app-caution-soft: #fffbeb;
+  --app-critical: #dc2626;
+  --app-critical-soft: #fef2f2;
   --app-neutral: #475569;
   --app-neutral-soft: #f1f5f9;
-  --app-glow-brand: 0 1px 2px rgb(15 118 110 / 0.2), 0 4px 12px rgb(15 118 110 / 0.14);
-  --app-glow-brand-lg: 0 8px 24px rgb(15 118 110 / 0.2);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --app-canvas: #071211;
-  --app-card: #101a19;
-  --app-glass: #101a19;
-  --app-inset: #16211f;
-  --app-raised: #17231f;
-  --app-scrim: rgb(0 0 0 / 0.6);
-  --app-fg: #ecfeff;
-  --app-fg-muted: #9fb4b1;
-  --app-fg-subtle: #6f8783;
-  --app-line: #1c2b29;
-  --app-line-strong: #2b423e;
-  --app-brand: #14b8a6;
-  --app-brand-hover: #2dd4bf;
-  --app-brand-soft: #0d211f;
-  --app-brand-fg: #04120f;
-  --app-positive: #34d399;
-  --app-positive-soft: #0d2a1e;
-  --app-caution: #fb923c;
-  --app-caution-soft: #2c1c0f;
+  --app-canvas: #0b1120;
+  --app-card: #0f172a;
+  --app-glass: #0f172a;
+  --app-inset: #1e293b;
+  --app-raised: #1e293b;
+  --app-scrim: rgb(2 6 23 / 0.65);
+  --app-fg: #f1f5f9;
+  --app-fg-muted: #94a3b8;
+  --app-fg-subtle: #7d8fa6;
+  --app-line: #1e293b;
+  --app-line-strong: #334155;
+  --app-line-control: #64748b;
+  /* color-dark-mode: lighter tonal variants, not inverted values. */
+  --app-brand: #60a5fa;
+  --app-brand-hover: #93c5fd;
+  --app-brand-soft: #172554;
+  --app-brand-fg: #0b1120;
+  --app-positive: #4ade80;
+  --app-positive-soft: #052e16;
+  --app-caution: #fbbf24;
+  --app-caution-soft: #2c1c05;
   --app-critical: #f87171;
-  --app-critical-soft: #2e1a1a;
-  --app-neutral: #9fb4b1;
-  --app-neutral-soft: #16211f;
-  --app-glow-brand: 0 0 0 1px rgb(20 184 166 / 0.3), 0 2px 14px rgb(20 184 166 / 0.32);
-  --app-glow-brand-lg: 0 0 26px rgb(20 184 166 / 0.36);
+  --app-critical-soft: #2d1114;
+  --app-neutral: #94a3b8;
+  --app-neutral-soft: #1e293b;
 }
 
+/*
+ * aurora / ocean / forest are accent variants of the same neutral chrome, not
+ * separate visual worlds. They exist because the stored `ui.theme` setting and
+ * the Settings picker already offer them -- preserving that capability without
+ * preserving the old tinted-chrome presentation.
+ */
 [data-theme="aurora"] {
   color-scheme: dark;
-  --app-canvas: #0a0f14;
-  --app-card: #101820;
-  --app-glass: rgb(16 24 32 / 0.72);
-  --app-inset: #16202a;
-  --app-raised: #17222d;
-  --app-scrim: rgb(2 6 10 / 0.6);
-  --app-fg: #f0fdf9;
-  --app-fg-muted: #94b3ac;
-  --app-fg-subtle: #5f7a72;
-  --app-line: #1e2b28;
-  --app-line-strong: #2c3f3a;
-  --app-brand: #14b8a6;
-  --app-brand-hover: #2dd4bf;
-  --app-brand-soft: #0b2a25;
-  --app-brand-fg: #04120f;
-  --app-positive: #34d399;
-  --app-positive-soft: #0d2a1e;
+  --app-canvas: #0b1120;
+  --app-card: #0f172a;
+  --app-glass: #0f172a;
+  --app-inset: #1e293b;
+  --app-raised: #1e293b;
+  --app-scrim: rgb(2 6 23 / 0.65);
+  --app-fg: #f1f5f9;
+  --app-fg-muted: #94a3b8;
+  --app-fg-subtle: #7d8fa6;
+  --app-line: #1e293b;
+  --app-line-strong: #334155;
+  --app-line-control: #64748b;
+  --app-brand: #a78bfa;
+  --app-brand-hover: #c4b5fd;
+  --app-brand-soft: #1e1b4b;
+  --app-brand-fg: #0b1120;
+  --app-positive: #4ade80;
+  --app-positive-soft: #052e16;
   --app-caution: #fbbf24;
-  --app-caution-soft: #2c2410;
-  --app-critical: #fb7185;
-  --app-critical-soft: #2e1620;
-  --app-neutral: #94b3ac;
-  --app-neutral-soft: #16202a;
-  --app-glow-brand: 0 0 0 1px rgb(20 184 166 / 0.3), 0 0 20px rgb(20 184 166 / 0.35), 0 0 40px rgb(139 92 246 / 0.15);
-  --app-glow-brand-lg: 0 0 0 1px rgb(20 184 166 / 0.35), 0 0 32px rgb(20 184 166 / 0.45), 0 0 64px rgb(139 92 246 / 0.2);
+  --app-caution-soft: #2c1c05;
+  --app-critical: #f87171;
+  --app-critical-soft: #2d1114;
+  --app-neutral: #94a3b8;
+  --app-neutral-soft: #1e293b;
 }
 
 [data-theme="ocean"] {
   color-scheme: light;
-  --app-canvas: #eef5fb;
+  --app-canvas: #f8fafc;
   --app-card: #ffffff;
-  --app-glass: rgb(255 255 255 / 0.75);
-  --app-inset: #e2eef7;
+  --app-glass: #ffffff;
+  --app-inset: #f1f5f9;
   --app-raised: #ffffff;
-  --app-scrim: rgb(6 32 54 / 0.4);
-  --app-fg: #0c2236;
-  --app-fg-muted: #3f6079;
-  --app-fg-subtle: #6b8aa3;
-  --app-line: #d3e3ee;
-  --app-line-strong: #b7d0e2;
-  --app-brand: #0071a8;
-  --app-brand-hover: #045f8c;
-  --app-brand-soft: #e0f2fe;
+  --app-scrim: rgb(15 23 42 / 0.45);
+  --app-fg: #0f172a;
+  --app-fg-muted: #475569;
+  --app-fg-subtle: #64748b;
+  --app-line: #e2e8f0;
+  --app-line-strong: #cbd5e1;
+  --app-line-control: #7c8ba1;
+  --app-brand: #0e7490;
+  --app-brand-hover: #155e75;
+  --app-brand-soft: #ecfeff;
   --app-brand-fg: #ffffff;
-  --app-positive: #047857;
-  --app-positive-soft: #ecfdf5;
+  --app-positive: #15803d;
+  --app-positive-soft: #f0fdf4;
   --app-caution: #b45309;
   --app-caution-soft: #fffbeb;
   --app-critical: #dc2626;
-  --app-critical-soft: #fff7f7;
-  --app-neutral: #3f6079;
-  --app-neutral-soft: #e2eef7;
-  --app-glow-brand: 0 1px 2px rgb(0 113 168 / 0.2), 0 4px 14px rgb(0 113 168 / 0.14);
-  --app-glow-brand-lg: 0 10px 26px rgb(0 113 168 / 0.2);
+  --app-critical-soft: #fef2f2;
+  --app-neutral: #475569;
+  --app-neutral-soft: #f1f5f9;
 }
 
 [data-theme="forest"] {
   color-scheme: light;
-  --app-canvas: #f3f7f0;
+  --app-canvas: #f8fafc;
   --app-card: #ffffff;
-  --app-glass: rgb(255 255 255 / 0.75);
-  --app-inset: #e7efe1;
+  --app-glass: #ffffff;
+  --app-inset: #f1f5f9;
   --app-raised: #ffffff;
-  --app-scrim: rgb(12 26 10 / 0.4);
-  --app-fg: #1a2b17;
-  --app-fg-muted: #4b5f45;
-  --app-fg-subtle: #6f8a63;
-  --app-line: #dbe6d3;
-  --app-line-strong: #c1d3b6;
+  --app-scrim: rgb(15 23 42 / 0.45);
+  --app-fg: #0f172a;
+  --app-fg-muted: #475569;
+  --app-fg-subtle: #64748b;
+  --app-line: #e2e8f0;
+  --app-line-strong: #cbd5e1;
+  --app-line-control: #7c8ba1;
   --app-brand: #15803d;
   --app-brand-hover: #166534;
-  --app-brand-soft: #eaf6ec;
+  --app-brand-soft: #f0fdf4;
   --app-brand-fg: #ffffff;
-  --app-positive: #4d7c0f;
-  --app-positive-soft: #f7fee7;
+  --app-positive: #15803d;
+  --app-positive-soft: #f0fdf4;
   --app-caution: #b45309;
   --app-caution-soft: #fffbeb;
   --app-critical: #dc2626;
-  --app-critical-soft: #fff7f7;
-  --app-neutral: #4b5f45;
-  --app-neutral-soft: #e7efe1;
-  --app-glow-brand: 0 1px 2px rgb(21 128 61 / 0.18), 0 4px 12px rgb(21 128 61 / 0.14);
-  --app-glow-brand-lg: 0 8px 22px rgb(21 128 61 / 0.18);
+  --app-critical-soft: #fef2f2;
+  --app-neutral: #475569;
+  --app-neutral-soft: #f1f5f9;
 }
 
-/* Layout / stacking vars shared by both themes (unlayered on purpose). */
+/* Layout / stacking vars shared by every theme (unlayered on purpose). */
 :root {
   --z-dropdown: 30;
   --z-sticky: 40;
   --z-overlay: 50;
   --z-toast: 60;
+
+  /* Shell metrics. Exposed as vars so sticky offsets, scroll-padding and the
+     mobile content inset all derive from one number instead of drifting. */
+  --shell-topbar-h: 3.5rem;
+  --shell-tabbar-h: 3.75rem;
+  --shell-sidebar-w: 15rem;
+  --shell-rail-w: 4.75rem;
 }
 
 @media (prefers-contrast: more) {
   :root,
-  [data-theme="light"] {
-    --app-line: #6b7280;
-    --app-line-strong: #3f3f46;
-    --app-fg-muted: #334155;
-    --app-fg-subtle: #475569;
-  }
-
-  [data-theme="dark"] {
-    --app-line: #7d8aa3;
-    --app-line-strong: #c7d2e3;
-    --app-fg-muted: #cbd5e1;
-    --app-fg-subtle: #94a3b8;
-  }
-
-  [data-theme="aurora"] {
-    --app-line: #5c7d76;
-    --app-line-strong: #8fb0a8;
-    --app-fg-muted: #c8ece3;
-    --app-fg-subtle: #94b3ac;
-  }
-
-  [data-theme="ocean"] {
-    --app-line: #6b8aa8;
-    --app-line-strong: #3f5a70;
-    --app-fg-muted: #234057;
-    --app-fg-subtle: #3f6079;
-  }
-
+  [data-theme="light"],
+  [data-theme="ocean"],
   [data-theme="forest"] {
-    --app-line: #6b8a5e;
-    --app-line-strong: #3f5c34;
-    --app-fg-muted: #2c3f27;
-    --app-fg-subtle: #4b5f45;
+    --app-line: #64748b;
+    --app-line-strong: #475569;
+    --app-line-control: #334155;
+    --app-fg-muted: #334155;
+    --app-fg-subtle: #334155;
+  }
+
+  [data-theme="dark"],
+  [data-theme="aurora"] {
+    --app-line: #64748b;
+    --app-line-strong: #94a3b8;
+    --app-line-control: #cbd5e1;
+    --app-fg-muted: #cbd5e1;
+    --app-fg-subtle: #cbd5e1;
   }
 }
 
@@ -231,6 +246,7 @@
   --color-fg-subtle: var(--app-fg-subtle);
   --color-line: var(--app-line);
   --color-line-strong: var(--app-line-strong);
+  --color-line-control: var(--app-line-control);
   --color-brand: var(--app-brand);
   --color-brand-hover: var(--app-brand-hover);
   --color-brand-soft: var(--app-brand-soft);
@@ -243,14 +259,14 @@
   --color-critical-soft: var(--app-critical-soft);
   --color-neutral: var(--app-neutral);
   --color-neutral-soft: var(--app-neutral-soft);
-  --shadow-glow-brand: var(--app-glow-brand);
-  --shadow-glow-brand-lg: var(--app-glow-brand-lg);
 }
 
 @theme {
-  --font-sans: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'Fira Code Variable', 'Fira Code', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Fira Code Variable', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* Flat Design: hierarchy comes from border + weight + spacing. Radii stay
+     small and consistent so controls read as one family. */
   --radius-xs: 0.25rem;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
@@ -258,42 +274,104 @@
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
 
-  --shadow-2xs: 0 1px 2px rgb(9 9 11 / 0.04);
-  --shadow-xs: 0 1px 2px rgb(9 9 11 / 0.06);
-  --shadow-sm: 0 1px 3px rgb(9 9 11 / 0.08), 0 1px 2px rgb(9 9 11 / 0.04);
-  --shadow-md: 0 4px 12px rgb(9 9 11 / 0.08), 0 1px 2px rgb(9 9 11 / 0.04);
-  --shadow-lg: 0 12px 32px rgb(9 9 11 / 0.12), 0 2px 6px rgb(9 9 11 / 0.06);
+  /*
+   * Elevation is intentionally near-flat. Shadows exist only for surfaces that
+   * genuinely float ABOVE the page (menus, dialogs, toasts) -- never to
+   * decorate an inline card. An inline surface is defined by its border.
+   */
+  --shadow-2xs: 0 1px 1px rgb(15 23 42 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 10px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 12px 28px rgb(15 23 42 / 0.14);
 
-  /* Flat Design (UI UX Pro Max style match): no glass/blur panels, definition comes from
-     borders + the accent-rail system instead of translucency + shadow. */
+  /* No glass/blur panels: translucency costs contrast, and the two styles that
+     use it were both risk:conditional in the skill's style data. */
   --blur-panel: 0px;
 
+  /*
+   * Motion tier: Subtle (--motion 2). `motion-timing` warns against one
+   * duration for every transition, so these are role-based, not a single value.
+   */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --duration-fast: 120ms;
-  --duration-base: 180ms;
-  --duration-slow: 240ms;
+  --duration-fast: 100ms;   /* colour/opacity state change */
+  --duration-base: 160ms;   /* small position/size change */
+  --duration-slow: 220ms;   /* panel or sheet entrance */
 }
 
 @layer base {
   :root {
     line-height: 1.5;
     font-weight: 400;
-    font-family: 'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    /* Inter's contextual alternates keep dense UI labels even-coloured. */
+    font-feature-settings: 'cv05' 1, 'ss01' 1;
+    /*
+     * focus-not-obscured (WCAG 2.2 AA 2.4.11): the sticky top bar and the
+     * mobile tab bar must never fully cover a control the keyboard has focused,
+     * so scrolling reserves their height on both edges.
+     */
+    scroll-padding-top: calc(var(--shell-topbar-h) + 0.5rem);
+    scroll-padding-bottom: calc(var(--shell-tabbar-h) + 0.5rem);
   }
 
   body {
     margin: 0;
     background: var(--app-canvas);
     color: var(--app-fg);
+    -webkit-font-smoothing: antialiased;
   }
 
   * {
     box-sizing: border-box;
   }
 
+  /*
+   * `cursor-pointer`: every clickable element gets the pointer cursor, and
+   * `tap-delay`: touch-action removes the legacy 300ms click delay. Applied at
+   * the base layer so no individual component can forget it.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  /*
+   * number-tabular: dates, counts, streaks and timers must not reflow as their
+   * digits change. Applied to the elements that carry data rather than
+   * globally, so prose keeps proportional figures.
+   */
+  th,
+  td,
+  time,
+  output,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * focus-appearance: a 2px ring plus a 2px offset gives an indicator at least
+   * a 2 CSS px perimeter, and --app-brand is verified >= 3:1 against canvas,
+   * card and inset in every theme.
+   */
   :focus-visible {
     outline: 2px solid var(--app-brand);
     outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  /* long-token-wrapping: URLs, ids and pasted user content must reflow rather
+     than force the page into horizontal scroll. */
+  p,
+  li,
+  dd,
+  blockquote {
+    overflow-wrap: anywhere;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -303,6 +381,7 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }

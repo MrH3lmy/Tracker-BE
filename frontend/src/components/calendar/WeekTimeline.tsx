@@ -50,7 +50,7 @@ function EntryChip({ entry, disabled }: { entry: WeekEntry; disabled: boolean })
       onClick={() => { if (entry.kind === 'TASK' && entry.taskId !== undefined) navigate(`/tasks/${entry.taskId}`); }}
       className={cn(
         'flex w-full cursor-grab items-center gap-1.5 rounded-md border border-line bg-inset/40 px-2 py-1.5 text-left text-xs transition-shadow active:cursor-grabbing',
-        isDragging && 'z-10 opacity-60 shadow-(--shadow-glow-brand-lg)',
+        isDragging && 'z-10 opacity-60 shadow-lg',
       )}
       aria-roledescription="draggable scheduled item"
     >

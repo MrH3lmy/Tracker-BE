@@ -1,13 +1,3 @@
-> [!IMPORTANT]
-> **Superseded — historical reference only.**
->
-> This document describes the previous Tracker design system ("Cockpit"). It was
-> replaced by **`design-system/tracker-v2/MASTER.md`** in #308 and is kept
-> unchanged as a record of what the app used to be.
->
-> Do not use it for design decisions. Consult it only to inventory functionality
-> that must not be lost.
-
 # Design System Master File
 
 > **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
@@ -16,10 +6,10 @@
 
 ---
 
-**Project:** Tracker-BE
-**Generated:** 2026-09-01 23:45:39
+**Project:** Tracker v2
+**Generated:** 2026-09-03 23:50:23
 **Category:** Productivity Tool
-**Design Dials:** Variance 6/10 (Balanced / Modern) | Motion 4/10 (Standard) | Density 8/10 (Dense / Dashboard)
+**Design Dials:** Motion 2/10 (Subtle) | Density 8/10 (Dense / Dashboard)
 
 ---
 
@@ -197,17 +187,17 @@
 
 ## Motion
 
-**Stagger List** (Standard) — Trigger: load or scroll | Duration: 300-450ms | Easing: `back.out(1.4)`
+**Scroll Reveal** (Subtle) — Trigger: scroll (viewport enter) | Duration: 300-400ms | Easing: `power1.out`
 
 ```js
-gsap.from('.grid-item', { opacity: 0, scale: 0.92, y: 16, duration: 0.4, stagger: { each: 0.06, from: 'start', grid: 'auto' }, ease: 'back.out(1.4)' });
+gsap.from(el, { opacity: 0, y: 12, duration: 0.35, ease: 'power1.out', scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none reverse' } });
 ```
 
-**Framework notes:** grid: 'auto' lets GSAP infer rows/columns from a CSS grid layout for a natural wave stagger; Use matchMedia('(prefers-reduced-motion: reduce)') to skip non-essential motion and render the final state immediately
+**Framework notes:** Requires the ScrollTrigger plugin registered once via gsap.registerPlugin(ScrollTrigger); Use matchMedia('(prefers-reduced-motion: reduce)') to skip non-essential motion and render the final state immediately
 
-- ✅ Combine with from: 'center' for a bento-grid layout to draw the eye inward first
-- ❌ Don't use back.out on dense data tables; the overshoot reads as sloppy on informational UI
-- ⚡ Group DOM writes; avoid interleaving layout reads (getBoundingClientRect) between staggered tweens
+- ✅ Keep the y offset small (8-16px) so it reads as a fade, not a slide
+- ❌ Don't reveal below-the-fold content needed for SEO/crawlers as invisible-by-default without a no-JS fallback
+- ⚡ toggleActions 'play none none reverse' avoids re-triggering on every scroll direction change
 
 ---
 
