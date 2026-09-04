@@ -63,7 +63,8 @@ echo Frontend URL: %FRONTEND_URL%
 echo Backend URL: %BACKEND_URL%
 echo Backend health: %BACKEND_HEALTH_URL%
 echo Swagger UI: %SWAGGER_URL%
-if not "%MINIO_PORT%"=="" echo MinIO API host port: %MINIO_PORT% (internal app endpoint remains minio:9000)
+rem No parentheses in these echoes: an unescaped ")" on a single-line `if` is a cmd.exe parsing hazard.
+if not "%MINIO_PORT%"=="" echo MinIO API host port: %MINIO_PORT% - the internal app endpoint remains minio:9000
 if not "%MINIO_CONSOLE_PORT%"=="" echo MinIO console host port: %MINIO_CONSOLE_PORT%
 echo.
 
@@ -117,5 +118,5 @@ if "!FRONTEND_READY!"=="0" (
   docker compose ps -a frontend
   docker compose logs --no-color --tail=60 frontend
 )
-echo Raise STARTUP_TIMEOUT_SECONDS if this machine is simply slow (current: %STARTUP_TIMEOUT_SECONDS%).
+echo Raise STARTUP_TIMEOUT_SECONDS if this machine is simply slow - current value: %STARTUP_TIMEOUT_SECONDS%.
 exit /b 1
