@@ -84,6 +84,34 @@ jobs:
       - run: npm run test
       - run: npm run build
 
+  shell-scripts:
+    name: Local dev script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Covers the Docker Compose launcher helpers: the frontend container's dependency-freshness
+      # check and the .env/port/container-ownership logic in scripts/lib. Both suites fake `docker`
+      # and `npm` through PATH, so this job needs no daemon and takes seconds.
+      - name: Run shell test suites
+        run: scripts/test/run-shell-tests.sh
+
+      # The frontend container bind-mounts scripts/docker/frontend-entrypoint.sh and runs it with
+      # BusyBox sh, so a bashism here would only ever fail on a developer's machine.
+      - name: Check container entrypoint parses as POSIX sh
+        run: dash -n scripts/docker/frontend-entrypoint.sh
+
+      - name: Shellcheck the launcher scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck --severity=warning \
+            start-tracker-docker.sh \
+            stop-tracker-docker.sh \
+            start-tracker.sh \
+            scripts/lib/tracker-compose.sh \
+            scripts/docker/frontend-entrypoint.sh \
+            scripts/test/*.sh
+
   dependency-and-secret-scan:
     name: Dependency + secret scan (Trivy)
     runs-on: ubuntu-latest

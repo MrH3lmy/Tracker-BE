@@ -19,9 +19,13 @@ frontend/                        Vite + React + TypeScript app
 docs/frontend-endpoint-map.md    FE-to-API endpoint mapping (partially stale, see below)
 API_DOCS.md                      Notes on the recurring-task completion contract
 scripts/package/                 jpackage native-launcher build scripts
+scripts/docker/                  Container entrypoints bind-mounted by docker-compose.yml
+scripts/lib/                     Shared shell helpers for the Docker launchers (.env/port/container ownership)
+scripts/test/                    Shell test suites for the above (scripts/test/run-shell-tests.sh)
 launch/                          Double-click launchers (macOS/Linux/Windows) that call the Docker start scripts
 docker-compose.yml, Dockerfile   Postgres + backend + frontend stack
 start-tracker*.sh/.bat           Convenience startup scripts (see README for which does what)
+stop-tracker-docker.sh/.bat      Compose shutdown, including the one-off containers `down` leaves behind
 ```
 
 ## Backend (Spring Boot)
@@ -91,6 +95,8 @@ JUnit 5 + Mockito + MockMvc, run with `mvn test`. No shared base test class; eac
 
 No checkstyle/spotless/jacoco — the backend has no enforced formatting or lint plugin; match existing style by hand.
 
+Local dev/Docker shell logic has its own suite: `scripts/test/run-shell-tests.sh` (plain bash asserts in `scripts/test/`, `docker`/`npm` faked through `PATH`, no daemon or network needed). CI also runs `shellcheck --severity=warning` and a `dash -n` POSIX check over the launcher scripts — `scripts/docker/frontend-entrypoint.sh` runs under BusyBox `sh` in the container, so keep it POSIX.
+
 **Swagger UI**: `http://localhost:8080/swagger-ui/index.html` · **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`.
 
 ## Frontend (Vite + React)
@@ -149,8 +155,13 @@ This doc reads as an earlier planning/spec document, not a description of the cu
 
 ## Running the full stack locally
 
-- **Recommended**: `./start-tracker-docker.sh` (or `.bat` on Windows) — starts Postgres, backend, and frontend via `docker-compose.yml`. Frontend at `http://localhost:5173`, backend at `http://localhost:8080`.
+- **Recommended**: `./start-tracker-docker.sh` (or `.bat` on Windows) — preflights the host ports, starts Postgres/MinIO/Redis/backend/frontend via `docker-compose.yml`, then waits for the backend's `/actuator/health` and for Vite to answer over HTTP before opening the browser. Stop it with `./stop-tracker-docker.sh`. Frontend at `http://localhost:${FRONTEND_PORT:-5173}`, backend at `http://localhost:${APP_PORT:-8080}`.
 - **Manual**: `mvn spring-boot:run` (requires Postgres already running and reachable via `DB_URL`/`DB_USERNAME`/`DB_PASSWORD`) plus `npm run dev` in `frontend/` separately. `start-tracker.sh`/`.bat` only start the backend — they do **not** start Postgres or the frontend.
+
+Two things about the Compose stack that are easy to get wrong:
+
+- **Never stop it with a bare `docker compose down`.** That leaves one-off `docker compose run` containers behind (they are also hidden from `docker compose ps`), and they keep holding host ports such as 5173 — the cause of `Bind for 0.0.0.0:5173 failed: port is already allocated`. Use `./stop-tracker-docker.sh` or `docker compose down --remove-orphans`.
+- **The frontend container's dependency check is a checksum marker we own** (`node_modules/.tracker-deps-checksum`, written by `scripts/docker/frontend-entrypoint.sh` after a successful `npm ci`). Do not "simplify" it back to comparing `package-lock.json` with npm's internal `node_modules/.package-lock.json`: those formats never match, so that comparison reinstalls everything on every start.
 
 ## Recurring task completion ("same-task reset")
 

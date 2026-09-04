@@ -106,18 +106,20 @@ The recommended one-click way to run the full Tracker app locally is with Docker
 - Spring Boot backend
 - Vite frontend
 
-Use the root-level Docker convenience script for your OS. It checks that Docker is installed and running, then starts the existing `docker-compose.yml` stack with `docker compose up --build`. The frontend container installs dependencies from `frontend/package-lock.json`, starts Vite from the `frontend/` directory, and points the UI at `VITE_API_BASE_URL=http://localhost:8080`.
+Use the root-level Docker convenience script for your OS. It checks that Docker is installed and running, checks that every host port the stack needs is actually available, then starts the existing `docker-compose.yml` stack with `docker compose up --build -d --remove-orphans`. The frontend container installs dependencies from `frontend/package-lock.json` only when they changed, starts Vite from the `frontend/` directory, and points the UI at `VITE_API_BASE_URL=http://localhost:${APP_PORT:-8080}`.
 
 macOS/Linux:
 
 ```bash
-./start-tracker-docker.sh
+./start-tracker-docker.sh     # start
+./stop-tracker-docker.sh      # stop (see "Stopping the stack" below for why not a bare `docker compose down`)
 ```
 
 Windows:
 
 ```bat
 start-tracker-docker.bat
+stop-tracker-docker.bat
 ```
 
 After startup, open:
@@ -125,6 +127,11 @@ After startup, open:
 - Frontend URL: `http://localhost:5173`
 - Backend URL: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+The launcher honours the `.env` port overrides described under [Host port conflicts](#host-port-conflicts), so if you set `FRONTEND_PORT=5174` it publishes *and* polls `http://localhost:5174`. What it does before touching Docker:
+
+1. **Port preflight.** For every host port the stack publishes, it works out who owns it. A leftover one-off container of this project is removed automatically; anything else - another project's container, or a plain process on your machine - stops startup with a message naming the owner and the variable to override, instead of the raw `Bind for 0.0.0.0:5173 failed: port is already allocated` from Docker. No containers are created or changed when the preflight fails. (The one exception is MinIO's `9000`/`9001`: when those are taken by something unrelated and you have not pinned `MINIO_PORT`/`MINIO_CONSOLE_PORT` yourself, the launcher picks free high ports instead of failing, because nothing in your browser needs those addresses.)
+2. **Real readiness, not container state.** "Container running" is not "ready": the app container is up while Maven/Flyway are still working, and the frontend container is up for the whole dependency install. The launcher waits for an HTTP 2xx from the backend's `/actuator/health` **and** an HTTP response from Vite before it opens your browser, reports which of the two it is still waiting on, and bails out with `docker compose logs` output if either container exits or the backend goes unhealthy. Raise `STARTUP_TIMEOUT_SECONDS` (default `900`) on a slow machine.
 
 ### Double-click launch
 
@@ -134,7 +141,7 @@ Non-technical users can start the full Docker-based Tracker app by double-clicki
 - **Linux:** double-click `launch/Tracker.desktop`. Depending on your desktop environment, you may need to right-click the file, open **Properties**, allow it to run as a program, or choose **Allow Launching** first.
 - **Windows:** double-click `launch/Tracker.bat`.
 
-Each launcher calls the existing Docker startup script for that OS (`start-tracker-docker.sh` on macOS/Linux or `start-tracker-docker.bat` on Windows). The Docker startup script checks that Docker is installed and running, starts PostgreSQL, the backend, and the frontend with Docker Compose, waits for **both** `http://localhost:8080` (the backend finishing its Maven build and Flyway migrations, which is slower than the frontend) and `http://localhost:5173` to respond, and then opens the web app in your browser. Opening the browser before the backend is actually ready is what causes register/login to fail with a connection error immediately after startup. If startup fails, the launcher keeps the terminal window open so you can read the Docker or startup error message.
+Each launcher calls the existing Docker startup script for that OS (`start-tracker-docker.sh` on macOS/Linux or `start-tracker-docker.bat` on Windows). The Docker startup script checks that Docker is installed and running, checks the host ports are free, starts PostgreSQL, the backend, and the frontend with Docker Compose, waits for **both** the backend's health endpoint (`http://localhost:8080/actuator/health` - the backend finishes its Maven build and Flyway migrations well after the frontend is up) and `http://localhost:5173` to respond, and then opens the web app in your browser. Opening the browser before the backend is actually ready is what causes register/login to fail with a connection error immediately after startup. If startup fails, the launcher keeps the terminal window open so you can read the Docker or startup error message.
 
 ---
 
@@ -210,19 +217,36 @@ The app starts on `http://localhost:8080`. Make sure `JWT_SECRET` is set first (
 Build and start everything:
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 Stop services:
 
 ```bash
-docker compose down
+docker compose down --remove-orphans
 ```
 
-Stop and remove DB volume:
+Stop and remove the database/MinIO/`node_modules` volumes:
 
 ```bash
-docker compose down -v
+docker compose down --remove-orphans -v
+```
+
+#### Stopping the stack
+
+Prefer `./stop-tracker-docker.sh` (`stop-tracker-docker.bat` on Windows), or at least pass `--remove-orphans` to `docker compose down`.
+
+A plain `docker compose down` does **not** remove one-off containers created by `docker compose run` - and `docker compose ps` does not list them either (only `docker compose ps -a` does). So a `docker compose run --service-ports frontend ...` session that was interrupted, or whose terminal was closed, leaves a `tracker-be-frontend-run-<hash>` container running and holding host port 5173 while the stack looks completely stopped. The next start then fails with:
+
+```
+Bind for 0.0.0.0:5173 failed: port is already allocated
+```
+
+`--remove-orphans` collects those containers; `./start-tracker-docker.sh` also clears them before it starts anything, and `./stop-tracker-docker.sh` passes any extra arguments (`-v`, ...) through to `docker compose down`. If you ever need to find such a container by hand:
+
+```bash
+docker ps -a --filter publish=5173
+docker ps -a --filter label=com.docker.compose.oneoff=True
 ```
 
 Services (default host ports):
@@ -232,7 +256,17 @@ Services (default host ports):
 - PostgreSQL: `localhost:5432` (`taskpriority/taskpriority`, DB `taskpriority`)
 - MinIO (S3-compatible object storage for note attachments): API `http://localhost:9000`, console `http://localhost:9001` (`taskpriority-dev` / `taskpriority-dev-secret`)
 
-The frontend service uses the checked-in `frontend/package.json` and `frontend/package-lock.json`, runs `npm ci` (skipped on restart if `package-lock.json` is unchanged since the last install), then starts Vite with `npm run dev -- --host 0.0.0.0`. Its API base URL is set to `http://localhost:${APP_PORT:-8080}` at container-start time, so it tracks `APP_PORT` below automatically.
+#### Frontend container: dependency installs and shutdown
+
+The frontend service runs `scripts/docker/frontend-entrypoint.sh` (bind-mounted read-only into the container - no image build involved). It:
+
+1. **Installs dependencies only when they changed.** It hashes `frontend/package-lock.json` + `frontend/package.json` and compares that to `node_modules/.tracker-deps-checksum`, a marker it writes itself inside the `frontend_node_modules` volume *after* a successful `npm ci`. Editing either manifest, dropping the volume, or an install that failed/was interrupted all lead to a fresh `npm ci`; an ordinary restart starts Vite in a couple of seconds.
+
+   Do **not** go back to comparing `package-lock.json` with npm's internal `node_modules/.package-lock.json`: those are two different formats (npm's hidden lockfile is a flattened record of what is on disk and has no root `""` package entry), they are never byte-identical, and the comparison silently made every single container start pay for a full `npm ci`.
+
+2. **Execs Vite** (`npm run dev -- --host 0.0.0.0 --port 5173 --strictPort`) so the dev server is the container's main process. As a `sh -c "... && npm run dev"` wrapper it was not: the shell stayed PID 1, never forwarded `SIGTERM`, and every `docker compose stop`/`down`/`restart` had to wait out the 10s grace period and `SIGKILL` the container - which is where `taskpriority-frontend exited with code 137` came from, with `OOMKilled=false` and plenty of free memory. The service also runs with `init: true` so Vite's short-lived child processes are reaped. Shutdown is now ~1s with exit code 143.
+
+The service's API base URL is set to `http://localhost:${APP_PORT:-8080}` at container-start time, so it tracks `APP_PORT` below automatically. Its `healthcheck` requests `http://127.0.0.1:5173/` from inside the container, so `docker compose ps` reports `(healthy)` only once Vite is actually serving - "container running" on its own means nothing while dependencies install.
 
 #### Host port conflicts
 
@@ -242,7 +276,16 @@ Every service's *host*-side port is configurable via environment variables (see 
 MINIO_PORT=19000 MINIO_CONSOLE_PORT=19001 docker compose up
 ```
 
-or copy `.env.example` to `.env` and edit it there for a change that persists across runs. Available overrides: `DB_PORT` (default `5432`), `MINIO_PORT` (default `9000`), `MINIO_CONSOLE_PORT` (default `9001`), `REDIS_PORT` (default `6379`), `APP_PORT` (default `8080`), `FRONTEND_PORT` (default `5173`).
+or copy `.env.example` to `.env` and edit it there for a change that persists across runs. Available overrides: `DB_PORT` (default `5432`), `MINIO_PORT` (default `9000`), `MINIO_CONSOLE_PORT` (default `9001`), `REDIS_PORT` (default `6379`), `APP_PORT` (default `8080`), `FRONTEND_PORT` (default `5173`). `start-tracker-docker.sh`/`.bat` read the same `.env` file Compose does (a value already set in your shell wins over the file, exactly as in Compose), so the URLs they poll and open follow your overrides.
+
+If a port is taken and you want to know by what before overriding anything:
+
+```bash
+docker ps -a --filter publish=5173      # a container (ours or someone else's)
+lsof -nP -iTCP:5173 -sTCP:LISTEN        # a process on the host (macOS/Linux)
+```
+
+`./start-tracker-docker.sh` runs that check for you and either reclaims the port (when a leftover container of this project holds it) or refuses to start with the owner named.
 
 Three different addresses are in play and shouldn't be confused:
 
@@ -575,6 +618,10 @@ cd frontend
 npm run lint
 npm run test
 npm run build
+
+# Local dev scripts (Docker Compose launcher helpers). Fakes `docker`/`npm` through PATH -
+# no Docker daemon, no network, runs in seconds.
+scripts/test/run-shell-tests.sh
 ```
 
 Coverage and SpotBugs reports land in `target/site/jacoco/` and `target/spotbugsXml.xml` (open `target/site/jacoco/index.html` in a browser, or run `mvn spotbugs:gui` for an interactive SpotBugs viewer). The CI workflow uploads both as build artifacts on every run, pass or fail.

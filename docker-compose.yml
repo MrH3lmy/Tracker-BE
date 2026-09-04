@@ -119,8 +119,15 @@ services:
     image: node:22-alpine
     container_name: taskpriority-frontend
     working_dir: /app
+    # 1g is empirically fine for Vite here. It is deliberately NOT raised in response to the
+    # frontend container exiting 137: that exit code came from Docker's stop path (SIGTERM
+    # ignored by the old `sh -c` wrapper -> SIGKILL after the grace period), not from memory
+    # pressure - `OOMKilled=false` on those exits is the tell. See frontend-entrypoint.sh.
     mem_limit: 1g
     cpus: 1.0
+    # Run tini as PID 1 so signals reach the dev server and Vite's short-lived child processes
+    # (esbuild/rollup workers) get reaped instead of piling up as zombies.
+    init: true
     depends_on:
       - app
     environment:
@@ -130,12 +137,23 @@ services:
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
-    command: >
-      sh -c "
-        if [ ! -f node_modules/.package-lock.json ] || ! cmp -s package-lock.json node_modules/.package-lock.json;
-        then npm ci; fi &&
-        npm run dev -- --host 0.0.0.0
-      "
+      # Read-only mount of the entrypoint below - no image build needed for a dev-only container.
+      - ./scripts/docker:/opt/tracker/docker:ro
+    # Installs dependencies only when package.json/package-lock.json actually changed (tracked by a
+    # checksum marker inside the node_modules volume), then execs Vite. See
+    # scripts/docker/frontend-entrypoint.sh for why the old inline lockfile comparison always
+    # reinstalled and why exec matters for shutdown.
+    command: ["sh", "/opt/tracker/docker/frontend-entrypoint.sh"]
+    # "Container running" is not "frontend ready" - the container is up for the whole dependency
+    # install while nothing is listening yet. This makes the difference visible to `docker compose
+    # ps`, which reports (healthy) only once Vite actually serves HTTP. start_period covers a cold
+    # `npm ci` on a fresh node_modules volume without counting those failures against retries.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:5173/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
 
 volumes:
   postgres_data:
