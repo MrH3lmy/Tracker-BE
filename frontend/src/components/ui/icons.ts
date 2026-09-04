@@ -56,6 +56,7 @@ export {
   Minus,
   MoreHorizontal,
   MoreVertical,
+  MoveHorizontal,
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,

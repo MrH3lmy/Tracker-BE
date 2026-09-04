@@ -5,47 +5,51 @@ import { Badge, cn } from '../ui';
 import { BoardCard } from './BoardCard';
 import type { BoardColumnRecord } from './boardTypes';
 
-const ACCENT_BY_STATUS: Record<string, string> = {
-  BACKLOG: 'border-t-line-strong',
-  NOT_STARTED: 'border-t-line-strong',
-  IN_PROGRESS: 'border-t-brand',
-  WAITING: 'border-t-caution',
-  BLOCKED: 'border-t-critical',
-  DONE: 'border-t-positive',
-  CANCELLED: 'border-t-line-strong',
-};
-
 interface BoardColumnProps {
   column: BoardColumnRecord;
+  columns: BoardColumnRecord[];
   tasks: TaskRecord[];
+  onMove: (taskId: number, columnId: number) => void;
+  busy?: boolean;
+  /** Mobile shows one column at a time, so it fills the width instead of sitting in a rail. */
+  fullWidth?: boolean;
 }
 
-export function BoardColumn({ column, tasks }: BoardColumnProps) {
+export function BoardColumn({ column, columns, tasks, onMove, busy = false, fullWidth = false }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `column-${column.id}`, data: { columnId: column.id } });
-  const accent = ACCENT_BY_STATUS[column.status ?? ''] ?? 'border-t-line-strong';
 
   return (
     <section
-      className="flex w-72 shrink-0 flex-col gap-3 rounded-xl border border-line bg-inset/30 p-3"
-      aria-label={`${column.name} column`}
+      className={cn('flex shrink-0 flex-col gap-2.5', fullWidth ? 'w-full' : 'w-72')}
+      aria-label={`${column.name} column, ${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`}
     >
-      <div className={cn('flex items-center justify-between gap-2 rounded-t-md border-t-2 px-1 pt-1', accent)}>
-        <h3 className="text-sm font-semibold text-fg">{column.name}</h3>
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <h3 className="truncate text-sm font-semibold text-fg">{column.name}</h3>
         <Badge variant="outline">{tasks.length}</Badge>
       </div>
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-24 flex-col gap-2 rounded-lg p-1 transition-colors duration-(--duration-fast)',
-          isOver && 'bg-brand-soft ring-2 ring-brand',
+          'flex min-h-24 flex-1 flex-col gap-2 rounded-lg border p-2 transition-colors duration-(--duration-fast)',
+          // The drop target reads as a target through both a border change and a
+          // background change, never colour alone.
+          isOver ? 'border-brand bg-brand-soft' : 'border-line bg-inset',
         )}
       >
         <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
           {tasks.length > 0 ? (
-            tasks.map((task) => <BoardCard key={task.id} task={task} />)
+            tasks.map((task) => (
+              <BoardCard
+                key={task.id}
+                task={task}
+                columns={columns}
+                busy={busy}
+                onMove={(columnId) => onMove(task.id, columnId)}
+              />
+            ))
           ) : (
-            <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-xs text-fg-subtle" role="status">
-              No tasks
+            <p className="rounded-md border border-dashed border-line px-3 py-6 text-center text-xs text-fg-subtle" role="status">
+              Nothing in {column.name}
             </p>
           )}
         </SortableContext>
