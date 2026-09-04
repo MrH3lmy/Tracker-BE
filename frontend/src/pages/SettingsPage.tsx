@@ -265,7 +265,7 @@ export function SettingsPage() {
                     onClick={() => updateSettingBody({ [HABIT_REMINDER_STYLE_KEY]: option.value })}
                     className={cn(
                       'flex flex-col gap-1 rounded-lg border p-3 text-left transition-[border-color,box-shadow] duration-(--duration-fast)',
-                      selected ? 'border-brand shadow-(--shadow-glow-brand)' : 'border-line hover:border-line-strong',
+                      selected ? 'border-brand ring-2 ring-brand/40' : 'border-line-control hover:border-fg-subtle',
                     )}
                   >
                     <span className="text-sm font-medium text-fg">{option.label}</span>
@@ -353,7 +353,7 @@ export function SettingsPage() {
                     onClick={() => handleThemeChange(option.value)}
                     className={cn(
                       'flex flex-col gap-2 rounded-lg border p-3 text-left transition-[border-color,box-shadow] duration-(--duration-fast) disabled:pointer-events-none disabled:opacity-50',
-                      selected ? 'border-brand shadow-(--shadow-glow-brand)' : 'border-line hover:border-line-strong',
+                      selected ? 'border-brand ring-2 ring-brand/40' : 'border-line-control hover:border-fg-subtle',
                     )}
                   >
                     <span data-theme={option.value} className="flex h-10 items-stretch gap-1.5 overflow-hidden rounded-md border border-line bg-canvas p-1.5">
