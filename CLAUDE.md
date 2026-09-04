@@ -21,7 +21,8 @@ API_DOCS.md                      Notes on the recurring-task completion contract
 scripts/package/                 jpackage native-launcher build scripts
 scripts/docker/                  Container entrypoints bind-mounted by docker-compose.yml
 scripts/lib/                     Shared shell helpers for the Docker launchers (.env/port/container ownership)
-scripts/test/                    Shell test suites for the above (scripts/test/run-shell-tests.sh)
+scripts/windows/                 PowerShell helper the .bat launchers use (Windows half of scripts/lib)
+scripts/test/                    Test suites for the above, bash + PowerShell (scripts/test/run-shell-tests.sh)
 launch/                          Double-click launchers (macOS/Linux/Windows) that call the Docker start scripts
 docker-compose.yml, Dockerfile   Postgres + backend + frontend stack
 start-tracker*.sh/.bat           Convenience startup scripts (see README for which does what)
@@ -95,7 +96,7 @@ JUnit 5 + Mockito + MockMvc, run with `mvn test`. No shared base test class; eac
 
 No checkstyle/spotless/jacoco — the backend has no enforced formatting or lint plugin; match existing style by hand.
 
-Local dev/Docker shell logic has its own suite: `scripts/test/run-shell-tests.sh` (plain bash asserts in `scripts/test/`, `docker`/`npm` faked through `PATH`, no daemon or network needed). CI also runs `shellcheck --severity=warning` and a `dash -n` POSIX check over the launcher scripts — `scripts/docker/frontend-entrypoint.sh` runs under BusyBox `sh` in the container, so keep it POSIX.
+Local dev/Docker script logic has its own suite: `scripts/test/run-shell-tests.sh` runs the bash suites (`*.test.sh`) and the PowerShell one (`*.test.ps1`, skipped with a notice when `pwsh` is missing); `docker`/`npm` are faked, so no daemon or network is needed. CI also runs `shellcheck --severity=warning`, a `dash -n` POSIX check, and a PowerShell parse check over the launcher scripts — `scripts/docker/frontend-entrypoint.sh` runs under BusyBox `sh` in the container, so keep it POSIX, and `scripts/windows/tracker-compose.ps1` must stay Windows PowerShell 5.1-compatible (no PS7-only syntax) since that is what Windows ships.
 
 **Swagger UI**: `http://localhost:8080/swagger-ui/index.html` · **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`.
 
@@ -161,6 +162,7 @@ This doc reads as an earlier planning/spec document, not a description of the cu
 Two things about the Compose stack that are easy to get wrong:
 
 - **Never stop it with a bare `docker compose down`.** That leaves one-off `docker compose run` containers behind (they are also hidden from `docker compose ps`), and they keep holding host ports such as 5173 — the cause of `Bind for 0.0.0.0:5173 failed: port is already allocated`. Use `./stop-tracker-docker.sh` or `docker compose down --remove-orphans`.
+- **The two launchers are meant to stay at parity.** `scripts/lib/tracker-compose.sh` (bash, for `.sh`) and `scripts/windows/tracker-compose.ps1` (PowerShell, for `.bat`) implement the same `.env` precedence, port-ownership classification and one-off cleanup, and each has a test suite. Change one, change the other.
 - **The frontend container's dependency check is a checksum marker we own** (`node_modules/.tracker-deps-checksum`, written by `scripts/docker/frontend-entrypoint.sh` after a successful `npm ci`). Do not "simplify" it back to comparing `package-lock.json` with npm's internal `node_modules/.package-lock.json`: those formats never match, so that comparison reinstalls everything on every start.
 
 ## Recurring task completion ("same-task reset")

@@ -28,19 +28,27 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem Compose reads .env itself; this script has to read it too, or a FRONTEND_PORT set there would
-rem publish the UI on one port while we poll another. Values already in the environment win, same
-rem as Compose.
-if exist ".env" (
-  for /f "usebackq eol=# tokens=1,* delims==" %%A in (".env") do (
-    set "KEY=%%A"
-    set "VAL=%%B"
-    set "KEY=!KEY: =!"
-    set "VAL=!VAL: =!"
-    if "!KEY!"=="APP_PORT" if "!APP_PORT!"=="" set "APP_PORT=!VAL!"
-    if "!KEY!"=="FRONTEND_PORT" if "!FRONTEND_PORT!"=="" set "FRONTEND_PORT=!VAL!"
-  )
+echo Starting Tracker with Docker Compose...
+
+rem Port preflight, the Windows half of scripts/lib/tracker-compose.sh. It resolves every published
+rem host port from the environment and .env (environment wins, same as Compose), removes leftover
+rem one-off "docker compose run" containers of this project - which survive "docker compose down"
+rem and are hidden from "docker compose ps" while still holding their ports - and refuses to start
+rem when anything else owns a port we need. On success it writes the resolved ports to a temp file
+rem for us to pick up, so this script and Compose agree on every port.
+set "TRACKER_PORT_FILE=%TEMP%\tracker-ports-%RANDOM%%RANDOM%.cmd"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\windows\tracker-compose.ps1" -Mode Preflight -EnvOut "%TRACKER_PORT_FILE%"
+if errorlevel 1 (
+  if exist "%TRACKER_PORT_FILE%" del "%TRACKER_PORT_FILE%" >nul 2>nul
+  echo.
+  echo Startup aborted before Docker was touched - no containers were created or changed.
+  exit /b 1
 )
+if exist "%TRACKER_PORT_FILE%" (
+  call "%TRACKER_PORT_FILE%"
+  del "%TRACKER_PORT_FILE%" >nul 2>nul
+)
+
 if "%APP_PORT%"=="" set "APP_PORT=8080"
 if "%FRONTEND_PORT%"=="" set "FRONTEND_PORT=5173"
 
@@ -51,24 +59,20 @@ set "SWAGGER_URL=%BACKEND_URL%/swagger-ui/index.html"
 if "%STARTUP_TIMEOUT_SECONDS%"=="" set "STARTUP_TIMEOUT_SECONDS=900"
 set /a MAX_ATTEMPTS=%STARTUP_TIMEOUT_SECONDS%/2
 
-echo Starting Tracker with Docker Compose...
 echo Frontend URL: %FRONTEND_URL%
 echo Backend URL: %BACKEND_URL%
 echo Backend health: %BACKEND_HEALTH_URL%
 echo Swagger UI: %SWAGGER_URL%
+if not "%MINIO_PORT%"=="" echo MinIO API host port: %MINIO_PORT% (internal app endpoint remains minio:9000)
+if not "%MINIO_CONSOLE_PORT%"=="" echo MinIO console host port: %MINIO_CONSOLE_PORT%
 echo.
 
-rem --remove-orphans collects the one-off containers "docker compose run" leaves behind - they are
-rem invisible to "docker compose ps" and keep holding host ports such as 5173, which surfaces as
-rem "Bind for 0.0.0.0:5173 failed: port is already allocated" on the next start.
+rem --remove-orphans is the safety net for the same one-off/renamed-service litter the preflight
+rem above cleans explicitly.
 docker compose up --build -d --remove-orphans
 if errorlevel 1 (
   echo.
   echo ERROR: "docker compose up" failed - see the Docker error above.
-  echo If it mentions "port is already allocated", find the owner with:
-  echo     docker ps -a --filter publish=%FRONTEND_PORT%
-  echo and either remove that container or start Tracker on another port:
-  echo     set FRONTEND_PORT=5174 ^&^& start-tracker-docker.bat
   exit /b %ERRORLEVEL%
 )
 
@@ -105,10 +109,13 @@ for /l %%I in (1,1,%MAX_ATTEMPTS%) do (
 echo ERROR: Timed out after %STARTUP_TIMEOUT_SECONDS%s waiting for the backend and/or frontend to become ready.
 if "!BACKEND_READY!"=="0" (
   echo   - Backend never became healthy at %BACKEND_HEALTH_URL%.
+  docker compose ps -a app
   docker compose logs --no-color --tail=60 app
 )
 if "!FRONTEND_READY!"=="0" (
   echo   - Frontend never responded at %FRONTEND_URL%.
+  docker compose ps -a frontend
   docker compose logs --no-color --tail=60 frontend
 )
+echo Raise STARTUP_TIMEOUT_SECONDS if this machine is simply slow (current: %STARTUP_TIMEOUT_SECONDS%).
 exit /b 1

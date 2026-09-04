@@ -133,6 +133,8 @@ The launcher honours the `.env` port overrides described under [Host port confli
 1. **Port preflight.** For every host port the stack publishes, it works out who owns it. A leftover one-off container of this project is removed automatically; anything else - another project's container, or a plain process on your machine - stops startup with a message naming the owner and the variable to override, instead of the raw `Bind for 0.0.0.0:5173 failed: port is already allocated` from Docker. No containers are created or changed when the preflight fails. (The one exception is MinIO's `9000`/`9001`: when those are taken by something unrelated and you have not pinned `MINIO_PORT`/`MINIO_CONSOLE_PORT` yourself, the launcher picks free high ports instead of failing, because nothing in your browser needs those addresses.)
 2. **Real readiness, not container state.** "Container running" is not "ready": the app container is up while Maven/Flyway are still working, and the frontend container is up for the whole dependency install. The launcher waits for an HTTP 2xx from the backend's `/actuator/health` **and** an HTTP response from Vite before it opens your browser, reports which of the two it is still waiting on, and bails out with `docker compose logs` output if either container exits or the backend goes unhealthy. Raise `STARTUP_TIMEOUT_SECONDS` (default `900`) on a slow machine.
 
+Both launchers do all of the above. The shared logic lives in `scripts/lib/tracker-compose.sh` for `start-tracker-docker.sh`/`stop-tracker-docker.sh`, and in `scripts/windows/tracker-compose.ps1` (Windows PowerShell 5.1, no install needed) for the `.bat` pair — the `.bat` files call it for the port preflight and for cleaning up one-off containers, then hand the resolved ports back to `cmd`. Both cover all six published ports (`DB_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `REDIS_PORT`, `APP_PORT`, `FRONTEND_PORT`), and neither ever stops a container or process outside this Compose project — a foreign owner is reported, never touched.
+
 ### Double-click launch
 
 Non-technical users can start the full Docker-based Tracker app by double-clicking the launcher for their operating system:
@@ -266,7 +268,7 @@ The frontend service runs `scripts/docker/frontend-entrypoint.sh` (bind-mounted 
 
 2. **Execs Vite** (`npm run dev -- --host 0.0.0.0 --port 5173 --strictPort`) so the dev server is the container's main process. As a `sh -c "... && npm run dev"` wrapper it was not: the shell stayed PID 1, never forwarded `SIGTERM`, and every `docker compose stop`/`down`/`restart` had to wait out the 10s grace period and `SIGKILL` the container - which is where `taskpriority-frontend exited with code 137` came from, with `OOMKilled=false` and plenty of free memory. The service also runs with `init: true` so Vite's short-lived child processes are reaped. Shutdown is now ~1s with exit code 143.
 
-The service's API base URL is set to `http://localhost:${APP_PORT:-8080}` at container-start time, so it tracks `APP_PORT` below automatically. Its `healthcheck` requests `http://127.0.0.1:5173/` from inside the container, so `docker compose ps` reports `(healthy)` only once Vite is actually serving - "container running" on its own means nothing while dependencies install.
+The service's API base URL is set to `http://localhost:${APP_PORT:-8080}` at container-start time, so it tracks `APP_PORT` below automatically. Its `healthcheck` requests `http://127.0.0.1:5173/` from inside the container, so `docker compose ps` reports `(healthy)` only once Vite is actually serving - "container running" on its own means nothing while dependencies install. The check's `start_period` is `600s`, sized from the slowest observed cold `npm ci` (5-7 minutes on a developer machine, ~3.5 minutes on CI-grade hardware) so Docker never labels a legitimate first-run install as unhealthy, while still leaving the launcher's `STARTUP_TIMEOUT_SECONDS` (900s) room to report a genuinely stuck frontend.
 
 #### Host port conflicts
 
@@ -619,8 +621,9 @@ npm run lint
 npm run test
 npm run build
 
-# Local dev scripts (Docker Compose launcher helpers). Fakes `docker`/`npm` through PATH -
-# no Docker daemon, no network, runs in seconds.
+# Local dev scripts (Docker Compose launcher helpers), bash + PowerShell. Fakes `docker`/`npm` -
+# no Docker daemon, no network, runs in seconds. The PowerShell suite covers the Windows
+# launcher's helper and is skipped with a notice if `pwsh` is not installed.
 scripts/test/run-shell-tests.sh
 ```
 

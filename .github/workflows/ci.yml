@@ -91,10 +91,21 @@ jobs:
       - uses: actions/checkout@v4
 
       # Covers the Docker Compose launcher helpers: the frontend container's dependency-freshness
-      # check and the .env/port/container-ownership logic in scripts/lib. Both suites fake `docker`
-      # and `npm` through PATH, so this job needs no daemon and takes seconds.
-      - name: Run shell test suites
+      # check, the .env/port/container-ownership logic in scripts/lib (bash, for the .sh launchers)
+      # and its equivalent in scripts/windows (PowerShell, for the .bat launchers). Every suite
+      # fakes `docker`/`npm`, so this job needs no daemon and takes seconds. ubuntu-latest ships
+      # pwsh, so the Windows helper suite runs here too rather than being skipped.
+      - name: Run shell + PowerShell test suites
         run: scripts/test/run-shell-tests.sh
+
+      - name: Check the Windows helper parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/windows/tracker-compose.ps1).Path, [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { $_.ToString() }; exit 1 }
+          Write-Host 'scripts/windows/tracker-compose.ps1 parses cleanly'
 
       # The frontend container bind-mounts scripts/docker/frontend-entrypoint.sh and runs it with
       # BusyBox sh, so a bashism here would only ever fail on a developer's machine.

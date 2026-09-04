@@ -146,14 +146,20 @@ services:
     command: ["sh", "/opt/tracker/docker/frontend-entrypoint.sh"]
     # "Container running" is not "frontend ready" - the container is up for the whole dependency
     # install while nothing is listening yet. This makes the difference visible to `docker compose
-    # ps`, which reports (healthy) only once Vite actually serves HTTP. start_period covers a cold
-    # `npm ci` on a fresh node_modules volume without counting those failures against retries.
+    # ps`, which reports (healthy) only once Vite actually serves HTTP.
+    #
+    # start_period is sized from the worst measured cold install rather than the best: `npm ci` on
+    # an empty node_modules volume took ~3.5 minutes on CI-grade hardware and 5-7 minutes on the
+    # developer machine where this was first reported. At 300s Docker would have flagged a
+    # perfectly healthy install as unhealthy on that machine, so 600s covers it with headroom -
+    # and still leaves the launcher's 900s STARTUP_TIMEOUT_SECONDS room to report an unhealthy
+    # frontend (first failure ~630s: start_period, then 3 x 10s retries) before it gives up.
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:5173/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 300s
+      start_period: 600s
 
 volumes:
   postgres_data:

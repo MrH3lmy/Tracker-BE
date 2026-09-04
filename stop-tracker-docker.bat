@@ -20,6 +20,11 @@ if errorlevel 1 (
 
 echo Stopping Tracker...
 docker compose down --remove-orphans %*
-if errorlevel 1 exit /b %ERRORLEVEL%
+set "DOWN_STATUS=%ERRORLEVEL%"
 
+rem Belt and braces: --remove-orphans above already collects one-off containers, but a one-off
+rem started against a *different* compose file still carries this project label and would survive.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\windows\tracker-compose.ps1" -Mode CleanupOneOff
+
+if not "%DOWN_STATUS%"=="0" exit /b %DOWN_STATUS%
 echo Tracker stopped.
