@@ -8,7 +8,7 @@ import {
   upsertSavedView,
   writeSavedViews,
   type SavedTaskView,
-} from './taskSavedViews';
+} from './savedTaskViews';
 
 export interface TaskSavedViewsProps {
   serializedFilters: string;

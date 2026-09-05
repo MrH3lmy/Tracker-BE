@@ -61,7 +61,7 @@
 Implementation: `pages/TasksPage.tsx` composed from `components/tasks/TaskWorkspaceRail.tsx`,
 `TaskActiveFilters.tsx`, `TaskFilters.tsx`, `TaskSavedViews.tsx`, `TaskListView.tsx`,
 `TaskRow.tsx`, `BlockerSummary.tsx`, `TaskStateChip.tsx`, `TaskListStates.tsx` and
-`TaskCreateForm.tsx`, plus the pure helpers in `taskLenses.ts` and `taskSavedViews.ts`.
+`TaskCreateForm.tsx`, plus the pure helpers in `taskLenses.ts` and `savedTaskViews.ts`.
 
 Raw searches: `../research/tool-transcripts/05-tasks-workspace.md` (21 searches across `product`,
 `ux`, `icons`, `react`, `style`, `color`, `--stack react`, `--stack html-tailwind`, plus the two

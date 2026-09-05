@@ -617,6 +617,7 @@ mvn test
 
 # Frontend
 cd frontend
+npm run check:filenames   # rejects same-directory filenames that differ only by letter case
 npm run lint
 npm run test
 npm run build
