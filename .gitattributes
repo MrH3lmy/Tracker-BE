@@ -1,0 +1,6 @@
+# Shell scripts are bind-mounted into Linux containers (see docker-compose.yml) and run by
+# /bin/sh there - a CRLF checkout breaks them with "no such file or directory".
+*.sh text eol=lf
+
+# Windows launchers must keep CRLF for cmd.exe.
+*.bat text eol=crlf

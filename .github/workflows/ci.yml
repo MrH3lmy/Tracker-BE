@@ -84,6 +84,45 @@ jobs:
       - run: npm run test
       - run: npm run build
 
+  shell-scripts:
+    name: Local dev script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Covers the Docker Compose launcher helpers: the frontend container's dependency-freshness
+      # check, the .env/port/container-ownership logic in scripts/lib (bash, for the .sh launchers)
+      # and its equivalent in scripts/windows (PowerShell, for the .bat launchers). Every suite
+      # fakes `docker`/`npm`, so this job needs no daemon and takes seconds. ubuntu-latest ships
+      # pwsh, so the Windows helper suite runs here too rather than being skipped.
+      - name: Run shell + PowerShell test suites
+        run: scripts/test/run-shell-tests.sh
+
+      - name: Check the Windows helper parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/windows/tracker-compose.ps1).Path, [ref]$null, [ref]$errors)
+          if ($errors) { $errors | ForEach-Object { $_.ToString() }; exit 1 }
+          Write-Host 'scripts/windows/tracker-compose.ps1 parses cleanly'
+
+      # The frontend container bind-mounts scripts/docker/frontend-entrypoint.sh and runs it with
+      # BusyBox sh, so a bashism here would only ever fail on a developer's machine.
+      - name: Check container entrypoint parses as POSIX sh
+        run: dash -n scripts/docker/frontend-entrypoint.sh
+
+      - name: Shellcheck the launcher scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck --severity=warning \
+            start-tracker-docker.sh \
+            stop-tracker-docker.sh \
+            start-tracker.sh \
+            scripts/lib/tracker-compose.sh \
+            scripts/docker/frontend-entrypoint.sh \
+            scripts/test/*.sh
+
   dependency-and-secret-scan:
     name: Dependency + secret scan (Trivy)
     runs-on: ubuntu-latest
