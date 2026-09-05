@@ -112,6 +112,7 @@ npm run build     # tsc -b && vite build
 npm run lint      # eslint .
 npm run test      # vitest run
 npm run preview   # preview production build
+npm run check:filenames   # reject same-directory filenames differing only by case (see below)
 ```
 
 ### Directory map (`frontend/src`)
@@ -180,4 +181,5 @@ Frequency semantics: `DAILY` adds `interval` days; `WEEKLY` honors `daysOfWeek` 
 - No Maven wrapper — use `mvn`, not `./mvnw`.
 - Add new Flyway migrations as new `V<n+1>__*.sql` files; never edit an applied one.
 - No formatter/linter is enforced on the backend; the frontend has ESLint but no Prettier — match existing style by hand in both.
+- **Never give two files in one directory names whose stems differ only by letter case** (`TaskSavedViews.tsx` + `taskSavedViews.ts`). Linux resolves an extensionless import exactly as written, but a default macOS filesystem is case-insensitive and Vite tries `.ts` before `.tsx`, so the import silently lands on the wrong module and the app renders a white page — green on CI, broken on the developer's machine. `frontend/scripts/checkFilenameCollisions.mjs` (`npm run check:filenames`, also a CI step and covered by `scripts/checkFilenameCollisions.test.mjs`) enforces this. Same-stem pairs that differ only by extension (`CodePreview.tsx` + `CodePreview.css`) are fine.
 - Backend testing is `mvn test`. Frontend testing is `npm run test` (Vitest + Testing Library) — coverage is partial, not repo-wide, but the harness is real; run it alongside `lint`/`build` when touching tested files, and add a colocated `*.test.tsx` for new interactive components where practical.

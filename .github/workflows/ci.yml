@@ -80,6 +80,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - run: npm ci
+
+      # Two files in one directory whose names differ only by case resolve differently on this
+      # case-sensitive runner than on a developer's macOS filesystem, so an import can be green
+      # here and blank-page the app there. This runner cannot reproduce that by building, only by
+      # inspecting the filenames.
+      - run: npm run check:filenames
+
       - run: npm run lint
       - run: npm run test
       - run: npm run build
