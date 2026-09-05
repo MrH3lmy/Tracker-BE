@@ -3,8 +3,10 @@
 **Overrides:** `design-system/tracker-v2/MASTER.md` and
 `design-system/tracker-v2/pages/tasks-surfaces.md` where they differ; everything
 not stated here follows those, in that order of specificity.
+**Established by:** #323.
 **Research:** `../research/board-kanban/` — verbatim `search.py` transcripts,
 skill v2.13.0, run fresh for this surface.
+**Screenshots:** `../screenshots/board-kanban/`.
 **Relationship to `tasks-surfaces.md`:** that file governs Board, Matrix and Task
 Detail *together*, and its interaction contract (movement is a command; titles
 are never single-line truncated; readiness is backend truth) is **unchanged and

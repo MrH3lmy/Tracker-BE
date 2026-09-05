@@ -1,4 +1,4 @@
-# UI UX Pro Max research method and log — Kanban board redesign
+# UI UX Pro Max research method and log — Kanban board redesign (#323)
 
 Skill: <https://github.com/nextlevelbuilder/ui-ux-pro-max-skill>, `skill.json` version
 **2.13.0**, cloned at HEAD for this task and run via its own
