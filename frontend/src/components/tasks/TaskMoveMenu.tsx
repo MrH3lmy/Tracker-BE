@@ -1,5 +1,5 @@
 import { Button, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '../ui';
-import { ArrowRight, Check, MoveHorizontal } from '../ui/icons';
+import { ArrowRight, Check, CornerUpRight } from '../ui/icons';
 import type { BoardColumnRecord } from '../board/boardTypes';
 
 export interface TaskMoveMenuProps {
@@ -48,7 +48,9 @@ export function TaskMoveMenu({
           aria-label={`Move "${taskTitle}" to another column`}
           title="Move to column"
         >
-          <MoveHorizontal className="h-4 w-4" aria-hidden />
+          {/* `icon-context-accessibility` asks for the most semantically precise
+              icon: MoveHorizontal (a double-headed arrow) reads as "resize". */}
+          <CornerUpRight className="h-4 w-4" aria-hidden />
         </Button>
       </MenuTrigger>
       <MenuContent align="start" className="min-w-52">

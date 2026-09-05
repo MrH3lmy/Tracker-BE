@@ -28,6 +28,7 @@ export {
   Copy,
   CopyPlus,
   CornerDownLeft,
+  CornerUpRight,
   Download,
   Eye,
   FileText,
