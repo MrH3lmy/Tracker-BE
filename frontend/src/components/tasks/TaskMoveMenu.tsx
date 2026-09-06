@@ -1,5 +1,5 @@
 import { Button, Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '../ui';
-import { ArrowRight, Check, MoveHorizontal } from '../ui/icons';
+import { ArrowRight, Check, CornerUpRight } from '../ui/icons';
 import type { BoardColumnRecord } from '../board/boardTypes';
 
 export interface TaskMoveMenuProps {
@@ -9,6 +9,8 @@ export interface TaskMoveMenuProps {
   onMove: (columnId: number) => void;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  /** Extra classes for the trigger. The board uses it to extend the hit area past the paint. */
+  className?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export function TaskMoveMenu({
   onMove,
   disabled = false,
   size = 'sm',
+  className,
 }: TaskMoveMenuProps) {
   if (columns.length === 0) return null;
 
@@ -44,11 +47,14 @@ export function TaskMoveMenu({
           variant="ghost"
           size={size}
           iconOnly
+          className={className}
           disabled={disabled}
           aria-label={`Move "${taskTitle}" to another column`}
           title="Move to column"
         >
-          <MoveHorizontal className="h-4 w-4" aria-hidden />
+          {/* `icon-context-accessibility` asks for the most semantically precise
+              icon: MoveHorizontal (a double-headed arrow) reads as "resize". */}
+          <CornerUpRight className="h-4 w-4" aria-hidden />
         </Button>
       </MenuTrigger>
       <MenuContent align="start" className="min-w-52">
