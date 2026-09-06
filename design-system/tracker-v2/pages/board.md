@@ -111,7 +111,7 @@ Supporting rules, all High severity, all applied:
   between four visible columns and three-and-a-clipped-one.
 - **Viewport height.** The board region is `height: calc(100dvh - topbar)`;
   `min-h-dvh`/`dvh` per Master §6, never `100vh`.
-- **Column width** `17.5rem`, `flex: 0 0 auto`. Chosen so two full columns plus a
+- **Column width** `18.5rem`, `flex: 0 0 auto`. Chosen so two full columns plus a
   peek fit at 768 and four at 1440 — the tablet tier gets a real board rather
   than a single column, and the peek is the scroll affordance.
 - **Column headers stay put** (`Data-Dense Dashboard`: "sticky headers"). The
@@ -162,6 +162,12 @@ are reconciled by changing **contrast, not presence**:
 
 - Both card controls — drag handle and Move menu — are **always rendered, always
   focusable, always hit-testable**, in a right-hand gutter.
+- Each paints **36×36** and extends to a **44×44** hit area through a
+  pseudo-element bleed, with an 8px gutter gap so the two hit areas abut without
+  overlapping. That clears `web-target-size` (24 CSS px) *and* Master §2's
+  stricter 44×44 house rule, so the board takes no target-size exception. The
+  column is `18.5rem` rather than `17.5rem` to pay for the wider gutter without
+  taking width off the title.
 - At rest they are `fg-subtle` (verified ≥4.5:1 in every theme, so far above the
   3:1 non-text minimum). On hover, on `focus-within`, and on touch they go to
   `fg`.
@@ -205,15 +211,25 @@ same undo.
 > **Do:** update URL on state/view changes. **Don't:** static URLs for dynamic
 > content."*
 
-| State | Parameter | Notes |
+| State | Parameter | History |
 |---|---|---|
-| Focus filter | `?focus=work` \| `training` | Omitted when `all` — the default stays a clean URL |
-| Active column (mobile) | `?column=<columnId>` | Omitted when it is the first column |
+| Focus filter | `?focus=work` \| `training` | **Replace.** Omitted when `all`, so the default stays a clean URL |
+| Active column (mobile) | `?column=<columnId>` | **Push.** Omitted when it is the first column |
 
-Written with `replace: true` so filtering does not stack history entries, but
-still restored on load — a bookmarked `/tasks/board?focus=work` opens filtered.
-Unknown or stale values fall back to the default rather than rendering an empty
-board.
+The two get different history treatment, because they are different kinds of
+change (`back-button`: *"users expect back to work predictably"*):
+
+- The **focus filter replaces** the current entry. It filters one view, and a
+  three-way segmented control should not bury the page the user arrived from
+  under three entries. Two filter toggles still leave a single Back to that page.
+- The **mobile column selection pushes** a new entry. Below `md` it is the
+  board's primary navigation — picking a column is moving to a different view of
+  the board — so Back returns to the column you came from, which on Android is
+  the system back gesture.
+
+Both are restored on load, so a bookmarked `/tasks/board?focus=work` opens
+filtered. Unknown or stale values fall back to the default rather than rendering
+an empty board.
 
 ---
 

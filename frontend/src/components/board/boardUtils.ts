@@ -66,3 +66,64 @@ export function blockedShare(counts: { total: number; blocked: number }): number
   if (counts.total === 0 || counts.blocked === 0) return 0;
   return Math.round((counts.blocked / counts.total) * 100);
 }
+
+/** A movement the board should commit: which task, to which column, at which index. */
+export interface DropResolution {
+  task: TaskRecord;
+  targetColumnId: number;
+  targetIndex: number;
+}
+
+/**
+ * Resolves a finished drag into a movement, or `null` when there is nothing to do.
+ *
+ * Extracted from the drag handler so the movement semantics -- which column a
+ * drop lands in, and at which index -- are testable without simulating a
+ * pointer. jsdom gives every element a zero-size rect, so a drag driven through
+ * dnd-kit's collision detection cannot be exercised there; the resolution it
+ * feeds can.
+ *
+ * `overId` is either a column droppable (`column-<id>`) or the id of a card
+ * already in a column. Dropping on a card takes that card's index, so the
+ * dragged task lands where the pointer is; dropping on the column body appends.
+ */
+export function resolveDrop(
+  activeId: string | number,
+  overId: string | number | null | undefined,
+  tasks: TaskRecord[],
+  tasksByColumn: Map<number, TaskRecord[]>,
+): DropResolution | null {
+  if (overId == null) return null;
+
+  const draggedTaskId = Number(activeId);
+  const task = tasks.find((candidate) => candidate.id === draggedTaskId);
+  if (!task) return null;
+
+  const over = String(overId);
+  const isColumnTarget = over.startsWith('column-');
+  const targetColumnId = isColumnTarget
+    ? Number(over.replace('column-', ''))
+    : tasks.find((candidate) => candidate.id === Number(over))?.boardColumnId;
+  if (targetColumnId == null || Number.isNaN(targetColumnId)) return null;
+
+  const destination = tasksByColumn.get(targetColumnId) ?? [];
+  const isSameColumn = task.boardColumnId === targetColumnId;
+  // Dropping on a column's body means "put it at the end". Within the column it
+  // already occupies, the end is `length - 1`, because the task is counted in
+  // that length and is about to vacate its own slot.
+  const endIndex = isSameColumn ? Math.max(0, destination.length - 1) : destination.length;
+
+  // Indices are taken against the FULL destination list, not one with the
+  // dragged task filtered out. Filtering first is what made a same-column
+  // downward reorder silently resolve to the task's own position and do
+  // nothing: dragging the top card onto the one below it computed index 0,
+  // which is exactly where it already was.
+  const overIndex = isColumnTarget ? -1 : destination.findIndex((candidate) => candidate.id === Number(over));
+  const targetIndex = overIndex < 0 ? endIndex : overIndex;
+
+  // A drop that changes nothing is not a move: it must not spend a request, an
+  // announcement or an undo.
+  if (isSameColumn && task.position === targetIndex) return null;
+
+  return { task, targetColumnId, targetIndex };
+}

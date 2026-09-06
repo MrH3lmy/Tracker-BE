@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoardPage } from './BoardPage';
 import { AnnouncementContext } from '../announcementContext';
@@ -88,13 +88,28 @@ function setViewport(multiColumn: boolean) {
   );
 }
 
-/** Surfaces the live URL so the deep-linking contract can be asserted. */
+/**
+ * Surfaces the live URL, and offers a real history Back, so both halves of the
+ * deep-linking contract can be asserted: what the URL says, and whether Back
+ * actually restores the previous board state.
+ */
 function LocationProbe() {
   const location = useLocation();
-  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>;
+  const navigate = useNavigate();
+  return (
+    <>
+      <span data-testid="location">{`${location.pathname}${location.search}`}</span>
+      <button type="button" onClick={() => navigate(-1)}>
+        history back
+      </button>
+    </>
+  );
 }
 
-function renderBoard({ multiColumn = true, entry = '/tasks/board' } = {}) {
+function renderBoard(
+  options: { multiColumn?: boolean; entry?: string; entries?: string[] } = {},
+) {
+  const { multiColumn = true, entry = '/tasks/board', entries = [entry] } = options;
   mockFetch();
   setViewport(multiColumn);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -102,7 +117,7 @@ function renderBoard({ multiColumn = true, entry = '/tasks/board' } = {}) {
     <QueryClientProvider client={queryClient}>
       <AnnouncementContext.Provider value={{ message: '', announce: () => {} }}>
         <UndoToastContext.Provider value={{ showUndo: () => {} }}>
-          <MemoryRouter initialEntries={[entry]}>
+          <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
             <LocationProbe />
             <Routes>
               <Route path="/tasks/board" element={<BoardPage />} />
@@ -301,5 +316,92 @@ describe('BoardPage - mobile shows one column at a time', () => {
     renderBoard({ multiColumn: false, entry: '/tasks/board?column=999' });
 
     expect(await screen.findByRole('region', { name: /To do column/ })).toBeInTheDocument();
+  });
+});
+
+describe('BoardPage - history semantics (back-button)', () => {
+  it('pushes a history entry per column, so Back returns to the column you came from', async () => {
+    const user = userEvent.setup();
+    renderBoard({ multiColumn: false });
+
+    const switcher = await screen.findByRole('navigation', { name: 'Board column' });
+    await user.click(within(switcher).getByRole('button', { name: /In progress/ }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?column=2'));
+
+    await user.click(within(switcher).getByRole('button', { name: /Done/ }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?column=3'));
+    expect(await screen.findByRole('region', { name: /Done column/ })).toBeInTheDocument();
+
+    // Back steps to the previous column rather than off the board entirely.
+    await user.click(screen.getByRole('button', { name: 'history back' }));
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?column=2'));
+    expect(await screen.findByRole('region', { name: /In progress column/ })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Done column/ })).toBeNull();
+  });
+
+  it('replaces the entry for the focus filter, so Back is not buried under filter toggles', async () => {
+    const user = userEvent.setup();
+    // Arrive at the board from somewhere, so there is a previous entry that a
+    // single Back should reach.
+    renderBoard({ entries: ['/tasks/board?column=3', '/tasks/board?column=2'] });
+
+    await screen.findByRole('article', { name: /Write the migration runbook/ });
+    await user.click(screen.getByRole('tab', { name: 'Work' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?focus=work'));
+
+    await user.click(screen.getByRole('tab', { name: 'Training & Life' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?focus=training'));
+
+    // Two filter changes stacked no entries, so a single Back skips straight
+    // past both of them to the entry the user actually arrived from.
+    await user.click(screen.getByRole('button', { name: 'history back' }));
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/tasks/board?column=3'));
+  });
+});
+
+describe('BoardPage - drag lifecycle', () => {
+  /** Lifts a card by its handle, past the 6px activation distance. */
+  async function startDrag(name: RegExp) {
+    const handle = await screen.findByRole('button', { name });
+    // dnd-kit's PointerSensor ignores non-primary pointers and non-left buttons.
+    fireEvent.pointerDown(handle, { pointerId: 1, isPrimary: true, button: 0, clientX: 0, clientY: 0 });
+    // Past the 6px activation distance, so the drag actually starts.
+    fireEvent.pointerMove(document, { pointerId: 1, isPrimary: true, clientX: 0, clientY: 40 });
+    return handle;
+  }
+
+  it('raises a floating copy of the card while a drag is in flight', async () => {
+    renderBoard();
+    await screen.findByRole('article', { name: /Write the migration runbook/ });
+
+    expect(screen.getAllByRole('article', { name: /Write the migration runbook/ })).toHaveLength(1);
+
+    await startDrag(/Drag Write the migration runbook/);
+
+    // The overlay is a second copy of the same card: the original stays in the
+    // column as a placeholder, the copy floats under the pointer.
+    await waitFor(() =>
+      expect(screen.getAllByRole('article', { name: /Write the migration runbook/ })).toHaveLength(2),
+    );
+  });
+
+  it('tears the overlay down again when the drag is cancelled with Escape', async () => {
+    renderBoard();
+    await screen.findByRole('article', { name: /Write the migration runbook/ });
+
+    await startDrag(/Drag Write the migration runbook/);
+    await waitFor(() =>
+      expect(screen.getAllByRole('article', { name: /Write the migration runbook/ })).toHaveLength(2),
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('article', { name: /Write the migration runbook/ })).toHaveLength(1),
+    );
+    // A cancelled drag is not a move.
+    expect(moveCalls).toHaveLength(0);
   });
 });

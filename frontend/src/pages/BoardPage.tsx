@@ -18,7 +18,7 @@ import { BoardColumn } from '../components/board/BoardColumn';
 import { BoardCardShell } from '../components/board/BoardCard';
 import { BoardSkeleton } from '../components/board/BoardSkeleton';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
-import { buildColumnModels, summariseBoard } from '../components/board/boardUtils';
+import { buildColumnModels, resolveDrop, summariseBoard } from '../components/board/boardUtils';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { sortTasksForBoard } from '../components/tasks/taskUtils';
 import { matchesFocus, type Focus } from '../components/scheduler/schedulerStyleUtils';
@@ -73,38 +73,56 @@ export function BoardPage() {
     `deep-linking`: "URLs should reflect current state for sharing. Do: update
     URL on state/view changes. Don't: static URLs for dynamic content." The
     focus filter and the mobile column selection previously lived only in
-    `useState`, so a filtered board could not be bookmarked, shared, or stepped
-    back out of. Written with `replace` so filtering does not stack history.
+    `useState`, so a filtered board could not be bookmarked or shared.
+
+    The two pieces of state get *different* history treatment, because they are
+    different kinds of change (`back-button`: "users expect back to work
+    predictably"):
+
+      - The focus filter REPLACES the current entry. It is a filter on one view,
+        and toggling a three-way segmented control should not bury the page the
+        user arrived from under three history entries.
+      - The mobile column selection PUSHES a new entry. Below `md` it is the
+        board's primary navigation -- picking a column is moving to a different
+        view of the board -- so Back must return to the column you came from,
+        which on Android is the system back gesture.
   */
   const [searchParams, setSearchParams] = useSearchParams();
   const focusParam = searchParams.get('focus');
   const focus: Focus = isFocus(focusParam) ? focusParam : 'all';
 
-  const updateParams = (mutate: (params: URLSearchParams) => void) => {
+  const updateParams = (mutate: (params: URLSearchParams) => void, { replace }: { replace: boolean }) => {
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
         mutate(next);
         return next;
       },
-      { replace: true },
+      { replace },
     );
   };
 
   const setFocus = (next: Focus) =>
-    updateParams((params) => {
-      if (next === 'all') params.delete('focus');
-      else params.set('focus', next);
-      // A column selected under one filter may hold nothing under the next, so the
-      // column falls back to the first rather than showing a phantom empty board.
-      params.delete('column');
-    });
+    updateParams(
+      (params) => {
+        if (next === 'all') params.delete('focus');
+        else params.set('focus', next);
+        // A column selected under one filter may hold nothing under the next, so
+        // the column falls back to the first rather than showing a phantom
+        // empty board.
+        params.delete('column');
+      },
+      { replace: true },
+    );
 
   const setVisibleColumnId = (columnId: number, isFirst: boolean) =>
-    updateParams((params) => {
-      if (isFirst) params.delete('column');
-      else params.set('column', String(columnId));
-    });
+    updateParams(
+      (params) => {
+        if (isFirst) params.delete('column');
+        else params.set('column', String(columnId));
+      },
+      { replace: false },
+    );
 
   const columns = useMemo<BoardColumnRecord[]>(() => {
     const data = columnsQuery.data?.data;
@@ -186,29 +204,11 @@ export function BoardPage() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const draggedTaskId = Number(active.id);
-    const draggedTask = tasks.find((task) => task.id === draggedTaskId);
-    if (!draggedTask) return;
-
-    const overId = String(over.id);
-    const targetColumnId = overId.startsWith('column-')
-      ? Number(overId.replace('column-', ''))
-      : tasks.find((task) => task.id === Number(overId))?.boardColumnId;
-    if (targetColumnId == null) return;
-
-    const columnTasks = (tasksByColumn.get(targetColumnId) ?? []).filter((task) => task.id !== draggedTaskId);
-    const overTaskId = overId.startsWith('column-') ? undefined : Number(overId);
-    const targetIndex =
-      overTaskId === undefined
-        ? columnTasks.length
-        : Math.max(0, columnTasks.findIndex((task) => task.id === overTaskId));
-
-    if (draggedTask.boardColumnId === targetColumnId && draggedTask.position === targetIndex) return;
-
-    commitMove(draggedTask, targetColumnId, targetIndex);
+    // Movement semantics live in `resolveDrop` so they are unit-testable
+    // without a pointer; this handler only decides whether to commit.
+    const drop = resolveDrop(event.active.id, event.over?.id, tasks, tasksByColumn);
+    if (!drop) return;
+    commitMove(drop.task, drop.targetColumnId, drop.targetIndex);
   };
 
   return (
@@ -376,7 +376,7 @@ export function BoardPage() {
             */}
             <DragOverlay dropAnimation={prefersReducedMotion ? null : undefined}>
               {activeTask ? (
-                <div className="w-[17.5rem] cursor-grabbing">
+                <div className="w-[18.5rem] cursor-grabbing">
                   <BoardCardShell task={activeTask} columns={columns} onMove={() => {}} elevated />
                 </div>
               ) : null}

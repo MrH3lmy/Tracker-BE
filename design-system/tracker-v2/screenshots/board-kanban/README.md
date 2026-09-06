@@ -1,8 +1,16 @@
 # Board redesign — screenshots
 
-Captured from the **running application** (Vite dev server against a local
-stand-in API serving `/api/v1/board-columns`, `/api/v1/tasks` and
-`/api/v1/tasks/{id}/move`), driven by Playwright at `deviceScaleFactor: 2`.
+Captured from the **running application**, driven by Playwright at
+`deviceScaleFactor: 2`.
+
+Two sources, both real builds of the frontend:
+
+- The `*-real-backend` shots run against the **actual Spring backend** (packaged
+  application, `local-test` profile), with real auth, the real seeded
+  `board_columns`, and readiness computed server-side. See `smoke-test.md` for
+  the behavioural run against that same stack.
+- Every other shot runs against a local stand-in API, so the fixture can be
+  shaped to exercise the design harder than a fresh database does.
 
 Design: `../../pages/board.md` · Research: `../../research/board-kanban/`
 
@@ -26,3 +34,5 @@ that has to wrap.
 | `board-1440-dark-dragging.png` | 1440 | Dark | Same, dark |
 | `board-1440-light-loading.png` | 1440 | Light | The board-shaped loading skeleton (`aria-busy`), reserving the real layout |
 | `board-1440-light-filtered.png` | 1440 | Light | `?focus=work` restored from the URL |
+| `board-1440-light-real-backend.png` | 1440 | Light | The same board against the **real Spring backend**, real auth, server-computed readiness |
+| `board-375-light-real-backend.png` | 375 | Light | Mobile, against the real backend |

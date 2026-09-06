@@ -222,7 +222,7 @@ export const BoardCardShell = memo(function BoardCardShell({
         cliff on touch. The previous card put the drag handle at the top-left,
         the strongest position on the card, for the least important control.
       */}
-      <div className="flex shrink-0 items-center gap-0.5 text-fg-subtle">
+      <div className="flex shrink-0 items-center gap-2 text-fg-subtle">
         {dragHandle}
         <TaskMoveMenu
           taskTitle={task.title}
@@ -230,6 +230,8 @@ export const BoardCardShell = memo(function BoardCardShell({
           currentColumnId={task.boardColumnId}
           onMove={onMove}
           disabled={busy}
+          size="md"
+          className='relative before:absolute before:-inset-1 before:content-[""]'
         />
       </div>
     </article>
@@ -272,7 +274,8 @@ export function BoardCard({ task, columns, onMove, busy = false }: BoardCardProp
 
             `web-target-size` asks for 24x24 CSS px pointer targets and warns
             against assuming the native 44pt figure defines web conformance.
-            This paints 32x32 and extends to 36x44 through the pseudo-element.
+            This clears both: 36x36 of paint, extended to a full 44x44 hit area
+            by the pseudo-element, matching MASTER.md section 2's house rule.
           */
           <button
             ref={setActivatorNodeRef}
@@ -280,8 +283,12 @@ export function BoardCard({ task, columns, onMove, busy = false }: BoardCardProp
             {...attributes}
             {...listeners}
             className={cn(
-              'relative flex h-8 w-8 cursor-grab touch-none items-center justify-center rounded-md',
-              'before:absolute before:-inset-x-0.5 before:-inset-y-1.5 before:content-[""]',
+              'relative flex h-9 w-9 cursor-grab touch-none items-center justify-center rounded-md',
+              // 36px of paint plus a 4px pseudo-element bleed on every side is a
+              // 44x44 hit area, which clears MASTER.md section 2's house rule
+              // rather than only the 24px WCAG 2.5.8 web minimum. The gutter's
+              // 8px gap keeps the two hit areas abutting, never overlapping.
+              'before:absolute before:-inset-1 before:content-[""]',
               'text-fg-subtle transition-colors duration-(--duration-fast)',
               'hover:bg-inset hover:text-fg active:cursor-grabbing active:bg-inset',
             )}

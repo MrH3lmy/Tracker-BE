@@ -29,7 +29,7 @@ export function BoardSkeleton({ columnCount = 4 }: { columnCount?: number }) {
         <div
           key={columnIndex}
           className={cn(
-            'flex w-full shrink-0 flex-col md:w-[17.5rem]',
+            'flex w-full shrink-0 flex-col md:w-[18.5rem]',
             'md:border-l md:border-line md:first:border-l-0',
             // Below `md` only the first column is on screen, matching the real board.
             columnIndex > 0 && 'hidden md:flex',

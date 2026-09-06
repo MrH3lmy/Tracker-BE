@@ -9,6 +9,8 @@ export interface TaskMoveMenuProps {
   onMove: (columnId: number) => void;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  /** Extra classes for the trigger. The board uses it to extend the hit area past the paint. */
+  className?: string;
 }
 
 /**
@@ -34,6 +36,7 @@ export function TaskMoveMenu({
   onMove,
   disabled = false,
   size = 'sm',
+  className,
 }: TaskMoveMenuProps) {
   if (columns.length === 0) return null;
 
@@ -44,6 +47,7 @@ export function TaskMoveMenu({
           variant="ghost"
           size={size}
           iconOnly
+          className={className}
           disabled={disabled}
           aria-label={`Move "${taskTitle}" to another column`}
           title="Move to column"

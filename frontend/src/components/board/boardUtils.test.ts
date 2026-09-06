@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TaskRecord } from '../tasks/taskTypes';
 import type { BoardColumnRecord } from './boardTypes';
-import { blockedShare, buildColumnModels, columnCounts, summariseBoard } from './boardUtils';
+import { blockedShare, buildColumnModels, columnCounts, resolveDrop, summariseBoard } from './boardUtils';
 
 const task = (overrides: Partial<TaskRecord> & { id: number }): TaskRecord => ({
   title: `Task ${overrides.id}`,
@@ -99,5 +99,86 @@ describe('blockedShare - the column load bar', () => {
 
   it('is zero, not NaN, for an empty column', () => {
     expect(blockedShare({ total: 0, blocked: 0 })).toBe(0);
+  });
+});
+
+describe('resolveDrop - what a finished drag actually moves', () => {
+  // Two columns: 1 holds tasks 1 and 2, column 2 holds task 3.
+  const tasks: TaskRecord[] = [
+    task({ id: 1, boardColumnId: 1, position: 0 }),
+    task({ id: 2, boardColumnId: 1, position: 1 }),
+    task({ id: 3, boardColumnId: 2, position: 0 }),
+  ];
+  const byColumn = new Map<number, TaskRecord[]>([
+    [1, [tasks[0], tasks[1]]],
+    [2, [tasks[2]]],
+  ]);
+
+  it('drops onto another column body by appending to the end of it', () => {
+    expect(resolveDrop(1, 'column-2', tasks, byColumn)).toEqual({
+      task: tasks[0],
+      targetColumnId: 2,
+      targetIndex: 1,
+    });
+  });
+
+  it('drops onto a card in another column at that card’s index', () => {
+    // Task 1 dropped on task 3 takes task 3's place at the top of column 2.
+    expect(resolveDrop(1, 3, tasks, byColumn)).toEqual({
+      task: tasks[0],
+      targetColumnId: 2,
+      targetIndex: 0,
+    });
+  });
+
+  it('appends to an empty column rather than failing to find an index', () => {
+    const withEmpty = new Map(byColumn).set(3, []);
+    expect(resolveDrop(1, 'column-3', tasks, withEmpty)).toEqual({
+      task: tasks[0],
+      targetColumnId: 3,
+      targetIndex: 0,
+    });
+  });
+
+  it('reorders downward within one column instead of resolving to a no-op', () => {
+    // The regression this function was extracted to pin down: dragging the top
+    // card onto the one below it must move it, not silently do nothing.
+    expect(resolveDrop(1, 2, tasks, byColumn)).toEqual({
+      task: tasks[0],
+      targetColumnId: 1,
+      targetIndex: 1,
+    });
+  });
+
+  it('reorders upward within one column', () => {
+    expect(resolveDrop(2, 1, tasks, byColumn)).toEqual({
+      task: tasks[1],
+      targetColumnId: 1,
+      targetIndex: 0,
+    });
+  });
+
+  it('sends a card dropped on its own column’s body to the end of it', () => {
+    expect(resolveDrop(1, 'column-1', tasks, byColumn)).toEqual({
+      task: tasks[0],
+      targetColumnId: 1,
+      targetIndex: 1,
+    });
+  });
+
+  it('is not a move when the task lands exactly where it started', () => {
+    // Task 2 dropped on its own column body appends at index 1 - where it is.
+    expect(resolveDrop(2, 'column-1', tasks, byColumn)).toBeNull();
+  });
+
+  it('is not a move when the drag ends over nothing', () => {
+    expect(resolveDrop(1, null, tasks, byColumn)).toBeNull();
+    expect(resolveDrop(1, undefined, tasks, byColumn)).toBeNull();
+  });
+
+  it('is not a move when the dragged task or the target is unknown', () => {
+    expect(resolveDrop(999, 'column-2', tasks, byColumn)).toBeNull();
+    expect(resolveDrop(1, 'column-nope', tasks, byColumn)).toBeNull();
+    expect(resolveDrop(1, 4242, tasks, byColumn)).toBeNull();
   });
 });

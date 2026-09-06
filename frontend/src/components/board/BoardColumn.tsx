@@ -51,7 +51,7 @@ export function BoardColumn({
         // The hairline that separates one column from the next. Decorative, so it
         // uses `line`, not `line-control`.
         'md:border-l md:border-line md:first:border-l-0',
-        fullWidth ? 'w-full' : 'w-full shrink-0 md:w-[17.5rem]',
+        fullWidth ? 'w-full' : 'w-full shrink-0 md:w-[18.5rem]',
       )}
     >
       {/*

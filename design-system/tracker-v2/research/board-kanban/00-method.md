@@ -132,7 +132,7 @@ implementation, each traceable to a transcript:
 | `Deep Linking` | Medium | *"**URLs should reflect current state for sharing**… Don't: static URLs for dynamic content"* | Focus filter and active column move into the query string |
 | `Empty States` | Medium | *"Show helpful message and action. Don't: blank empty screens"* | Designed per-column empty state |
 | `Focus Not Obscured (Minimum)` | High | *"Offset sticky UI with scroll-padding"* | Sticky column headers get `scroll-margin` |
-| `Target Size (Minimum)` | High | *"24×24 CSS px pointer targets"* | Handle and move button both ≥24px paint, ≥44px hit area |
+| `Target Size (Minimum)` | High | *"24×24 CSS px pointer targets"* | Handle and move button paint 36×36 with a 44×44 hit area — clearing both this rule and Master §2's stricter house figure |
 | `Colour Only` | High | *"Use icons/text in addition to colour"* | Every state token is icon **and** word; the spine is redundant |
 
 ### `--stack html-tailwind` (`08-stack-tailwind.md`)
