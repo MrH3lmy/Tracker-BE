@@ -193,8 +193,10 @@ describe('BoardPage - backend-authoritative readiness', () => {
     const readyCard = within(await screen.findByRole('article', { name: /Write the migration runbook/ }));
     expect(readyCard.queryByText('Ready')).toBeNull();
 
-    // The blocked chip's explanation is one interaction away.
-    expect(blockedCard.getByText(/Waiting for 1 task/)).toBeInTheDocument();
+    // The blocked chip's explanation is one interaction away. The board shows a
+    // compact "1 blocker", but the control still names itself in full.
+    expect(blockedCard.getByRole('button', { name: /Waiting for 1 task/ })).toBeInTheDocument();
+    expect(blockedCard.getByText('1 blocker')).toBeInTheDocument();
   });
 
   it('aggregates the column and board blocked counts straight from task.blocked', async () => {

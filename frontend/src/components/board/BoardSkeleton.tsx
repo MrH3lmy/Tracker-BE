@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { cn } from '../ui';
 
 /**
@@ -24,13 +25,20 @@ const COLUMN_SHAPES = [
  */
 export function BoardSkeleton({ columnCount = 4 }: { columnCount?: number }) {
   return (
-    <div className="flex min-h-0 flex-1 gap-0 overflow-hidden" aria-hidden>
+    // One track below `md` (where the real board shows a single column) and one
+    // per column above it. A media query rather than an inline template, so the
+    // hidden columns below `md` do not leave empty tracks behind.
+    <div
+      className="grid min-h-0 flex-1 grid-cols-1 md:[grid-template-columns:repeat(var(--board-skeleton-columns),minmax(0,1fr))]"
+      style={{ '--board-skeleton-columns': Math.max(columnCount, 1) } as CSSProperties}
+      aria-hidden
+    >
       {Array.from({ length: columnCount }, (_, columnIndex) => (
         <div
           key={columnIndex}
           className={cn(
-            'flex w-full shrink-0 flex-col md:w-[18.5rem]',
-            'md:border-l md:border-line md:first:border-l-0',
+            'flex min-w-0 flex-col',
+            'border-l border-line first:border-l-0',
             // Below `md` only the first column is on screen, matching the real board.
             columnIndex > 0 && 'hidden md:flex',
           )}

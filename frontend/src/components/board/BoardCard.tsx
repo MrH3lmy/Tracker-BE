@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Link } from 'react-router-dom';
 import type { TaskRecord } from '../tasks/taskTypes';
-import { formatDate, isOverdue } from '../tasks/taskUtils';
+import { formatDateShort, isOverdue } from '../tasks/taskUtils';
 import { BlockerDisclosure } from '../tasks/BlockerDisclosure';
 import { ReadinessBadge } from '../tasks/ReadinessBadge';
 import { TaskMoveMenu } from '../tasks/TaskMoveMenu';
@@ -30,6 +30,8 @@ interface CardMetaProps {
   children: ReactNode;
   /** Screen-reader name for the value, since the glyph alone does not name it. */
   label: string;
+  /** `critical` pairs an overdue date with its Overdue badge; never the only channel. */
+  tone?: 'subtle' | 'critical';
 }
 
 /**
@@ -40,10 +42,15 @@ interface CardMetaProps {
  * `compact-label-overflow`: the label stays whole on one line -- `nowrap` with a
  * shrinkable `min-w-0` body and a `shrink-0` glyph.
  */
-function CardMeta({ icon, children, label }: CardMetaProps) {
+function CardMeta({ icon, children, label, tone = 'subtle' }: CardMetaProps) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1 text-[11px] whitespace-nowrap text-fg-subtle">
-      <span className="shrink-0 text-fg-subtle" aria-hidden>
+    <span
+      className={cn(
+        'inline-flex min-w-0 items-center gap-1 text-[11px] whitespace-nowrap',
+        tone === 'critical' ? 'font-medium text-critical' : 'text-fg-subtle',
+      )}
+    >
+      <span className={cn('shrink-0', tone === 'critical' ? 'text-critical' : 'text-fg-subtle')} aria-hidden>
         {icon}
       </span>
       <span className="sr-only">{label}: </span>
@@ -91,7 +98,7 @@ export const BoardCardShell = memo(function BoardCardShell({
   const subtaskTotal = task.subtaskCount ?? task.subtaskIds?.length ?? 0;
   const hasStateBadge = task.blocked || overdue;
   const hasValueChip =
-    (task.dueDate && !overdue) || subtaskTotal > 0 || streak > 0 || typeof task.priorityScore === 'number';
+    Boolean(task.dueDate) || subtaskTotal > 0 || streak > 0 || typeof task.priorityScore === 'number';
 
   return (
     <article
@@ -155,14 +162,14 @@ export const BoardCardShell = memo(function BoardCardShell({
             */}
             <ReadinessBadge blocked={task.blocked} ready={task.ready} />
             {/* `Ready` is deliberately not rendered here; it is never inferred from `!blocked`. */}
-            {overdue && (
-              <Badge variant="critical">
-                <span>Overdue</span>
-                {/* A task can be flagged overdue by the backend without carrying a
-                    due date, so the date is additive rather than assumed. */}
-                {task.dueDate && <time dateTime={task.dueDate}>{formatDate(task.dueDate)}</time>}
-              </Badge>
-            )}
+            {/*
+              `compact-label-semantics` again: "Overdue" is the state, the date
+              is a value, so the badge carries only the word and the date drops
+              to the chip row below (in critical colour, so the pairing still
+              reads as one fact). Keeping them fused made a badge long enough to
+              be clipped mid-word in a narrow column.
+            */}
+            {overdue && <Badge variant="critical">Overdue</Badge>}
           </div>
         )}
 
@@ -173,9 +180,13 @@ export const BoardCardShell = memo(function BoardCardShell({
         {hasValueChip && (
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
-              {task.dueDate && !overdue && (
-                <CardMeta icon={<CalendarDays className="h-3 w-3" />} label="Due">
-                  <time dateTime={task.dueDate}>{formatDate(task.dueDate)}</time>
+              {task.dueDate && (
+                <CardMeta
+                  icon={<CalendarDays className="h-3 w-3" />}
+                  label={overdue ? 'Was due' : 'Due'}
+                  tone={overdue ? 'critical' : 'subtle'}
+                >
+                  <time dateTime={task.dueDate}>{formatDateShort(task.dueDate)}</time>
                 </CardMeta>
               )}
               {subtaskTotal > 0 && (

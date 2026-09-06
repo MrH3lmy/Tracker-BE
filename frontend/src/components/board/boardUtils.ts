@@ -127,3 +127,46 @@ export function resolveDrop(
 
   return { task, targetColumnId, targetIndex };
 }
+
+/**
+ * Narrowest a column may become before the multi-column board stops being
+ * useful. Below this the card's title area is squeezed past readability by the
+ * 44x44 action gutter, so the board switches to the single-column model rather
+ * than shrinking further or scrolling sideways.
+ *
+ * Calibrated against the real content area rather than picked round: a 1440
+ * viewport leaves 1176px beside the sidebar, which is 235px across five
+ * columns -- the tightest arrangement that still reads. The same rule sends
+ * five columns at 1024 (152px each) and at 768 (134px each) to the
+ * single-column board instead of shrinking them into unreadability.
+ */
+export const MIN_COLUMN_WIDTH_PX = 224;
+
+/**
+ * Widest a column grows to when there are only a few of them, so a three-column
+ * board on a 1440 screen reads as a board rather than three very wide lists.
+ */
+export const MAX_COLUMN_WIDTH_PX = 416;
+
+/**
+ * Can every configured column be shown at once, inside the width available?
+ *
+ * The board never scrolls horizontally and never shows a partial "peek" column:
+ * either all columns fit, or the board switches to the single-column model with
+ * its switcher. That makes the answer depend on the *number of configured
+ * columns*, which is backend data, so it cannot be a fixed CSS breakpoint.
+ *
+ * `availableWidth` of 0 or less means "not measured yet" to the caller, which
+ * decides its own fallback; this function reports it as not fitting.
+ */
+export function fitsAllColumns(availableWidth: number, columnCount: number): boolean {
+  if (columnCount <= 0) return true;
+  if (!Number.isFinite(availableWidth) || availableWidth <= 0) return false;
+  return availableWidth >= columnCount * MIN_COLUMN_WIDTH_PX;
+}
+
+/** Rendered width of one column once `fitsAllColumns` has said they all fit. */
+export function fittedColumnWidth(availableWidth: number, columnCount: number): number {
+  if (columnCount <= 0 || availableWidth <= 0) return MIN_COLUMN_WIDTH_PX;
+  return Math.min(MAX_COLUMN_WIDTH_PX, Math.floor(availableWidth / columnCount));
+}

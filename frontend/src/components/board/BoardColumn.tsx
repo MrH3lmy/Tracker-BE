@@ -13,12 +13,17 @@ export interface BoardColumnProps {
   busy?: boolean;
   /** True while any card is being dragged, so drop affordances only exist during a drag. */
   dragActive?: boolean;
-  /** Below `md` the board shows one column at a time, so it fills the width instead of sitting in the rail. */
+  /** True when the board is showing one column at a time, so it fills the width. */
   fullWidth?: boolean;
 }
 
 /**
  * One column of the board.
+ *
+ * Sized by the board's grid, never by itself: the board gives every configured
+ * column an equal `minmax(0, 1fr)` track when they all fit, and renders exactly
+ * one of these at full width when they do not. There is no fixed column width
+ * and no horizontal scrolling, so a column can never be clipped off-screen.
  *
  * A column is a *column of the board grid*, not a container: no column background,
  * no column border box. Columns share one ground and are separated by a hairline
@@ -47,11 +52,13 @@ export function BoardColumn({
     <section
       aria-label={`${column.name} column, ${counts.total} ${counts.total === 1 ? 'task' : 'tasks'}`}
       className={cn(
-        'flex min-h-0 flex-col',
-        // The hairline that separates one column from the next. Decorative, so it
-        // uses `line`, not `line-control`.
-        'md:border-l md:border-line md:first:border-l-0',
-        fullWidth ? 'w-full' : 'w-full shrink-0 md:w-[18.5rem]',
+        // A grid track, not a fixed-width rail item: `min-w-0` lets the track
+        // shrink to its share of the board instead of forcing the page wider.
+        'flex min-h-0 min-w-0 flex-col',
+        // The hairline that separates one column from the next. Decorative, so
+        // it uses `line`, not `line-control`. In single-column mode this column
+        // is the first child, so it draws no rule.
+        'border-l border-line first:border-l-0',
       )}
     >
       {/*

@@ -18,7 +18,15 @@ import { BoardColumn } from '../components/board/BoardColumn';
 import { BoardCardShell } from '../components/board/BoardCard';
 import { BoardSkeleton } from '../components/board/BoardSkeleton';
 import type { BoardColumnRecord } from '../components/board/boardTypes';
-import { buildColumnModels, resolveDrop, summariseBoard } from '../components/board/boardUtils';
+import {
+  MAX_COLUMN_WIDTH_PX,
+  buildColumnModels,
+  fitsAllColumns,
+  fittedColumnWidth,
+  resolveDrop,
+  summariseBoard,
+} from '../components/board/boardUtils';
+import { useElementWidth } from '../components/board/useElementWidth';
 import type { TaskRecord } from '../components/tasks/taskTypes';
 import { sortTasksForBoard } from '../components/tasks/taskUtils';
 import { matchesFocus, type Focus } from '../components/scheduler/schedulerStyleUtils';
@@ -36,7 +44,11 @@ const focusOptions = [
   { value: 'training' as Focus, label: 'Training & Life' },
 ];
 
-/** Below this the board shows one column at a time (`gesture-conflicts`). */
+/**
+ * Fallback for deciding the layout before the board can be measured (and in
+ * test environments that do not lay out). Once a real width is available it
+ * wins, because whether every column fits depends on how many there are.
+ */
 const MULTI_COLUMN_QUERY = '(min-width: 768px)';
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -65,8 +77,9 @@ export function BoardPage() {
   const { moveTask } = useTaskMutations();
   const { showUndo } = useUndoToast();
   const { announce } = useAnnouncement();
-  const showAllColumns = useMediaQuery(MULTI_COLUMN_QUERY);
+  const canProbablyFitColumns = useMediaQuery(MULTI_COLUMN_QUERY);
   const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
+  const [availableWidth, measureBoard] = useElementWidth<HTMLDivElement>();
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
 
   /*
@@ -149,6 +162,21 @@ export function BoardPage() {
 
   const columnModels = useMemo(() => buildColumnModels(columns, tasksByColumn), [columns, tasksByColumn]);
   const summary = useMemo(() => summariseBoard(columnModels), [columnModels]);
+
+  /*
+    Containment rule: either EVERY configured column fits inside the content
+    area, or the board shows one column at a time. It never scrolls sideways and
+    never leaves a partial column peeking off the edge, at any width.
+
+    That decision cannot be a CSS breakpoint, because it depends on how many
+    columns the backend configured -- three fit where five do not. So the board
+    measures itself and divides. Until it can be measured (first paint, or a
+    test environment that does not lay out), the `md` breakpoint stands in.
+  */
+  const showAllColumns =
+    availableWidth === null ? canProbablyFitColumns : fitsAllColumns(availableWidth, columns.length);
+  const columnWidth =
+    availableWidth === null ? MAX_COLUMN_WIDTH_PX : fittedColumnWidth(availableWidth, Math.max(columns.length, 1));
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -299,13 +327,18 @@ export function BoardPage() {
         <>
           {!showAllColumns && activeModel && (
             /*
-              The mobile column switcher. Sticky, so column context is never lost
-              mid-scroll, and each entry carries its own blocked count so the
-              user can see which column needs attention without visiting it.
+              The column switcher. Rendered whenever the board is in
+              single-column mode, at ANY width -- a wide viewport with many
+              configured columns lands here too, and without the switcher there
+              would be no way to reach the other columns at all.
+
+              Sticky, so column context is never lost mid-scroll, and each entry
+              carries its own blocked count so the user can see which column
+              needs attention without visiting it.
             */
             <nav
               aria-label="Board column"
-              className="sticky top-(--shell-topbar-h) z-(--z-sticky) shrink-0 border-b border-line bg-canvas px-4 pb-2 sm:px-6 md:hidden"
+              className="sticky top-(--shell-topbar-h) z-(--z-sticky) shrink-0 border-b border-line bg-canvas px-4 pb-2 sm:px-6"
             >
               <ul className="flex gap-1.5 overflow-x-auto pb-1">
                 {columnModels.map((model, index) => {
@@ -350,21 +383,42 @@ export function BoardPage() {
             onDragCancel={() => setActiveTaskId(null)}
           >
             {/*
-              The column rail. `horizontal-scroll`: wide content scrolls inside its
-              own region, never the page.
+              The padding wrapper. The measured element sits inside it with no
+              padding and no width cap of its own, so what it reports is the
+              true available width and capping the grid cannot feed back into
+              the measurement.
             */}
-            <div className="flex min-h-0 flex-1 flex-col px-1 sm:px-3 md:flex-row md:overflow-x-auto md:overscroll-x-contain">
-              {visibleModels.map((model) => (
-                <BoardColumn
-                  key={model.column.id}
-                  model={model}
-                  columns={columns}
-                  busy={moveTask.isPending}
-                  dragActive={activeTaskId != null}
-                  onMove={handleMenuMove}
-                  fullWidth={!showAllColumns}
-                />
-              ))}
+            <div className="min-h-0 flex-1 px-1 sm:px-3">
+              <div ref={measureBoard} className="flex h-full min-h-0 flex-col">
+                {/*
+                  Every column is a track of one grid, each `minmax(0, 1fr)` so
+                  they share the width evenly and none can push the page wider
+                  than it is. There is no horizontal scroll and no peek: when
+                  they stop fitting, `showAllColumns` turns this into the
+                  single-column board instead.
+                */}
+                <div
+                  className={cn('grid h-full min-h-0', !showAllColumns && 'w-full')}
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.max(visibleModels.length, 1)}, minmax(0, 1fr))`,
+                    // Keeps a two- or three-column board from stretching into
+                    // very wide lists on a large screen.
+                    maxWidth: showAllColumns ? Math.max(visibleModels.length, 1) * MAX_COLUMN_WIDTH_PX : undefined,
+                  }}
+                >
+                  {visibleModels.map((model) => (
+                    <BoardColumn
+                      key={model.column.id}
+                      model={model}
+                      columns={columns}
+                      busy={moveTask.isPending}
+                      dragActive={activeTaskId != null}
+                      onMove={handleMenuMove}
+                      fullWidth={!showAllColumns}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/*
@@ -376,7 +430,7 @@ export function BoardPage() {
             */}
             <DragOverlay dropAnimation={prefersReducedMotion ? null : undefined}>
               {activeTask ? (
-                <div className="w-[18.5rem] cursor-grabbing">
+                <div className="cursor-grabbing" style={{ width: columnWidth }}>
                   <BoardCardShell task={activeTask} columns={columns} onMove={() => {}} elevated />
                 </div>
               ) : null}

@@ -126,7 +126,7 @@ implementation, each traceable to a transcript:
 | `Content Jumping` | High | *"Reserve appropriate space… **stable count slot for badges**. Bad: badge insertion pushes toolbar actions"* | Fixed-width count and score slots |
 | `Contextual Live Badge Updates` | High | *"Use **one** appropriate atomic status message… Don't announce a bare number or **make every badge a competing live region**"* | One board-level `role="status"`; per-column ones removed |
 | `Loading Indicators` | High | *"**Stable skeleton** or progress **with `aria-busy`**. Bad: flickering spinner or frozen UI"* | Board-shaped skeleton replaces the "Loading…" line |
-| `Horizontal Scroll` | High | *"Don't: content wider than viewport"* | Column rail scrolls; the page never does |
+| `Horizontal Scroll` | High | *"**Avoid horizontal scrolling.** Do: ensure content fits viewport width. Don't: content wider than viewport"* | Taken at face value: the board fits every column inside the content area or shows one at a time. Nothing scrolls sideways — not the page, not the board |
 | `Gesture Conflicts` | Medium | *"Avoid horizontal swipe on main content. Good: **vertical scroll primary**. Bad: horizontal swipe carousel **only**"* | Below `md`, one column at a time, vertical scroll |
 | `Pull to Refresh` | Low | *"Good: `overscroll-behavior: contain`"* | Applied to every scrolling column |
 | `Deep Linking` | Medium | *"**URLs should reflect current state for sharing**… Don't: static URLs for dynamic content"* | Focus filter and active column move into the query string |
@@ -190,6 +190,7 @@ inventory the redesign is measured against.
 | # | Previous board behaviour | Rule |
 |---|---|---|
 | 1 | Board capped at `max-w-6xl` inside a full-width main region; the rightmost column is clipped at 1440 | `Data-Dense Dashboard` (*maximum data visibility*) |
+| 1b | Fixed-width columns in a horizontally scrolling rail, so a column could still be clipped or reachable only by scrolling | `Horizontal Scroll` — see board.md §3 "Containment" |
 | 2 | The whole page scrolls; column headers scroll away with the content | `Data-Dense Dashboard` (*sticky headers*) |
 | 3 | canvas → column slab → card → blocker box: four nested bordered surfaces | Master §13.2 *card-in-card-in-card* |
 | 4 | Five identically-styled pills per card mixing state, values and metrics | `Compact Label Semantics` |

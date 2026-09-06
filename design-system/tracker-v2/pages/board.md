@@ -41,9 +41,11 @@ Three consequences follow, and they are the whole redesign:
    background, no column border box. Columns are separated by a 1px `line` rule
    and share one continuous ground. This deletes an entire surface level and is
    what makes the board read calm at density.
-2. **The board owns the viewport.** It is full-bleed and viewport-height. The
-   column rail scrolls horizontally, each column body scrolls vertically, the page
-   scrolls not at all, and the column headers stay put.
+2. **The board owns the viewport, and stays inside it.** It is full-bleed and
+   viewport-height. Every configured column is visible at once or none of the
+   extras are: the board never scrolls horizontally, never clips a column, and
+   never leaves a partial column peeking off the edge. Each column body scrolls
+   vertically, the page scrolls not at all, and the column headers stay put.
 3. **The card ranks its own contents.** State, identity, values and actions each
    get a distinct visual channel instead of five identical pills.
 
@@ -103,7 +105,7 @@ Supporting rules, all High severity, all applied:
 │ ▌card          │                 │              │                         │
 │      ↕ each column body scrolls independently; the page does not          │
 └───────────────────────────────────────────────────────────────────────────┘
-        ↔ rail scrolls horizontally inside its own region
+     every configured column is a track of one grid — nothing scrolls sideways
 ```
 
 - **Full-bleed.** `/tasks` already sets `routeOwnsPageLayout`, so the board drops
@@ -111,9 +113,11 @@ Supporting rules, all High severity, all applied:
   between four visible columns and three-and-a-clipped-one.
 - **Viewport height.** The board region is `height: calc(100dvh - topbar)`;
   `min-h-dvh`/`dvh` per Master §6, never `100vh`.
-- **Column width** `18.5rem`, `flex: 0 0 auto`. Chosen so two full columns plus a
-  peek fit at 768 and four at 1440 — the tablet tier gets a real board rather
-  than a single column, and the peek is the scroll affordance.
+- **Columns have no fixed width.** The board is a CSS grid of
+  `repeat(<configured columns>, minmax(0, 1fr))`, so the columns divide the
+  content area evenly and none of them can push the page wider than it is. A
+  sparse board is capped at `26rem` per column so three columns on a large
+  screen read as a board rather than three very wide lists.
 - **Column headers stay put** (`Data-Dense Dashboard`: "sticky headers"). The
   header sits *outside* the scrolling body rather than using `position: sticky`,
   because on the desktop board the column body is the scroll container, so the
@@ -131,6 +135,50 @@ reading a single card.
 
 It is **never the only carrier** — the header also prints "*n* blocked" in words
 whenever *n* > 0 (`Colour Only`).
+
+### Containment: all columns, or one
+
+The board has exactly two states, and there is nothing in between:
+
+| Condition | Board |
+|---|---|
+| The content area fits **every** configured column at `>= 14rem` each | All columns, side by side, no scrolling |
+| It does not | **One** column at a time, chosen from the switcher |
+
+There is no third state where some columns are visible and the rest are reached
+by scrolling sideways. A partial "peek" column is not a scroll affordance here,
+it is a clipped column.
+
+**Why this cannot be a breakpoint.** How much width a board needs depends on how
+many columns the backend configured: three fit where five do not, at the very
+same viewport. So the board measures its own content area with a
+`ResizeObserver` and divides by the configured count. A viewport media query
+stands in only until the first measurement, and for environments that never lay
+out.
+
+`14rem` (224px) is the narrowest column that still leaves a usable card beside
+the 44x44 action gutter. It is calibrated against the real content area rather
+than picked round: a 1440 viewport leaves 1176px beside the sidebar, which is
+235px across five columns — the tightest arrangement that still reads. The same
+rule sends five columns at 1024 (152px each) and at 768 (134px each) to the
+single-column board instead of shrinking them into unreadability.
+
+Worked through, with the shell's own sidebar and rail widths:
+
+| Configured columns | 1440 | 1024 | 768 | 375 |
+|---|---|---|---|---|
+| 3 | all (392px) | all (253px) | one | one |
+| 4 | all (294px) | one | one | one |
+| 5 | all (235px) | one | one | one |
+
+Collapsing the sidebar widens the content area, and the board re-measures and
+re-fits without a reload — the `ResizeObserver` watches the element, not the
+viewport.
+
+**The switcher is part of this rule, not a mobile detail.** Whenever the board
+is in single-column mode — at *any* width, including 1024 with five columns —
+the column switcher is rendered. Without it there would be no way to reach the
+other columns at all.
 
 ### Mobile (`<768px`)
 
@@ -166,8 +214,8 @@ are reconciled by changing **contrast, not presence**:
   pseudo-element bleed, with an 8px gutter gap so the two hit areas abut without
   overlapping. That clears `web-target-size` (24 CSS px) *and* Master §2's
   stricter 44×44 house rule, so the board takes no target-size exception. The
-  column is `18.5rem` rather than `17.5rem` to pay for the wider gutter without
-  taking width off the title.
+  columns divide the content area evenly (see §3), so the wider gutter costs
+  title width only in the tightest arrangement the containment rule allows.
 - At rest they are `fg-subtle` (verified ≥4.5:1 in every theme, so far above the
   3:1 non-text minimum). On hover, on `focus-within`, and on touch they go to
   `fg`.
@@ -293,13 +341,18 @@ Additions to Master §13 and `tasks-surfaces.md` §8:
    are different ranks (`Compact Label Semantics`).
 3. **Capping the board at the shared content measure.** A board is a horizontal
    instrument; `max-w-6xl` clips it.
-4. **Column headers that scroll away.** They are the board's orientation.
-5. **A `role="status"` per column.** One board-level live region, one atomic
+4. **A fixed column width.** It is what forces either a clipped column or a
+   sideways scrollbar; columns are grid tracks that divide the width available.
+5. **Horizontal scrolling to reach a column**, and the clipped "peek" column
+   that comes with it. Either every configured column fits, or the board shows
+   one at a time — never some of them plus a scrollbar.
+6. **Column headers that scroll away.** They are the board's orientation.
+7. **A `role="status"` per column.** One board-level live region, one atomic
    message.
-6. **A bare "Loading…" line** where a board is about to appear.
-7. **An action that only exists on hover.** De-emphasise with contrast, never
+8. **A bare "Loading…" line** where a board is about to appear.
+9. **An action that only exists on hover.** De-emphasise with contrast, never
    with presence.
-8. **A permanently tinted drop target.** Tint is drag feedback, not decoration.
-9. **Board state that only exists in `useState`.** Filters and the active column
+10. **A permanently tinted drop target.** Tint is drag feedback, not decoration.
+11. **Board state that only exists in `useState`.** Filters and the active column
    are URL state.
-10. **`MoveHorizontal` for "move to a different column."** It reads as resize.
+12. **`MoveHorizontal` for "move to a different column."** It reads as resize.

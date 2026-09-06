@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { TaskRecord } from '../tasks/taskTypes';
 import type { BoardColumnRecord } from './boardTypes';
-import { blockedShare, buildColumnModels, columnCounts, resolveDrop, summariseBoard } from './boardUtils';
+import {
+  MAX_COLUMN_WIDTH_PX,
+  MIN_COLUMN_WIDTH_PX,
+  blockedShare,
+  buildColumnModels,
+  columnCounts,
+  fitsAllColumns,
+  fittedColumnWidth,
+  resolveDrop,
+  summariseBoard,
+} from './boardUtils';
 
 const task = (overrides: Partial<TaskRecord> & { id: number }): TaskRecord => ({
   title: `Task ${overrides.id}`,
@@ -180,5 +190,61 @@ describe('resolveDrop - what a finished drag actually moves', () => {
     expect(resolveDrop(999, 'column-2', tasks, byColumn)).toBeNull();
     expect(resolveDrop(1, 'column-nope', tasks, byColumn)).toBeNull();
     expect(resolveDrop(1, 4242, tasks, byColumn)).toBeNull();
+  });
+});
+
+describe('fitsAllColumns - the board never scrolls sideways or shows a peek', () => {
+  it('fits every column when the width divides to at least the usable minimum', () => {
+    for (const count of [3, 4, 5]) {
+      expect(fitsAllColumns(MIN_COLUMN_WIDTH_PX * count, count)).toBe(true);
+    }
+  });
+
+  it('refuses one pixel short rather than clipping a column', () => {
+    for (const count of [3, 4, 5]) {
+      expect(fitsAllColumns(MIN_COLUMN_WIDTH_PX * count - 1, count)).toBe(false);
+    }
+  });
+
+  it('scales the answer with the configured column count, not a fixed breakpoint', () => {
+    // The real content areas the shell leaves beside its sidebar. The same
+    // width answers differently depending on how many columns are configured,
+    // which is exactly why this cannot be a CSS breakpoint.
+    const at1440 = 1176;
+    const at1024 = 760;
+
+    expect(fitsAllColumns(at1440, 5)).toBe(true);
+    expect(fitsAllColumns(at1440, 4)).toBe(true);
+    expect(fitsAllColumns(at1440, 3)).toBe(true);
+
+    expect(fitsAllColumns(at1024, 3)).toBe(true);
+    expect(fitsAllColumns(at1024, 4)).toBe(false);
+    expect(fitsAllColumns(at1024, 5)).toBe(false);
+  });
+
+  it('treats an unmeasured or zero width as not fitting', () => {
+    expect(fitsAllColumns(0, 3)).toBe(false);
+    expect(fitsAllColumns(-1, 3)).toBe(false);
+    expect(fitsAllColumns(Number.NaN, 3)).toBe(false);
+  });
+
+  it('has nothing to fit when no columns are configured', () => {
+    expect(fitsAllColumns(0, 0)).toBe(true);
+  });
+});
+
+describe('fittedColumnWidth', () => {
+  it('splits the available width evenly between the columns', () => {
+    expect(fittedColumnWidth(1200, 4)).toBe(300);
+    expect(fittedColumnWidth(1200, 5)).toBe(240);
+    expect(fittedColumnWidth(1176, 5)).toBe(235);
+  });
+
+  it('caps a sparse board so two columns do not become very wide lists', () => {
+    expect(fittedColumnWidth(1200, 2)).toBe(MAX_COLUMN_WIDTH_PX);
+  });
+
+  it('never returns a fraction of a pixel', () => {
+    expect(Number.isInteger(fittedColumnWidth(1000, 3))).toBe(true);
   });
 });

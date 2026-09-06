@@ -31,13 +31,20 @@ export function BlockerDisclosure({ blockers, defaultOpen = false, className, va
   if (!blockers || blockers.length === 0) return null;
 
   const summary = `Waiting for ${blockers.length} ${blockers.length === 1 ? 'task' : 'tasks'}`;
+  // Leads with the number, which is the part worth keeping when a narrow board
+  // column truncates the label.
+  const compactSummary = `${blockers.length} ${blockers.length === 1 ? 'blocker' : 'blockers'}`;
 
   if (variant === 'inline') {
     return (
       <RadixCollapsible.Root defaultOpen={defaultOpen} className={cn('min-w-0', className)}>
-        <RadixCollapsible.Trigger className="group flex min-h-6 w-full cursor-pointer items-center gap-1 rounded-xs text-left text-[11px] font-medium text-caution transition-colors duration-(--duration-fast) hover:text-fg">
+        {/* Visibly compact, but the accessible name keeps the full phrasing. */}
+        <RadixCollapsible.Trigger
+          aria-label={summary}
+          className="group flex min-h-6 w-full cursor-pointer items-center gap-1 rounded-xs text-left text-[11px] font-medium text-caution transition-colors duration-(--duration-fast) hover:text-fg"
+        >
           <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="min-w-0 truncate">{summary}</span>
+          <span className="min-w-0 truncate">{compactSummary}</span>
           <ChevronDown
             className="h-3 w-3 shrink-0 transition-transform duration-(--duration-fast) group-data-[state=open]:rotate-180"
             aria-hidden

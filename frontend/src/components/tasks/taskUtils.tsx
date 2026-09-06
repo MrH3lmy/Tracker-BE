@@ -18,6 +18,23 @@ export const formatDate = (value?: string) => {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 };
 
+/**
+ * A date for dense surfaces: "Sep 3" within the current year, "Sep 3, 2027"
+ * outside it. The year is the least informative part of a due date on a board
+ * card and the first thing to get truncated away in a narrow column, so it is
+ * shown only when it actually distinguishes something.
+ */
+export const formatDateShort = (value?: string) => {
+  if (!value) return '\u2014';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return new Intl.DateTimeFormat(
+    undefined,
+    sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' },
+  ).format(date);
+};
+
 /** Minutes as a compact duration: 45 -> "45m", 90 -> "1h 30m". Returns undefined when unset. */
 export const formatMinutes = (minutes?: number) => {
   if (minutes === undefined || minutes === null || !Number.isFinite(minutes)) return undefined;
